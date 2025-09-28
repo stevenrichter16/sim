@@ -1,11 +1,17 @@
 import { Mode, clamp01 } from './constants.js';
 import { world, idx, getViewState, setViewOffset, isTelemetryEnabled, getInspectedTile } from './state.js';
+import { drainParticleBursts, drainFlashes } from './effects.js';
 import { debugConfig } from './debug.js';
+
+const clamp255 = (value) => Math.max(0, Math.min(255, Math.round(value)));
 
 let canvas = null;
 let ctx = null;
 let offscreen = null;
 let offctx = null;
+let frameTicker = 0;
+const particles = [];
+const flashes = [];
 
 export function initRenderer(canvasElement){
   canvas = canvasElement;
@@ -31,6 +37,7 @@ export function fitCanvas(){
 
 export function draw(){
   if(!ctx || !offctx) return;
+  frameTicker++;
   offscreen.width = world.W;
   offscreen.height = world.H;
   const img = offctx.createImageData(world.W, world.H);
@@ -62,38 +69,52 @@ export function draw(){
   ctx.scale(view.scale, view.scale);
   ctx.imageSmoothingEnabled=false;
   ctx.drawImage(offscreen,0,0,world.W*world.cell,world.H*world.cell);
-  ctx.fillStyle="#8891a7";
-  for(let y=0;y<world.H;y++) for(let x=0;x<world.W;x++){
-    if(world.wall[idx(x,y)]) ctx.fillRect(x*world.cell,y*world.cell,world.cell,world.cell);
+  for(let y=0;y<world.H;y++){
+    for(let x=0;x<world.W;x++){
+      if(world.wall[idx(x,y)]){
+        drawShadedTile(ctx, x*world.cell, y*world.cell, world.cell, '#2a3350', { outline: '#121a30' });
+      }
+    }
   }
-  ctx.fillStyle="#00ffb3";
-  for(let y=0;y<world.H;y++) for(let x=0;x<world.W;x++){
-    if(world.vent[idx(x,y)]) ctx.fillRect(x*world.cell+world.cell/4,y*world.cell+world.cell/4,world.cell/2,world.cell/2);
+  for(let y=0;y<world.H;y++){
+    for(let x=0;x<world.W;x++){
+      if(world.vent[idx(x,y)]){
+        drawShadedTile(ctx, x*world.cell + world.cell/4, y*world.cell + world.cell/4, world.cell/2, '#3cffd2', { sheen: 0.35, outline: '#0b4136' });
+      }
+    }
   }
-  ctx.fillStyle="#ff6a00";
   for(const i of world.fire){
     const x=i%world.W, y=(i/world.W)|0;
-    ctx.fillRect(x*world.cell+2,y*world.cell+2,world.cell-4,world.cell-4);
+    const jitter = (Math.sin((frameTicker + i) * 0.3) + 1) * 0.5;
+    drawAnimatedCore(ctx, x*world.cell, y*world.cell, world.cell, '#ff6a00', jitter);
   }
-  for(let y=0;y<world.H;y++) for(let x=0;x<world.W;x++){
-    const tile=idx(x,y);
-    const S=world.strings[tile];
-    if(!S||world.fire.has(tile)) continue;
-    if(S.mode===Mode.WATER){ ctx.fillStyle="#6ec6ff"; ctx.fillRect(x*world.cell+3,y*world.cell+3,world.cell-6,world.cell-6);}
-    else if(S.mode===Mode.CRYOFOAM){
-      ctx.fillStyle="#d7f3ff";
-      ctx.fillRect(x*world.cell+2,y*world.cell+2,world.cell-4,world.cell-4);
-      ctx.strokeStyle="#6fbde6";
-      ctx.strokeRect(x*world.cell+2,y*world.cell+2,world.cell-4,world.cell-4);
-    }
-    else if(S.mode===Mode.ACID){ ctx.fillStyle="#9bff8a"; ctx.fillRect(x*world.cell+3,y*world.cell+3,world.cell-6,world.cell-6);}
-    else if(S.mode===Mode.BASE){ ctx.fillStyle="#ffaf87"; ctx.fillRect(x*world.cell+3,y*world.cell+3,world.cell-6,world.cell-6);}
-    else if(S.mode===Mode.ICE){ ctx.fillStyle="#b9e8ff"; ctx.fillRect(x*world.cell+3,y*world.cell+3,world.cell-6,world.cell-6);}
-    else if(S.mode===Mode.CLF3){
-      ctx.fillStyle="#7eed75";
-      ctx.fillRect(x*world.cell+2,y*world.cell+2,world.cell-4,world.cell-4);
-      ctx.strokeStyle="#1f7d24";
-      ctx.strokeRect(x*world.cell+2,y*world.cell+2,world.cell-4,world.cell-4);
+  for(let y=0;y<world.H;y++){
+    for(let x=0;x<world.W;x++){
+      const tile=idx(x,y);
+      const S=world.strings[tile];
+      if(world.wall[tile] || !S || world.fire.has(tile)) continue;
+      const baseX = x*world.cell;
+      const baseY = y*world.cell;
+      if(S.mode===Mode.WATER){
+        const ripple = 0.5 + 0.5*Math.sin((frameTicker*0.12) + tile*0.7);
+        drawLiquidTile(ctx, baseX, baseY, world.cell, '#6ec6ff', ripple);
+      }
+      else if(S.mode===Mode.CRYOFOAM){
+        drawShadedTile(ctx, baseX, baseY, world.cell, '#d7f3ff', { outline: '#6fbde6', sheen:0.25 });
+      }
+      else if(S.mode===Mode.ACID){
+        const bubblePhase = (Math.sin(frameTicker*0.18 + tile*0.6) + 1) * 0.5;
+        drawAcidTile(ctx, baseX, baseY, world.cell, '#9bff8a', bubblePhase);
+      }
+      else if(S.mode===Mode.BASE){
+        drawShadedTile(ctx, baseX, baseY, world.cell, '#ffaf87', { sheen:0.18 });
+      }
+      else if(S.mode===Mode.ICE){
+        drawShadedTile(ctx, baseX, baseY, world.cell, '#b9e8ff', { sheen:0.3, outline:'#6fbde6' });
+      }
+      else if(S.mode===Mode.CLF3){
+        drawShadedTile(ctx, baseX, baseY, world.cell, '#7eed75', { outline:'#1f7d24', sheen:0.1 });
+      }
     }
   }
   for(const a of world.agents){
@@ -103,18 +124,16 @@ export function draw(){
     const cx = a.x*world.cell+world.cell/2;
     const cy = a.y*world.cell+world.cell/2;
     const baseRadius = Math.max(2,world.cell*0.35);
-    if(intensity > 0.5){
-      const haloRadius = baseRadius + intensity * world.cell * 0.2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, haloRadius, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(239,71,111,${(intensity-0.5)*0.6})`;
-      ctx.fill();
-      ctx.fillStyle = color;
+    if(intensity > 0.35){
+      drawPanicBloom(ctx, cx, cy, baseRadius, intensity);
     }
     ctx.beginPath();
     ctx.arc(cx, cy, baseRadius, 0, Math.PI*2);
     ctx.fill();
   }
+  drawFlashes(ctx);
+  drawParticles(ctx);
+  drawHeatHaze(ctx);
   drawOverlays(ctx);
   if(isTelemetryEnabled()) drawInspectionHighlight(ctx);
   ctx.restore();
@@ -141,36 +160,394 @@ function drawOverlays(ctx){
   if(!overlay.heat && !overlay.amplitude && !overlay.tension) return;
   const cell = world.cell;
   ctx.save();
-  ctx.globalAlpha = 0.45;
+  ctx.globalCompositeOperation = 'lighter';
   for(let i=0;i<world.strings.length;i++){
-    const x = (i % world.W) * cell;
-    const y = ((i / world.W) | 0) * cell;
-    let r=0,g=0,b=0;
+    const cx = (i % world.W) * cell + cell / 2;
+    const cy = ((i / world.W) | 0) * cell + cell / 2;
+    const S = world.strings[i];
     if(overlay.heat){
       const heat = clamp01(world.heat[i] ?? 0);
-      r += Math.round(255 * heat);
-      g += Math.round(80 * heat);
-    }
-    const S = world.strings[i];
-    if(S){
-      if(overlay.amplitude){
-        const amp = clamp01(S.amplitude);
-        g += Math.round(220 * amp);
-        b += Math.round(255 * amp);
-      }
-      if(overlay.tension){
-        const loose = clamp01(1 - S.tension);
-        r += Math.round(200 * loose);
-        b += Math.round(120 * loose);
+      if(heat > 0.05){
+        const haze = ctx.createRadialGradient(cx, cy, cell * 0.2, cx, cy, cell * (0.8 + heat));
+        haze.addColorStop(0, `rgba(255,120,60,${0.25 + heat * 0.4})`);
+        haze.addColorStop(1, 'rgba(255,120,60,0)');
+        ctx.fillStyle = haze;
+        ctx.fillRect(cx - cell, cy - cell, cell * 2, cell * 2);
       }
     }
-    const intensity = Math.max(r,g,b);
-    if(intensity === 0) continue;
-    const color = `rgb(${Math.min(255,r)},${Math.min(255,g)},${Math.min(255,b)})`;
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, cell, cell);
+    if(S && overlay.amplitude){
+      const amp = clamp01(S.amplitude);
+      if(amp > 0.05){
+        const glow = ctx.createRadialGradient(cx, cy, cell * 0.1, cx, cy, cell * (0.8 + amp));
+        glow.addColorStop(0, `rgba(90,200,255,${0.2 + amp * 0.45})`);
+        glow.addColorStop(1, 'rgba(90,200,255,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(cx - cell, cy - cell, cell * 2, cell * 2);
+      }
+    }
+    if(S && overlay.tension){
+      const loose = clamp01(1 - S.tension);
+      if(loose > 0.05){
+        const ring = ctx.createRadialGradient(cx, cy, cell * 0.45, cx, cy, cell * (1.2 + loose));
+        ring.addColorStop(0, 'rgba(0,0,0,0)');
+        ring.addColorStop(0.7, `rgba(255,60,200,${0.12 + loose * 0.4})`);
+        ring.addColorStop(1, 'rgba(255,60,200,0)');
+        ctx.fillStyle = ring;
+        ctx.fillRect(cx - cell*1.5, cy - cell*1.5, cell * 3, cell * 3);
+      }
+    }
   }
   ctx.restore();
+}
+
+function drawShadedTile(ctx, x, y, size, baseColor, { outline = null, sheen = 0.2 } = {}){
+  const highlight = shadeColor(baseColor, sheen);
+  const shadow = shadeColor(baseColor, -0.28);
+  const fillGradient = ctx.createLinearGradient(x, y, x, y + size);
+  fillGradient.addColorStop(0, highlight);
+  fillGradient.addColorStop(0.55, baseColor);
+  fillGradient.addColorStop(1, shadow);
+  ctx.fillStyle = fillGradient;
+  ctx.fillRect(x, y, size, size);
+  ctx.save();
+  ctx.lineWidth = Math.max(1, size * 0.08);
+  ctx.strokeStyle = outline ? outline : shadeColor(baseColor, -0.45);
+  ctx.strokeRect(x + ctx.lineWidth * 0.5, y + ctx.lineWidth * 0.5, size - ctx.lineWidth, size - ctx.lineWidth);
+  ctx.restore();
+  if(sheen > 0){
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    const sheenHeight = size * 0.35;
+    const sheenGradient = ctx.createLinearGradient(x, y, x, y + sheenHeight);
+    sheenGradient.addColorStop(0, 'rgba(255,255,255,0.8)');
+    sheenGradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sheenGradient;
+    ctx.fillRect(x + size * 0.08, y + size * 0.05, size - size * 0.16, sheenHeight);
+    ctx.restore();
+  }
+}
+
+function drawAcidTile(ctx, x, y, size, baseColor, phase){
+  drawShadedTile(ctx, x, y, size, baseColor, { sheen:0.22, outline:shadeColor(baseColor, -0.38) });
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, size, size);
+  ctx.clip();
+
+  const bubbleCount = 5;
+  const phaseAngle = phase * Math.PI * 2;
+  for(let i=0;i<bubbleCount;i++){
+    const offset = (phase + i * 0.21) % 1;
+    const swirl = Math.sin(phaseAngle + i * 2.1) * 0.05;
+    const bubbleX = x + size * (0.18 + 0.68 * (((phase * 1.3 + i * 0.41) + swirl + 2) % 1));
+    const bubbleY = y + size * (0.95 - offset * 0.92);
+    const bubbleRadius = size * (0.05 + offset * 0.07);
+    const glow = ctx.createRadialGradient(bubbleX, bubbleY, bubbleRadius * 0.2, bubbleX, bubbleY, bubbleRadius);
+    glow.addColorStop(0, shadeColor(baseColor, 0.5));
+    glow.addColorStop(0.6, shadeColor(baseColor, 0.3));
+    glow.addColorStop(1, 'rgba(255,255,255,0.15)');
+    ctx.globalAlpha = 0.45 + 0.3 * offset;
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(bubbleX, bubbleY, bubbleRadius, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = shadeColor(baseColor, 0.6);
+    ctx.lineWidth = bubbleRadius * 0.25;
+    ctx.beginPath();
+    ctx.arc(bubbleX, bubbleY, bubbleRadius * 0.8, Math.PI*0.85, Math.PI*1.6);
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = 0.22;
+  ctx.fillStyle = shadeColor(baseColor, 0.48);
+  const slosh = Math.sin(phaseAngle) * (size * 0.05);
+  ctx.beginPath();
+  ctx.ellipse(x + size*0.5, y + size*0.28 + slosh, size*0.42, size*0.14, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.globalAlpha = 0.18;
+  ctx.strokeStyle = shadeColor(baseColor, 0.55);
+  ctx.lineWidth = Math.max(1, size * 0.04);
+  ctx.beginPath();
+  ctx.moveTo(x + size*0.1, y + size*0.82);
+  ctx.quadraticCurveTo(x + size*0.5, y + size*0.86 + slosh*0.6, x + size*0.9, y + size*0.8);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawLiquidTile(ctx, x, y, size, baseColor, phase){
+  const highlight = shadeColor(baseColor, 0.25);
+  const shadow = shadeColor(baseColor, -0.3);
+  const grad = ctx.createLinearGradient(x, y, x, y + size);
+  grad.addColorStop(0, highlight);
+  grad.addColorStop(0.5, shadeColor(baseColor, (phase - 0.5) * 0.4));
+  grad.addColorStop(1, shadow);
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, size, size);
+  ctx.save();
+  const waveY = y + size * (0.6 - (phase - 0.5) * 0.1);
+  const lineWidth = Math.max(1, size * 0.06);
+  const pad = lineWidth * 0.5;
+  ctx.strokeStyle = shadeColor(baseColor, 0.35);
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.moveTo(x + pad, waveY);
+  ctx.bezierCurveTo(
+    x + pad + size * 0.25,
+    waveY + size * 0.04,
+    x - pad + size * 0.75,
+    waveY - size * 0.04,
+    x + size - pad,
+    waveY
+  );
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawAnimatedCore(ctx, x, y, size, baseColor, jitter){
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const inner = size * (0.25 + jitter * 0.15);
+  const outer = size * 0.5;
+  const gradient = ctx.createRadialGradient(cx, cy, inner * 0.3, cx, cy, outer);
+  gradient.addColorStop(0, shadeColor(baseColor, 0.5));
+  gradient.addColorStop(0.5, shadeColor(baseColor, 0.1));
+  gradient.addColorStop(1, shadeColor(baseColor, -0.45));
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.rect(x, y, size, size);
+  ctx.fill();
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.4 + 0.4 * jitter;
+  ctx.beginPath();
+  ctx.arc(cx, cy - size * 0.1, inner, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,230,120,0.8)';
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawPanicBloom(ctx, cx, cy, baseRadius, intensity){
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.25 + 0.4 * intensity;
+  ctx.filter = 'blur(6px)';
+  const radius = baseRadius + intensity * world.cell * 0.6;
+  const gradient = ctx.createRadialGradient(cx, cy, baseRadius * 0.2, cx, cy, radius);
+  gradient.addColorStop(0, 'rgba(239,71,111,0.8)');
+  gradient.addColorStop(1, 'rgba(239,71,111,0)');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawHeatHaze(ctx){
+  const cell = world.cell;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.18;
+  for(let i=0;i<world.heat.length;i++){
+    const heat = clamp01(world.heat[i]);
+    if(heat < 0.35) continue;
+    const x = (i % world.W) * cell + cell / 2;
+    const y = ((i / world.W) | 0) * cell + cell / 2;
+    const radius = cell * (0.6 + heat * 0.9);
+    const gradient = ctx.createRadialGradient(x, y, radius * 0.2, x, y, radius);
+    gradient.addColorStop(0, `rgba(255,140,60,${0.35 + heat * 0.35})`);
+    gradient.addColorStop(1, 'rgba(255,140,60,0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFlashes(ctx){
+  const pending = drainFlashes();
+  const cell = world.cell;
+  for(const flash of pending){
+    flashes.push({
+      x: (flash.x + 0.5) * cell,
+      y: (flash.y + 0.5) * cell,
+      radius: flash.radius * cell,
+      life: flash.life,
+      maxLife: flash.life,
+      colorStart: hexToRgb(flash.colorStart),
+      colorEnd: hexToRgb(flash.colorEnd),
+    });
+  }
+
+  if(!flashes.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for(let i=flashes.length-1;i>=0;i--){
+    const flash = flashes[i];
+    flash.life -= 1;
+    if(flash.life <= 0){
+      flashes.splice(i,1);
+      continue;
+    }
+    const t = 1 - flash.life / flash.maxLife;
+    const ease = t*t*(3-2*t);
+    const radius = flash.radius * (0.55 + ease * 1.25);
+    const color = lerpColor(flash.colorStart, flash.colorEnd, ease);
+    const gradient = ctx.createRadialGradient(flash.x, flash.y, radius * 0.15, flash.x, flash.y, radius);
+    const innerAlpha = (0.6 - ease*0.25);
+    const midAlpha = (0.32 - ease*0.22);
+    gradient.addColorStop(0, `rgba(${color.r},${color.g},${color.b},${innerAlpha.toFixed(2)})`);
+    gradient.addColorStop(0.45, `rgba(${color.r},${color.g},${color.b},${midAlpha.toFixed(2)})`);
+    gradient.addColorStop(0.9, `rgba(${Math.round(color.r*0.4)},${Math.round(color.g*0.4)},${Math.round(color.b*0.5)},${(midAlpha*0.4).toFixed(2)})`);
+    gradient.addColorStop(1, 'rgba(30,30,40,0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(flash.x, flash.y, radius, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawParticles(ctx){
+  const pending = drainParticleBursts();
+  const cell = world.cell;
+  const spawnParticle = (px, py, color, variance = 1, life = 28, type='spark') => {
+    let vx = (Math.random() - 0.5) * variance;
+    let vy = (Math.random() - 0.6) * variance;
+    let gravity = 0.02;
+    if(type === 'freeze'){
+      vy -= Math.abs(vy) * 0.4;
+      gravity = 0.01;
+    } else if(type === 'thaw'){
+      vx *= 0.2;
+      vy = Math.abs(vy) * 0.4 + 0.18;
+      gravity = 0.045;
+    }
+    particles.push({
+      x: px,
+      y: py,
+      vx,
+      vy,
+      life,
+      maxLife: life,
+      color,
+      type,
+      gravity,
+    });
+  };
+
+  for(const burst of pending){
+    const baseX = (burst.x + 0.5) * cell;
+    const baseY = (burst.y + 0.5) * cell;
+    const count = Math.max(4, Math.round(6 * (burst.intensity ?? 1)));
+    let color = { r: 255, g: 200, b: 120, a: 0.8 };
+    let variance = 1.2;
+    switch(burst.type){
+      case 'steam':
+        color = { r: 190, g: 225, b: 255, a: 0.85 };
+        variance = 0.8;
+        break;
+      case 'spark':
+        color = { r: 255, g: 210, b: 80, a: 0.9 };
+        variance = 1.4;
+        break;
+      case 'foam':
+        color = { r: 215, g: 243, b: 255, a: 0.8 };
+        variance = 0.6;
+        break;
+      case 'freeze':
+        color = { r: 240, g: 255, b: 255, a: 0.9 };
+        variance = 0.5;
+        break;
+      case 'thaw':
+        color = { r: 90, g: 170, b: 255, a: 0.7 };
+        variance = 0.5;
+        break;
+    }
+    for(let i=0;i<count;i++){
+      spawnParticle(baseX, baseY, color, variance, 22 + Math.random() * 16, burst.type);
+    }
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for(let i=particles.length - 1; i>=0; i--){
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += p.gravity ?? 0.02;
+    p.life -= 1;
+    if(p.life <= 0){
+      particles.splice(i,1);
+      continue;
+    }
+    const alpha = Math.max(0, p.life / p.maxLife) * p.color.a;
+    ctx.fillStyle = `rgba(${p.color.r},${p.color.g},${p.color.b},${alpha.toFixed(2)})`;
+    ctx.beginPath();
+    const radius = Math.max(1, (p.maxLife - p.life) * 0.1 + 1.5);
+    if(p.type === 'freeze'){
+      ctx.fillStyle = `rgba(${p.color.r},${p.color.g},${p.color.b},${(alpha*1.1).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+    if(p.type === 'thaw'){
+      const bodyColor = `rgba(${p.color.r},${p.color.g},${p.color.b},${(alpha*0.85).toFixed(2)})`;
+      const highlightColor = `rgba(255,255,255,${(alpha*0.45).toFixed(2)})`;
+      ctx.save();
+      ctx.fillStyle = bodyColor;
+      ctx.beginPath();
+      const head = radius * 1.5;
+      ctx.moveTo(p.x, p.y - head);
+      ctx.quadraticCurveTo(p.x + radius*0.6, p.y + radius*0.1, p.x, p.y + radius*1.3);
+      ctx.quadraticCurveTo(p.x - radius*0.6, p.y + radius*0.1, p.x, p.y - head);
+      ctx.fill();
+      // trailing sheen
+      ctx.strokeStyle = `rgba(${p.color.r},${p.color.g},${p.color.b},${(alpha*0.35).toFixed(2)})`;
+      ctx.lineWidth = Math.max(1, radius*0.25);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y + radius*1.1);
+      ctx.lineTo(p.x, p.y + radius*1.6);
+      ctx.stroke();
+      // highlight bubble
+      ctx.fillStyle = highlightColor;
+      ctx.beginPath();
+      ctx.ellipse(p.x + radius*0.18, p.y - head*0.55, radius*0.28, radius*0.45, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+      continue;
+    }
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function shadeColor(hex, amount){
+  const { r, g, b } = hexToRgb(hex);
+  const adjust = (channel) => clamp255(channel + amount * 255);
+  return rgbToHex(adjust(r), adjust(g), adjust(b));
+}
+
+function hexToRgb(hex){
+  const normalized = hex.replace('#','');
+  const value = parseInt(normalized, 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  };
+}
+
+function rgbToHex(r,g,b){
+  const component = (v) => v.toString(16).padStart(2,'0');
+  return `#${component(r)}${component(g)}${component(b)}`;
 }
 
 function hslToRgb(h,s,l){
@@ -178,7 +555,13 @@ function hslToRgb(h,s,l){
   return [f(0),f(8),f(4)].map(v=>Math.round(v*255));
 }
 
-const clamp255=(x)=>Math.max(0,Math.min(255,Math.round(x)));
+function lerpColor(a, b, t){
+  return {
+    r: Math.round(a.r + (b.r - a.r) * t),
+    g: Math.round(a.g + (b.g - a.g) * t),
+    b: Math.round(a.b + (b.b - a.b) * t),
+  };
+}
 
 function panicGradient(intensity){
   const clamped = clamp01(intensity);

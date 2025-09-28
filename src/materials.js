@@ -1,5 +1,6 @@
 import { Mode, TAU, DIRS4, clamp01, lerp, wrapTau } from './constants.js';
 import { world, idx, inBounds } from './state.js';
+import { emitParticleBurst, emitFlash } from './effects.js';
 
 const FOAM_BASE_TTL = 10;
 const FOAM_HEAT_CAP = 0.18;
@@ -98,6 +99,7 @@ export function ensureCryofoam(tileIdx, { ttl = FOAM_BASE_TTL, permanent = false
   const current = world.strings[tileIdx];
   if(!current || current.mode !== Mode.CRYOFOAM){
     world.strings[tileIdx] = baseStringFor(Mode.CRYOFOAM);
+    emitParticleBurst(tileIdx % world.W, (tileIdx / world.W) | 0, { type:'foam', intensity:0.8 });
   }
   world.wall[tileIdx] = 1;
   world.vent[tileIdx] = 0;
@@ -263,14 +265,26 @@ export function reactFireWater(i,j){
   F.phase = wrapTau(F.phase + Math.PI*0.6);
   F.amplitude = Math.max(0, F.amplitude - 1.2*s);
   addHeatXY(j % world.W, (j / world.W) | 0, 0.2*s);
+  emitParticleBurst(j % world.W, (j / world.W) | 0, { type:'steam', intensity: Math.min(1, s*14) });
   if(F.amplitude < 0.2) world.fire.delete(i);
 }
 
-export function reactAcidBase(i,j){
+export function reactAcidBase(i,j,{ triggerFlash = true } = {}){
   const Aci = Sget(i);
   const Bas = Sget(j);
   const s = couple(Aci,Bas,0.08);
   Aci.tension = clamp01(Aci.tension - 0.6*s);
   Bas.tension = clamp01(Bas.tension - 0.6*s);
   addHeatXY(j % world.W, (j / world.W) | 0, 6*s);
+  if(triggerFlash){
+    emitParticleBurst(j % world.W, (j / world.W) | 0, { type:'spark', intensity: Math.min(1.2, s*10) });
+    const ax = i % world.W;
+    const ay = (i / world.W) | 0;
+    const bx = j % world.W;
+    const by = (j / world.W) | 0;
+    const flashIntensity = clamp01(s * 6);
+    const baseRadius = 1.0 + flashIntensity * 0.7;
+    emitFlash(ax, ay, { radius: baseRadius, life: 26, colorStart:'#ff4bf8', colorEnd:'#d4dae4' });
+    emitFlash(bx, by, { radius: baseRadius, life: 26, colorStart:'#ff4bf8', colorEnd:'#d4dae4' });
+  }
 }

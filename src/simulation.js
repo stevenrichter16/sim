@@ -1,5 +1,6 @@
 import { Mode, DIRS4, clamp01, wrapTau } from './constants.js';
 import { world, idx, inBounds, resetWorld, metricsState } from './state.js';
+import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
 import {
@@ -57,6 +58,12 @@ class Agent{
       const socialStress = acc / Math.max(1,n);
       if(socialStress > 0.05){
         this.S.tension = clamp01(this.S.tension - socialStress*0.15);
+        emitFlash(this.x, this.y, {
+          radius: 0.55 + socialStress * 0.6,
+          life: 18,
+          colorStart: '#ff53f6',
+          colorEnd: '#c6ccd8',
+        });
       }
     }
     const o=world.o2[idx(this.x,this.y)];
@@ -206,7 +213,8 @@ export function createSimulation({ getSettings, updateMetrics, draw }){
   let last = performance.now();
   let simTime = 0;
   let stepCount = 0;
-  let recorder = debugConfig.enableRecorder ? createRecorder({ size: debugConfig.recorderSize }) : null;
+let recorder = debugConfig.enableRecorder ? createRecorder({ size: debugConfig.recorderSize }) : null;
+let acidBasePairs = new Set();
 
   function ensureRecorder(){
     if(!debugConfig.enableRecorder) return null;
@@ -321,6 +329,31 @@ export function createSimulation({ getSettings, updateMetrics, draw }){
       else a.step();
     }
 
+    // Acid/Base neutralization pulses (adjacent pairs)
+    const nextPairs = new Set();
+    const width = world.W;
+    for(let y=1;y<world.H-1;y++){
+      for(let x=1;x<world.W-1;x++){
+        const idx0 = y*width + x;
+        const S0 = world.strings[idx0];
+        if(!S0) continue;
+        if(S0.mode !== Mode.ACID && S0.mode !== Mode.BASE) continue;
+        const neighbors = [idx0 + 1, idx0 + width];
+        for(const nIdx of neighbors){
+          if(nIdx >= world.strings.length) continue;
+          const Sn = world.strings[nIdx];
+          if(!Sn) continue;
+          if(Sn.mode === S0.mode) continue;
+          if(Sn.mode !== Mode.ACID && Sn.mode !== Mode.BASE) continue;
+          const key = idx0 < nIdx ? `${idx0}-${nIdx}` : `${nIdx}-${idx0}`;
+          const isNew = !acidBasePairs.has(key);
+          reactAcidBase(idx0, nIdx, { triggerFlash:isNew });
+          nextPairs.add(key);
+        }
+      }
+    }
+    acidBasePairs = nextPairs;
+
     for(const i of world.fire){
       const S=world.strings[i];
       if(S){
@@ -391,6 +424,7 @@ export function createSimulation({ getSettings, updateMetrics, draw }){
       worldInit(o2BaseValue);
       simTime = 0;
       stepCount = 0;
+      acidBasePairs = new Set();
       if(recorder) recorder.clear();
       if(updateMetrics){ updateMetrics({ reset:true }); }
     },
@@ -422,11 +456,15 @@ function handlePhaseTransitions(){
   for(let i=0;i<world.strings.length;i++){
     const S = world.strings[i];
     if(!S) continue;
+    const x = i % world.W;
+    const y = (i / world.W) | 0;
     if(S.mode === Mode.WATER && world.heat[i] <= FREEZE_POINT){
       world.strings[i] = baseStringFor(Mode.ICE);
+      emitParticleBurst(x, y, { type:'freeze', intensity: clamp01((FREEZE_POINT - world.heat[i]) * 8) });
       world.heat[i] = Math.min(1, world.heat[i] + 0.02); // latent heat release of fusion
     } else if(S.mode === Mode.ICE && world.heat[i] >= MELT_POINT){
       world.strings[i] = baseStringFor(Mode.WATER);
+      emitParticleBurst(x, y, { type:'thaw', intensity: clamp01((world.heat[i] - MELT_POINT) * 8) });
       world.heat[i] = Math.max(0, world.heat[i] - 0.02); // latent heat absorption during melting
     }
   }
