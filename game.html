@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>CavesOfOoo — String‑State Engine (mobile‑friendly)</title>
+<link rel="stylesheet" href="styles/main.css" />
+</head>
+<body>
+<div class="wrap">
+  <div class="layout-main">
+    <canvas id="view" width="960" height="540"></canvas>
+    <div id="heartbeat" style="position:relative;margin-top:6px;font:12px/1.2 ui-monospace;color:#9ee8ff;opacity:.85">engine: starting…</div>
+
+    <div class="panel controls-panel">
+      <h3>String‑State Engine — mobile controls</h3>
+
+      <div class="controls-body">
+        <div class="controls-buttons">
+          <div class="toolbar">
+            <div class="zoom-controls" role="group" aria-label="Zoom controls">
+              <button class="btn zoom-btn" id="zoomIn" type="button">+</button>
+              <button class="btn zoom-btn" id="zoomOut" type="button">−</button>
+            </div>
+            <button class="btn" id="toggleTelemetry" type="button">📊 Telemetry</button>
+            <button class="btn" id="togglePause" type="button">⏸️ Pause</button>
+            <button class="btn" id="stepOnce" type="button">⏭️ Step</button>
+            <button class="btn" id="toggleRecorder" type="button">📼 Recorder Off</button>
+            <button class="btn" id="seedWarm" type="button">🔥 Warm Grid</button>
+          </div>
+
+          <!-- Brush palette (tap to select) -->
+          <div class="grid" id="brushGrid" aria-label="Brush palette">
+            <button class="btn" data-brush="fire">🔥 Fire</button>
+            <button class="btn" data-brush="vent">🪟 O₂ Vent</button>
+            <button class="btn" data-brush="water">💧 Water</button>
+            <button class="btn" data-brush="ice">🧊 Ice</button>
+            <button class="btn" data-brush="cryofoam">🧯 Cryofoam</button>
+            <button class="btn" data-brush="acid">🧪 Acid</button>
+            <button class="btn" data-brush="base">🧴 Base</button>
+            <button class="btn" data-brush="clf3">☣️ ClF₃ Canister</button>
+            <button class="btn" data-brush="wall">🧱 Wall</button>
+            <button class="btn" data-brush="eraser">🧹 Eraser</button>
+            <button class="btn" id="toggleDraw">✏️ Draw</button>
+          </div>
+
+          <!-- Actions -->
+          <div class="grid actions-grid">
+            <button class="btn" id="spawnCalm">🙂 NPC Calm</button>
+            <button class="btn" id="spawnPanic">😱 NPC Panic</button>
+            <button class="btn" id="spark">⚡ Random Fire</button>
+            <button class="btn" id="clear">🧼 Clear</button>
+          </div>
+        </div>
+
+        <div class="controls-sliders">
+          <label class="slider-row">Heat diffusion
+            <input class="slider" id="dHeat" type="range" min="0" max="0.6" step="0.01" value="0.18">
+            <span class="kbd" id="dHeatVal">0.18</span>
+          </label>
+          <label class="slider-row">O₂ diffusion
+            <input class="slider" id="dO2" type="range" min="0" max="0.4" step="0.01" value="0.10">
+            <span class="kbd" id="dO2Val">0.10</span>
+          </label>
+          <label class="slider-row">O₂ baseline
+            <input class="slider" id="o2Base" type="range" min="0" max="0.30" step="0.005" value="0.21">
+            <span class="kbd" id="o2BaseVal">0.21</span>
+          </label>
+          <label class="slider-row">O₂ cutoff
+            <input class="slider" id="o2Cut" type="range" min="0" max="0.21" step="0.005" value="0.16">
+            <span class="kbd" id="o2CutVal">0.16</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span class="chip"><i class="dot" style="background:#ff6a00"></i> Fire</span>
+        <span class="chip"><i class="dot" style="background:#7bdcff"></i> O₂ field</span>
+        <span class="chip"><i class="dot" style="background:#ff7a7a"></i> Heat</span>
+      <span class="chip"><i class="dot" style="background:#00ffb3"></i> Vent</span>
+      <span class="chip"><i class="dot" style="background:#8891a7"></i> Wall</span>
+      <span class="chip"><i class="dot" style="background:#b9e8ff"></i> Ice</span>
+      <span class="chip"><i class="dot" style="background:#d7f3ff;border:1px solid #6fbde6"></i> Cryofoam</span>
+      <span class="chip"><i class="dot" style="background:#7eed75"></i> ClF₃ Canister</span>
+      <span class="chip"><i class="dot" style="background:#ffd166"></i> NPC calm</span>
+      <span class="chip"><i class="dot" style="background:#ef476f"></i> NPC panic</span>
+      </div>
+
+      <div class="small" style="margin-top:6px">Tip: tap a brush, toggle <b>Draw</b>, then drag your finger on the canvas. Use 🧹 Eraser to remove. Everything works with touch only; no right‑click or modifier keys needed.</div>
+    </div>
+  </div>
+  <aside class="panel metrics-panel" aria-label="Live metrics">
+    <button class="accordion" id="metricsToggle" type="button" aria-expanded="false">Live Metrics <span class="accordion-icon">▸</span></button>
+    <div class="metrics-summary" id="metricsSummary" hidden>
+      <div class="row"><span>Avg O₂ (fraction)</span><span class="kbd" id="mO2">—</span></div>
+      <div class="row small"><span>Δ O₂ per step (~0.1s)</span><span class="kbd" id="mO2d">—</span></div>
+      <div class="row"><span>Total Fire Intensity</span><span class="kbd" id="mFire">—</span></div>
+      <div class="row small"><span>Δ Fire per step (~0.1s)</span><span class="kbd" id="mFired">—</span></div>
+      <div class="row" style="margin-top:6px"><span>Avg Amplitude</span><span class="kbd" id="mAmpAvg">—</span></div>
+      <div class="row"><span>Avg Tension</span><span class="kbd" id="mTensionAvg">—</span></div>
+      <div class="row"><span>Avg Heat</span><span class="kbd" id="mHeatAvg">—</span></div>
+    </div>
+      <div class="small" style="width:100%;margin-top:4px">Modes</div>
+      <div class="small" id="mModeCounts" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+
+    <div class="small" style="margin-top:6px;display:flex;align-items:center;gap:4px">Amplitude Histogram <span class="hint" data-hint="X-axis: amplitude (0 = calm, 1 = max). Y-axis: number of tiles falling into each bin.">ℹ️</span></div>
+    <div id="histAmp" style="display:flex;align-items:flex-end;height:40px;gap:2px;width:100%;background:#111a33;border-radius:6px;padding:2px"></div>
+    <div class="small" style="display:flex;justify-content:space-between;width:100%;font-size:10px;color:#9eaad1"><span>0</span><span>0.5</span><span>1.0</span></div>
+    <div class="small" style="margin-top:4px;display:flex;align-items:center;gap:4px">Tension Histogram <span class="hint" data-hint="X-axis: tension (0 = loose, 1 = rigid). Y-axis: number of tiles in each bucket.">ℹ️</span></div>
+    <div id="histTension" style="display:flex;align-items:flex-end;height:40px;gap:2px;width:100%;background:#111a33;border-radius:6px;padding:2px"></div>
+    <div class="small" style="display:flex;justify-content:space-between;width:100%;font-size:10px;color:#9eaad1"><span>0</span><span>0.5</span><span>1.0</span></div>
+    <div class="small" style="margin-top:4px;display:flex;align-items:center;gap:4px">Heat Histogram <span class="hint" data-hint="X-axis: normalized tile heat (0 = cold, 1 = max). Y-axis: tile count per bin.">ℹ️</span></div>
+    <div id="histHeat" style="display:flex;align-items:flex-end;height:40px;gap:2px;width:100%;background:#111a33;border-radius:6px;padding:2px"></div>
+    <div class="small" style="display:flex;justify-content:space-between;width:100%;font-size:10px;color:#9eaad1"><span>0</span><span>0.5</span><span>1.0</span></div>
+    <div class="row" id="telemetryPanel" style="display:none;margin-top:8px;flex-direction:column;align-items:flex-start;gap:4px">
+      <span class="kbd" style="background:#1b2439">Telemetry Inspect</span>
+      <div class="row small"><span>Mode</span><span class="kbd" id="tMode">—</span></div>
+      <div class="row small"><span>Tension <span class="hint" data-hint="Resilience of the strand or crew at this tile. 0 means slack, overstressed fibres like Fire or ClF3; 1 means taut, composed structure like Ice or Calm NPCs. Heat spikes, low oxygen, or agitated neighbours erode it, while cool, oxygen-rich zones let it recover. If tension drops below 0.4 while amplitude climbs, the resident mode is primed to flip into Panic.">ℹ️</span></span><span class="kbd" id="tTension">—</span></div>
+      <div class="telemetry-bar" aria-label="Tension bar: 0 is relaxed, 1 is maximally taut.">
+        <div id="tTensionBar" class="telemetry-bar-fill" style="width:0;background:#ffaf87"></div>
+      </div>
+      <div class="row small"><span>Amplitude <span class="hint" data-hint="Energy in the local oscillation. 0 is a settled tile (calm crews, ice); values near 1 mean violent motion or combustion. Waves spread by coupling with neighbours, so clustered Fires or panicked agents drive this higher. Sustained amplitude above 0.8 marks hotspots that feed Panic or keep flames roaring until damped by Water or tension rebounds.">ℹ️</span></span><span class="kbd" id="tAmplitude">—</span></div>
+      <div class="telemetry-bar" aria-label="Amplitude bar: 0 is calm, 1 is peak oscillation.">
+        <div id="tAmplitudeBar" class="telemetry-bar-fill" style="width:0;background:#6ec6ff"></div>
+      </div>
+      <div class="row small"><span>Phase <span class="hint" data-hint="Where this oscillation sits within the 0–1 cycle (mapped to 0–2π radians). 0 is aligned with the global baseline, 0.5 is inverted, and quarter offsets show tiles leading or lagging the wave. Phase differences decide how strongly tiles couple: matching phase locks calm zones together, while out-of-phase patches shear energy into nearby modes, shifting colours and fuelling reactions.">ℹ️</span></span><span class="kbd" id="tPhase">—</span></div>
+      <div class="telemetry-bar" aria-label="Phase bar: 0 aligned with baseline, 1 nearly inverted.">
+        <div id="tPhaseBar" class="telemetry-bar-fill" style="width:0;background:#d7f3ff"></div>
+      </div>
+      <div class="row small"><span>Heat</span><span class="kbd" id="tHeat">—</span></div>
+      <div class="telemetry-bar">
+        <div id="tHeatBar" class="telemetry-bar-fill" style="width:0;background:#ff7a7a"></div>
+      </div>
+      <div class="small" style="margin-top:4px">History (last 10 frames)</div>
+      <div id="historyScrubber" style="display:flex;align-items:center;gap:6px;width:100%">
+        <input id="historyIndex" type="range" min="0" max="0" value="0" step="1" style="flex:1">
+        <span class="kbd" id="historyLabel">—</span>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <div class="panel legend-panel" id="legendPanel" aria-label="Material legend"></div>
+</div>
+
+
+<script type="module" src="src/bootstrap.js"></script>
+</body>
+</html>
