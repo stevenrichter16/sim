@@ -3,6 +3,7 @@ import { world, idx, inBounds, resetWorld, metricsState } from './state.js';
 import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
+import { thresholds } from './config.js';
 import {
   baseStringFor,
   Sget,
@@ -18,7 +19,7 @@ import {
   stepCryofoam,
 } from './materials.js';
 
-class Agent{
+export class Agent{
   constructor(x,y,mode){
     this.x = x;
     this.y = y;
@@ -56,8 +57,8 @@ class Agent{
       this.S.phase = lerpPhase(this.S.phase, avg, 0.1);
       // social stress lowers tension slightly when surrounded by agitated peers
       const socialStress = acc / Math.max(1,n);
-      if(socialStress > 0.05){
-        this.S.tension = clamp01(this.S.tension - socialStress*0.15);
+      if(socialStress > thresholds.socialStress.trigger){
+        this.S.tension = clamp01(this.S.tension - socialStress * thresholds.socialStress.tensionMultiplier);
         emitFlash(this.x, this.y, {
           radius: 0.55 + socialStress * 0.6,
           life: 18,
@@ -67,27 +68,27 @@ class Agent{
       }
     }
     const o=world.o2[idx(this.x,this.y)];
-    if(o < 0.17) this.S.amplitude = clamp01(this.S.amplitude + 0.01);
-    if(o < 0.15){
+    if(o < thresholds.oxygen.lowAmplitudeThreshold) this.S.amplitude = clamp01(this.S.amplitude + thresholds.oxygen.lowAmplitudeRise);
+    if(o < thresholds.oxygen.lowTensionThreshold){
       // hypoxia weakens resilience (lower tension)
-      this.S.tension = clamp01(this.S.tension - 0.02);
-    } else if(o > 0.19){
+      this.S.tension = clamp01(this.S.tension - thresholds.oxygen.lowTensionDrop);
+    } else if(o > thresholds.oxygen.highTensionThreshold){
       // good oxygen lets them recover a bit
-      this.S.tension = clamp01(this.S.tension + 0.01);
+      this.S.tension = clamp01(this.S.tension + thresholds.oxygen.highTensionRecovery);
     }
 
     const heatLevel = world.heat[idx(this.x,this.y)];
-    if(heatLevel > 0.75){
-      this.S.tension = clamp01(this.S.tension - 0.03);
-    } else if(heatLevel < 0.35){
-      this.S.tension = clamp01(this.S.tension + 0.005);
+    if(heatLevel > thresholds.heat.highThreshold){
+      this.S.tension = clamp01(this.S.tension - thresholds.heat.highTensionDrop);
+    } else if(heatLevel < thresholds.heat.lowThreshold){
+      this.S.tension = clamp01(this.S.tension + thresholds.heat.lowTensionRecovery);
     }
 
     this.S.amplitude*=0.998;
     const panicIntensity = clamp01((this.S.amplitude - 0.2) * 0.8 + (0.5 - this.S.tension));
     this.panicLevel = panicIntensity;
-    if(this.S.amplitude>0.8 && this.S.tension<0.4) this.S.mode=Mode.PANIC;
-    else if(this.S.amplitude<0.4) this.S.mode=Mode.CALM;
+    if(this.S.amplitude>thresholds.panic.amplitudeHigh && this.S.tension<thresholds.panic.tensionLow) this.S.mode=Mode.PANIC;
+    else if(this.S.amplitude<thresholds.panic.amplitudeLow) this.S.mode=Mode.CALM;
   }
   step(){ this._doStep(null); }
   stepWithBins(bins){ this._doStep(bins); }
@@ -449,23 +450,22 @@ let acidBasePairs = new Set();
   };
 }
 
-const FREEZE_POINT = 0.15;
-const MELT_POINT = 0.20; // provide hysteresis to avoid rapid flipping
-
 function handlePhaseTransitions(){
   for(let i=0;i<world.strings.length;i++){
     const S = world.strings[i];
     if(!S) continue;
     const x = i % world.W;
     const y = (i / world.W) | 0;
-    if(S.mode === Mode.WATER && world.heat[i] <= FREEZE_POINT){
+    if(S.mode === Mode.WATER && world.heat[i] <= thresholds.freezePoint){
       world.strings[i] = baseStringFor(Mode.ICE);
-      emitParticleBurst(x, y, { type:'freeze', intensity: clamp01((FREEZE_POINT - world.heat[i]) * 8) });
+      emitParticleBurst(x, y, { type:'freeze', intensity: clamp01((thresholds.freezePoint - world.heat[i]) * 8) });
       world.heat[i] = Math.min(1, world.heat[i] + 0.02); // latent heat release of fusion
-    } else if(S.mode === Mode.ICE && world.heat[i] >= MELT_POINT){
+    } else if(S.mode === Mode.ICE && world.heat[i] >= thresholds.meltPoint){
       world.strings[i] = baseStringFor(Mode.WATER);
-      emitParticleBurst(x, y, { type:'thaw', intensity: clamp01((world.heat[i] - MELT_POINT) * 8) });
+      emitParticleBurst(x, y, { type:'thaw', intensity: clamp01((world.heat[i] - thresholds.meltPoint) * 8) });
       world.heat[i] = Math.max(0, world.heat[i] - 0.02); // latent heat absorption during melting
     }
   }
 }
+
+export { handlePhaseTransitions };

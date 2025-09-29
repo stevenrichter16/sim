@@ -1,0 +1,78 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { world } from '../src/state.js';
+import { Mode } from '../src/constants.js';
+import { reactFireWater, reactAcidBase } from '../src/materials.js';
+import { initWorld, placeMode } from './helpers/worldHarness.js';
+import { Agent } from '../src/simulation.js';
+
+describe('amplitude and tension effects', () => {
+  beforeEach(() => {
+    initWorld({ o2: 0.21 });
+  });
+
+  it('fire amplitude decays gradually with repeated water reactions', () => {
+    const fireIdx = placeMode(10, 12, Mode.FIRE);
+    const waterIdx = placeMode(11, 12, Mode.WATER);
+    world.fire.add(fireIdx);
+
+    const amplitudes = [];
+    for(let i = 0; i < 5; i++){
+      reactFireWater(fireIdx, waterIdx);
+      amplitudes.push(world.strings[fireIdx].amplitude);
+    }
+
+    expect(amplitudes[0]).toBeLessThan(1.0);
+    for(let i = 1; i < amplitudes.length; i++){
+      expect(amplitudes[i]).toBeLessThanOrEqual(amplitudes[i-1]);
+      expect(amplitudes[i]).toBeGreaterThan(0);
+    }
+    expect(world.heat[waterIdx]).toBeGreaterThan(0);
+  });
+
+  it('acid and base tensions fall with sustained reactions', () => {
+    const acidIdx = placeMode(20, 20, Mode.ACID);
+    const baseIdx = placeMode(21, 20, Mode.BASE);
+
+    const acidTensions = [];
+    const baseTensions = [];
+    for(let i = 0; i < 4; i++){
+      reactAcidBase(acidIdx, baseIdx, { triggerFlash: false });
+      acidTensions.push(world.strings[acidIdx].tension);
+      baseTensions.push(world.strings[baseIdx].tension);
+    }
+
+    for(let i = 1; i < acidTensions.length; i++){
+      expect(acidTensions[i]).toBeLessThanOrEqual(acidTensions[i-1]);
+      expect(baseTensions[i]).toBeLessThanOrEqual(baseTensions[i-1]);
+    }
+    expect(world.heat[baseIdx]).toBeGreaterThan(0);
+  });
+
+  it('social stress pushes agent panic level higher', () => {
+    const active = new Agent(30, 30, Mode.PANIC);
+    active.S.amplitude = 1.1;
+    const active2 = new Agent(30, 31, Mode.PANIC);
+    active2.S.amplitude = 1.05;
+    const calm = new Agent(31, 30, Mode.CALM);
+    calm.S.amplitude = 0.6;
+    calm.S.tension = 0.8;
+
+    world.agents = [active, active2, calm];
+    const bins = new Map();
+    const key = '7,7';
+    bins.set(key, world.agents);
+
+    const initialTension = calm.S.tension;
+
+    for(let i = 0; i < world.W * world.H; i++){
+      world.o2[i] = 0.14;
+    }
+
+    for(let i = 0; i < 8; i++){
+      calm._doStep(bins);
+    }
+
+    expect(calm.S.tension).toBeLessThan(initialTension);
+    expect(calm.panicLevel).toBeGreaterThan(0);
+  });
+});
