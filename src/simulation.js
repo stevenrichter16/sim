@@ -3,7 +3,7 @@ import { world, idx, inBounds, resetWorld, metricsState } from './state.js';
 import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
-import { thresholds } from './config.js';
+import { thresholds, roles } from './config.js';
 import {
   baseStringFor,
   Sget,
@@ -25,6 +25,21 @@ export class Agent{
     this.y = y;
     this.S = baseStringFor(mode);
     this.panicLevel = 0;
+    this.role = mode;
+    this.isMedic = mode === Mode.MEDIC;
+    if(this.isMedic){
+      this.medicConfig = roles.medic || {
+        auraRadius: 3,
+        auraTensionBoost: 0.01,
+        auraAmplitudeDrop: 0.02,
+        burstTensionBoost: 0.1,
+        burstAmplitudeDrop: 0.05,
+        burstCooldown: 12,
+        burstTriggerTension: 0.4,
+        stressResistance: { heat:true, social:true, oxygen:false },
+      };
+      this.medicCooldown = 0;
+    }
   }
   _doStep(bins){
     if(Math.random()<0.45){
@@ -44,6 +59,25 @@ export class Agent{
       }
       return out;
     })() : [world.agents];
+
+    if(this.isMedic){
+      const aura = this.medicConfig;
+      const neighbours = world.agents;
+      for(const agent of neighbours){
+        if(agent === this || agent.role === Mode.MEDIC) continue;
+        const dist = Math.abs(agent.x - this.x) + Math.abs(agent.y - this.y);
+        if(dist <= aura.auraRadius){
+          agent.S.tension = clamp01(agent.S.tension + aura.auraTensionBoost);
+          agent.S.amplitude = Math.max(0, agent.S.amplitude - aura.auraAmplitudeDrop);
+          if(agent.S.tension < aura.burstTriggerTension && this.medicCooldown <= 0){
+            agent.S.tension = clamp01(agent.S.tension + aura.burstTensionBoost);
+            agent.S.amplitude = Math.max(0, agent.S.amplitude - aura.burstAmplitudeDrop);
+            this.medicCooldown = aura.burstCooldown;
+          }
+        }
+      }
+      if(this.medicCooldown > 0) this.medicCooldown -= 1;
+    }
     for(const g of groups){
       for(const ag of g){
         if(ag===this) continue;
@@ -58,7 +92,9 @@ export class Agent{
       // social stress lowers tension slightly when surrounded by agitated peers
       const socialStress = acc / Math.max(1,n);
       if(socialStress > thresholds.socialStress.trigger){
-        this.S.tension = clamp01(this.S.tension - socialStress * thresholds.socialStress.tensionMultiplier);
+        if(!(this.isMedic && this.medicConfig.stressResistance.social)){
+      this.S.tension = clamp01(this.S.tension - socialStress * thresholds.socialStress.tensionMultiplier);
+        }
         emitFlash(this.x, this.y, {
           radius: 0.55 + socialStress * 0.6,
           life: 18,
@@ -68,27 +104,36 @@ export class Agent{
       }
     }
     const o=world.o2[idx(this.x,this.y)];
-    if(o < thresholds.oxygen.lowAmplitudeThreshold) this.S.amplitude = clamp01(this.S.amplitude + thresholds.oxygen.lowAmplitudeRise);
-    if(o < thresholds.oxygen.lowTensionThreshold){
+    if(!(this.isMedic && this.medicConfig.stressResistance.oxygen)){
+      if(o < thresholds.oxygen.lowAmplitudeThreshold) this.S.amplitude = clamp01(this.S.amplitude + thresholds.oxygen.lowAmplitudeRise);
+      if(o < thresholds.oxygen.lowTensionThreshold){
       // hypoxia weakens resilience (lower tension)
       this.S.tension = clamp01(this.S.tension - thresholds.oxygen.lowTensionDrop);
-    } else if(o > thresholds.oxygen.highTensionThreshold){
+      } else if(o > thresholds.oxygen.highTensionThreshold){
       // good oxygen lets them recover a bit
       this.S.tension = clamp01(this.S.tension + thresholds.oxygen.highTensionRecovery);
+      }
     }
 
     const heatLevel = world.heat[idx(this.x,this.y)];
-    if(heatLevel > thresholds.heat.highThreshold){
-      this.S.tension = clamp01(this.S.tension - thresholds.heat.highTensionDrop);
-    } else if(heatLevel < thresholds.heat.lowThreshold){
-      this.S.tension = clamp01(this.S.tension + thresholds.heat.lowTensionRecovery);
+    if(!(this.isMedic && this.medicConfig.stressResistance.heat)){
+      if(heatLevel > thresholds.heat.highThreshold){
+        this.S.tension = clamp01(this.S.tension - thresholds.heat.highTensionDrop);
+      } else if(heatLevel < thresholds.heat.lowThreshold){
+        this.S.tension = clamp01(this.S.tension + thresholds.heat.lowTensionRecovery);
+      }
     }
 
     this.S.amplitude*=0.998;
     const panicIntensity = clamp01((this.S.amplitude - 0.2) * 0.8 + (0.5 - this.S.tension));
     this.panicLevel = panicIntensity;
-    if(this.S.amplitude>thresholds.panic.amplitudeHigh && this.S.tension<thresholds.panic.tensionLow) this.S.mode=Mode.PANIC;
-    else if(this.S.amplitude<thresholds.panic.amplitudeLow) this.S.mode=Mode.CALM;
+    if(this.isMedic){
+      this.S.mode = Mode.MEDIC;
+      this.panicLevel = 0;
+    } else {
+      if(this.S.amplitude>thresholds.panic.amplitudeHigh && this.S.tension<thresholds.panic.tensionLow) this.S.mode=Mode.PANIC;
+      else if(this.S.amplitude<thresholds.panic.amplitudeLow) this.S.mode=Mode.CALM;
+    }
   }
   step(){ this._doStep(null); }
   stepWithBins(bins){ this._doStep(bins); }

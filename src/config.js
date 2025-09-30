@@ -28,3 +28,20 @@ export const thresholds = {
     heatCap: 0.18,
   },
 };
+
+export const roles = {
+  medic: {
+    auraRadius: 3,
+    auraTensionBoost: 0.01,
+    auraAmplitudeDrop: 0.02,
+    burstTensionBoost: 0.1,
+    burstAmplitudeDrop: 0.05,
+    burstCooldown: 12,
+    burstTriggerTension: 0.4,
+    stressResistance: {
+      heat: true,
+      social: true,
+      oxygen: false,
+    },
+  },
+};

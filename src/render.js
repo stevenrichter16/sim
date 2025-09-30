@@ -2,6 +2,7 @@ import { Mode, clamp01 } from './constants.js';
 import { world, idx, getViewState, setViewOffset, isTelemetryEnabled, getInspectedTile } from './state.js';
 import { drainParticleBursts, drainFlashes } from './effects.js';
 import { debugConfig } from './debug.js';
+import { roles } from './config.js';
 
 const clamp255 = (value) => Math.max(0, Math.min(255, Math.round(value)));
 
@@ -119,17 +120,34 @@ export function draw(){
   }
   for(const a of world.agents){
     const intensity = clamp01(a.panicLevel ?? 0);
-    const color = panicGradient(intensity);
-    ctx.fillStyle = color;
+    const isMedic = a.S?.mode === Mode.MEDIC;
+    if(isMedic){
+      ctx.fillStyle = '#4bffa5';
+    } else {
+      const color = panicGradient(intensity);
+      ctx.fillStyle = color;
+    }
     const cx = a.x*world.cell+world.cell/2;
     const cy = a.y*world.cell+world.cell/2;
     const baseRadius = Math.max(2,world.cell*0.35);
-    if(intensity > 0.35){
+    if(!isMedic && intensity > 0.35){
       drawPanicBloom(ctx, cx, cy, baseRadius, intensity);
     }
     ctx.beginPath();
     ctx.arc(cx, cy, baseRadius, 0, Math.PI*2);
     ctx.fill();
+    if(isMedic){
+      const medicConfig = roles.medic || {};
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.strokeStyle = '#4bffa5';
+      ctx.lineWidth = Math.max(1, world.cell * 0.15);
+      const auraRadius = baseRadius + (medicConfig.auraRadius ?? 3) * world.cell * 0.4;
+      ctx.beginPath();
+      ctx.arc(cx, cy, auraRadius, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
   drawFlashes(ctx);
   drawParticles(ctx);

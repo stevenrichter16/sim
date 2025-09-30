@@ -9,6 +9,7 @@ export const Mode = Object.freeze({
   CLF3: 41,
   CALM: 101,
   PANIC: 102,
+  MEDIC: 103,
 });
 
 export const TAU = Math.PI * 2;

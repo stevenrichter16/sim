@@ -75,4 +75,17 @@ describe('amplitude and tension effects', () => {
     expect(calm.S.tension).toBeLessThan(initialTension);
     expect(calm.panicLevel).toBeGreaterThan(0);
   });
+
+  it('medic aura boosts tension and lowers amplitude for nearby agents', () => {
+    const medic = new Agent(40, 40, Mode.MEDIC);
+    const subject = new Agent(41, 40, Mode.CALM);
+    subject.S.tension = 0.5;
+    subject.S.amplitude = 0.5;
+    world.agents = [medic, subject];
+
+    medic._doStep(null);
+
+    expect(subject.S.tension).toBeGreaterThan(0.5);
+    expect(subject.S.amplitude).toBeLessThan(0.5);
+  });
 });

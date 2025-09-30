@@ -1,9 +1,10 @@
 import { Mode, TAU, DIRS4, clamp01, lerp, wrapTau } from './constants.js';
 import { world, idx, inBounds } from './state.js';
 import { emitParticleBurst, emitFlash } from './effects.js';
+import { thresholds, roles } from './config.js';
 
 const FOAM_BASE_TTL = 10;
-const FOAM_HEAT_CAP = 0.18;
+const FOAM_HEAT_CAP = thresholds.cryofoam.heatCap;
 const FOAM_EXPANSION_HEAT = 0.25;
 const FOAM_EXPANSION_TTL = 6;
 const FOAM_DIAGONALS = Object.freeze([[1,1],[1,-1],[-1,1],[-1,-1]]);
@@ -20,6 +21,16 @@ export function baseStringFor(mode){
     case Mode.CLF3:   return { mode, tension:0.05, amplitude:0.0, phase:0.0 };
     case Mode.CALM:   return { mode, tension:0.90, amplitude:0.1, phase:0.0 };
     case Mode.PANIC:  return { mode, tension:0.20, amplitude:0.9, phase:0.8 };
+    case Mode.MEDIC: {
+      const cfg = roles.medic || {};
+      return {
+        mode,
+        tension: 0.85,
+        amplitude: 0.05,
+        phase: 0.0,
+        composure: cfg.burstCooldown ?? 12,
+      };
+    }
     default: return { mode, tension:0.5, amplitude:0.2, phase:Math.random()*TAU };
   }
 }
