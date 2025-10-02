@@ -13,6 +13,7 @@ let offctx = null;
 let frameTicker = 0;
 const particles = [];
 const flashes = [];
+let customCanvasSize = null;
 
 export function initRenderer(canvasElement){
   canvas = canvasElement;
@@ -22,17 +23,44 @@ export function initRenderer(canvasElement){
   return ctx;
 }
 
+export function setCustomCanvasSize(size){
+  if(size && (Number.isNaN(size.width) || Number.isNaN(size.height))){
+    customCanvasSize = null;
+  } else {
+    customCanvasSize = size;
+  }
+  if(customCanvasSize && customCanvasSize.width && customCanvasSize.height){
+    document.documentElement.style.setProperty('--canvas-column-width', `${customCanvasSize.width}px`);
+  } else {
+    document.documentElement.style.removeProperty('--canvas-column-width');
+  }
+  fitCanvas();
+}
+
+export function getCustomCanvasSize(){
+  return customCanvasSize;
+}
+
 export function getContext(){
   return ctx;
 }
 
 export function fitCanvas(){
   if(!canvas) return;
-  const pw = Math.min(window.innerWidth - 24, 1000);
-  const ph = Math.min(window.innerHeight * 0.55, 520);
-  canvas.width = Math.floor(pw);
-  canvas.height = Math.floor(ph);
-  world.cell = Math.floor(Math.min(canvas.width / world.W, canvas.height / world.H));
+  let targetWidth;
+  let targetHeight;
+  if(customCanvasSize && customCanvasSize.width && customCanvasSize.height){
+    targetWidth = customCanvasSize.width;
+    targetHeight = customCanvasSize.height;
+  } else {
+    targetWidth = Math.min(window.innerWidth - 24, 3200);
+    targetHeight = Math.min(window.innerHeight - 80, 1800);
+  }
+  targetWidth = Math.max(480, targetWidth);
+  targetHeight = Math.max(360, targetHeight);
+  canvas.width = Math.floor(targetWidth);
+  canvas.height = Math.floor(targetHeight);
+  world.cell = Math.max(1, Math.floor(Math.min(canvas.width / world.W, canvas.height / world.H)));
   clampViewToCanvas();
 }
 

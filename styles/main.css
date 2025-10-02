@@ -19,7 +19,7 @@ html,body{
 
 .wrap{
   display:grid;
-  grid-template-columns:minmax(0,2.5fr) minmax(260px,320px) minmax(280px,420px);
+  grid-template-columns:var(--canvas-column-width, minmax(0,2.5fr)) minmax(260px,320px) minmax(280px,420px);
   gap:20px;
   padding:16px 18px;
   align-items:start;
@@ -34,6 +34,8 @@ html,body{
 .controls-sliders{display:flex;flex-direction:column;gap:12px;background:#111a33;border:1px solid var(--line);border-radius:10px;padding:12px;}
 .slider-row{display:flex;align-items:center;gap:8px;font-size:12px;}
 .slider-row input{flex:1;}
+.select-input{flex:1;background:var(--chip);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:4px 6px;font-size:12px;min-width:120px;}
+.select-input:focus{outline:none;border-color:var(--accent);}
 .actions-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
 .metrics-panel{display:flex;flex-direction:column;gap:8px;}
 .legend-panel{max-height:calc(100vh - 48px);overflow:auto;display:flex;flex-direction:column;gap:12px;}

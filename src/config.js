@@ -43,5 +43,9 @@ export const roles = {
       social: true,
       oxygen: false,
     },
+    searchRadius: 32,
+    scanInterval: 6,
+    repathInterval: 12,
+    maxAssignmentsPerTarget: 1,
   },
 };

@@ -88,4 +88,20 @@ describe('amplitude and tension effects', () => {
     expect(subject.S.tension).toBeGreaterThan(0.5);
     expect(subject.S.amplitude).toBeLessThan(0.5);
   });
+
+  it('medic moves toward panicking agent to provide support', () => {
+    const medic = new Agent(10, 10, Mode.MEDIC);
+    const target = new Agent(15, 10, Mode.PANIC);
+    target.S.tension = 0.2;
+    target.S.amplitude = 0.9;
+    world.agents = [medic, target];
+    const initialDistance = Math.abs(medic.x - target.x) + Math.abs(medic.y - target.y);
+
+    for(let i = 0; i < 12; i++){
+      medic._doStep(null);
+    }
+
+    const movedDistance = Math.abs(medic.x - target.x) + Math.abs(medic.y - target.y);
+    expect(movedDistance).toBeLessThan(initialDistance);
+  });
 });

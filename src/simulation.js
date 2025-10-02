@@ -19,6 +19,8 @@ import {
   stepCryofoam,
 } from './materials.js';
 
+const medicAssignments = new Map();
+
 export class Agent{
   constructor(x,y,mode){
     this.x = x;
@@ -39,8 +41,114 @@ export class Agent{
         stressResistance: { heat:true, social:true, oxygen:false },
       };
       this.medicCooldown = 0;
+      this.medicTarget = null;
+      this.medicPath = [];
+      this.medicScanTimer = 0;
+      this.medicRepathTimer = 0;
     }
   }
+  _medicAcquireTarget(){
+    const aura = this.medicConfig;
+    const limit = aura.maxAssignmentsPerTarget ?? 1;
+    let best = null;
+    let bestScore = Infinity;
+    for(const agent of world.agents){
+      if(agent === this || agent.role === Mode.MEDIC) continue;
+      const tension = agent.S?.tension ?? 1;
+      const amplitude = agent.S?.amplitude ?? 0;
+      const isPanicking = agent.S?.mode === Mode.PANIC;
+      if(!isPanicking && tension > aura.burstTriggerTension) continue;
+      const dist = Math.abs(agent.x - this.x) + Math.abs(agent.y - this.y);
+      if(dist > (aura.searchRadius ?? 32)) continue;
+      const assigned = medicAssignments.get(agent) ?? 0;
+      if(assigned >= limit && this.medicTarget !== agent) continue;
+      const score = tension + dist * 0.05 - (isPanicking ? 0.2 : 0);
+      if(score < bestScore){
+        bestScore = score;
+        best = agent;
+      }
+    }
+    if(best !== this.medicTarget){
+      this._medicReleaseTarget();
+      this.medicTarget = best || null;
+      if(this.medicTarget){
+        medicAssignments.set(this.medicTarget, (medicAssignments.get(this.medicTarget) ?? 0) + 1);
+      }
+      this.medicPath = [];
+    }
+  }
+
+  _medicPlanPath(){
+    const target = this.medicTarget;
+    if(!target) return;
+    const aura = this.medicConfig;
+    const maxRange = aura.searchRadius ?? 32;
+    const start = idx(this.x, this.y);
+    const goal = idx(target.x, target.y);
+    const queue = [start];
+    const cameFrom = new Map([[start, null]]);
+    const limit = maxRange * maxRange;
+    while(queue.length && !cameFrom.has(goal) && cameFrom.size < limit){
+      const current = queue.shift();
+      const cx = current % world.W;
+      const cy = (current / world.W) | 0;
+      for(const [dx,dy] of DIRS4){
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if(!inBounds(nx, ny)) continue;
+        const nIdx = idx(nx, ny);
+        if(cameFrom.has(nIdx)) continue;
+        if(world.wall[nIdx]) continue;
+        if(world.fire.has(nIdx)) continue;
+        cameFrom.set(nIdx, current);
+        queue.push(nIdx);
+      }
+    }
+    if(!cameFrom.has(goal)){
+      this.medicPath = [];
+      return;
+    }
+    const path = [];
+    let current = goal;
+    while(current !== null && current !== start){
+      path.push(current);
+      current = cameFrom.get(current) ?? null;
+    }
+    this.medicPath = path.reverse();
+  }
+
+  _medicAdvance(){
+    if(!this.medicTarget) return;
+    const target = this.medicTarget;
+    if(target.S?.mode !== Mode.PANIC && target.S?.tension > this.medicConfig.burstTriggerTension){
+      this._medicReleaseTarget();
+      return;
+    }
+    if(!this.medicPath.length) return;
+    const next = this.medicPath.shift();
+    const nx = next % world.W;
+    const ny = (next / world.W) | 0;
+    if(world.wall[next] || world.fire.has(next)){
+      this.medicPath = [];
+      return;
+    }
+    this.x = nx;
+    this.y = ny;
+  }
+
+  _medicReleaseTarget(){
+    if(this.medicTarget){
+      const current = medicAssignments.get(this.medicTarget) ?? 0;
+      if(current <= 1){
+        medicAssignments.delete(this.medicTarget);
+      } else {
+        medicAssignments.set(this.medicTarget, current - 1);
+      }
+    }
+    this.medicTarget = null;
+    this.medicPath = [];
+  }
+
   _doStep(bins){
     if(Math.random()<0.45){
       const dirs = DIRS4;
@@ -63,6 +171,17 @@ export class Agent{
     if(this.isMedic){
       const aura = this.medicConfig;
       const neighbours = world.agents;
+      this.medicScanTimer -= 1;
+      this.medicRepathTimer -= 1;
+      if(this.medicScanTimer <= 0){
+        this.medicScanTimer = aura.scanInterval ?? 6;
+        this._medicAcquireTarget();
+      }
+      if(this.medicTarget && (this.medicRepathTimer <= 0 || !this.medicPath.length)){
+        this.medicRepathTimer = aura.repathInterval ?? 12;
+        this._medicPlanPath();
+      }
+      this._medicAdvance();
       for(const agent of neighbours){
         if(agent === this || agent.role === Mode.MEDIC) continue;
         const dist = Math.abs(agent.x - this.x) + Math.abs(agent.y - this.y);
@@ -93,7 +212,7 @@ export class Agent{
       const socialStress = acc / Math.max(1,n);
       if(socialStress > thresholds.socialStress.trigger){
         if(!(this.isMedic && this.medicConfig.stressResistance.social)){
-      this.S.tension = clamp01(this.S.tension - socialStress * thresholds.socialStress.tensionMultiplier);
+          this.S.tension = clamp01(this.S.tension - socialStress * thresholds.socialStress.tensionMultiplier);
         }
         emitFlash(this.x, this.y, {
           radius: 0.55 + socialStress * 0.6,
@@ -471,6 +590,7 @@ let acidBasePairs = new Set();
       simTime = 0;
       stepCount = 0;
       acidBasePairs = new Set();
+      medicAssignments.clear();
       if(recorder) recorder.clear();
       if(updateMetrics){ updateMetrics({ reset:true }); }
     },

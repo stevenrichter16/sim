@@ -48,6 +48,7 @@
           <div class="grid actions-grid">
             <button class="btn" id="spawnCalm">🙂 NPC Calm</button>
             <button class="btn" id="spawnPanic">😱 NPC Panic</button>
+            <button class="btn" id="spawnMedic">💊 Medic</button>
             <button class="btn" id="spark">⚡ Random Fire</button>
             <button class="btn" id="clear">🧼 Clear</button>
           </div>
@@ -69,6 +70,15 @@
           <label class="slider-row">O₂ cutoff
             <input class="slider" id="o2Cut" type="range" min="0" max="0.21" step="0.005" value="0.16">
             <span class="kbd" id="o2CutVal">0.16</span>
+          </label>
+          <label class="slider-row">Canvas size
+            <select id="canvasSize" class="select-input">
+              <option value="auto">Auto fit</option>
+              <option value="960x540">960 × 540</option>
+              <option value="1280x720">1280 × 720</option>
+              <option value="1440x810">1440 × 810</option>
+              <option value="1600x900">1600 × 900</option>
+            </select>
           </label>
         </div>
       </div>

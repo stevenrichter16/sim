@@ -1,6 +1,7 @@
 import { Mode, TAU, clamp01 } from './constants.js';
 import { debugConfig, setDebugFlag } from './debug.js';
 import { materialLegend, GLOBAL_EFFECTS } from './materialLegend.js';
+import { setCustomCanvasSize } from './render.js';
 import {
   world,
   idx,
@@ -34,6 +35,7 @@ export function initInput({ canvas, draw }){
   const toggleDrawBtn = document.getElementById('toggleDraw');
   const spawnCalmBtn = document.getElementById('spawnCalm');
   const spawnPanicBtn = document.getElementById('spawnPanic');
+  const spawnMedicBtn = document.getElementById('spawnMedic');
   const sparkBtn = document.getElementById('spark');
   const clearBtn = document.getElementById('clear');
   const dHeat = document.getElementById('dHeat');
@@ -74,6 +76,7 @@ export function initInput({ canvas, draw }){
   const legendPanel = document.getElementById('legendPanel');
   const metricsToggle = document.getElementById('metricsToggle');
   const metricsSummary = document.getElementById('metricsSummary');
+  const canvasSizeSelect = document.getElementById('canvasSize');
 
   const createHistBars = (container, gradient)=>{
     if(!container) return [];
@@ -867,6 +870,11 @@ export function initInput({ canvas, draw }){
         simulation.spawnNPC(Mode.PANIC);
       };
     }
+    if(spawnMedicBtn){
+      spawnMedicBtn.onclick = ()=>{
+        simulation.spawnNPC(Mode.MEDIC);
+      };
+    }
     if(sparkBtn){
       sparkBtn.onclick = ()=> simulation.randomFires(50);
     }
@@ -900,6 +908,19 @@ export function initInput({ canvas, draw }){
       historyOffset = parseInt(historySlider.value,10) || 0;
       updateHistoryUI();
       updateTelemetryInspector();
+    });
+  }
+  if(canvasSizeSelect){
+    canvasSizeSelect.addEventListener('change',()=>{
+      const value = canvasSizeSelect.value;
+      if(value === 'auto'){
+        setCustomCanvasSize(null);
+      } else {
+        const [width,height] = value.split('x').map(v=> parseInt(v,10));
+        if(width && height){
+          setCustomCanvasSize({ width, height });
+        }
+      }
     });
   }
 
