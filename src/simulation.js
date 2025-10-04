@@ -24,6 +24,7 @@ const medicAssignments = new Map();
 const HELP_DIFF = 0.12;
 const HELP_DECAY = 0.02;
 const HELP_DEPOSIT = 0.10;
+const MAX_PHASE_SHOCK = 1.2;
 
 export class Agent{
   constructor(x,y,mode){
@@ -51,6 +52,7 @@ export class Agent{
       this.medicRepathTimer = 0;
       this._medicPickNewScoutDir();
     }
+    this.phaseShock = 0;
   }
   _medicAcquireTarget(){
     const aura = this.medicConfig;
@@ -273,6 +275,10 @@ export class Agent{
         if(d<=3){ acc+=couple(this.S, ag.S, 0.02); sumPhase+=ag.S.phase; n++; }
       }
     }
+    if(this.phaseShock > 0){
+      const wobble = (Math.random() - 0.5) * this.phaseShock * 2;
+      this.S.phase = wrapTau(this.S.phase + wobble);
+    }
     if(n>0){
       this.S.amplitude = clamp01(this.S.amplitude + acc/n);
       const avg=sumPhase/n;
@@ -291,22 +297,27 @@ export class Agent{
         });
       }
     }
-    const o=world.o2[idx(this.x,this.y)];
+    const tileIdx = idx(this.x,this.y);
+    const o=world.o2[tileIdx];
     if(!(this.isMedic && this.medicConfig.stressResistance.oxygen)){
       if(o < thresholds.oxygen.lowAmplitudeThreshold) this.S.amplitude = clamp01(this.S.amplitude + thresholds.oxygen.lowAmplitudeRise);
       if(o < thresholds.oxygen.lowTensionThreshold){
       // hypoxia weakens resilience (lower tension)
       this.S.tension = clamp01(this.S.tension - thresholds.oxygen.lowTensionDrop);
+      const shock = 0.18 + (thresholds.oxygen.lowTensionThreshold - o) * 1.6;
+      this.phaseShock = Math.min(MAX_PHASE_SHOCK, Math.max(this.phaseShock, shock));
       } else if(o > thresholds.oxygen.highTensionThreshold){
       // good oxygen lets them recover a bit
       this.S.tension = clamp01(this.S.tension + thresholds.oxygen.highTensionRecovery);
       }
     }
 
-    const heatLevel = world.heat[idx(this.x,this.y)];
+    const heatLevel = world.heat[tileIdx];
     if(!(this.isMedic && this.medicConfig.stressResistance.heat)){
       if(heatLevel > thresholds.heat.highThreshold){
         this.S.tension = clamp01(this.S.tension - thresholds.heat.highTensionDrop);
+        const shock = 0.2 + (heatLevel - thresholds.heat.highThreshold) * 0.8;
+        this.phaseShock = Math.min(MAX_PHASE_SHOCK, Math.max(this.phaseShock, shock));
       } else if(heatLevel < thresholds.heat.lowThreshold){
         this.S.tension = clamp01(this.S.tension + thresholds.heat.lowTensionRecovery);
       }
@@ -326,7 +337,7 @@ export class Agent{
     if(this.S?.mode === Mode.PANIC && world.helpField){
       const intensity = this.panicLevel ?? 0;
       if(intensity > 0){
-        const k = idx(this.x, this.y);
+        const k = tileIdx;
         const current = world.helpField[k] || 0;
         const deficit = clamp01(1 - current);
         if(deficit > 0){
@@ -336,6 +347,11 @@ export class Agent{
           world.helpField[k] = clamp01(current + delta);
         }
       }
+    }
+
+    if(this.phaseShock > 0){
+      this.phaseShock *= 0.7;
+      if(this.phaseShock < 0.01) this.phaseShock = 0;
     }
   }
   step(){ this._doStep(null); }

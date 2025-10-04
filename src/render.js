@@ -158,6 +158,23 @@ export function draw(){
     const cx = a.x*world.cell+world.cell/2;
     const cy = a.y*world.cell+world.cell/2;
     const baseRadius = Math.max(2,world.cell*0.35);
+    const shock = a.phaseShock ?? 0;
+    if(shock > 0.01){
+      const pulse = 0.6 + 0.4*Math.sin(frameTicker*0.3 + (a.x+a.y));
+      const haloR = baseRadius * (1.2 + pulse * 0.6 + Math.min(0.8, shock));
+      const gradient = ctx.createRadialGradient(cx, cy, baseRadius*0.2, cx, cy, haloR);
+      const shockAlpha = clamp01(0.35 + Math.min(0.6, shock));
+      gradient.addColorStop(0, `rgba(255, 120, 60, ${shockAlpha})`);
+      gradient.addColorStop(0.5, `rgba(255, 40, 90, ${shockAlpha*0.55})`);
+      gradient.addColorStop(1, 'rgba(100, 10, 20, 0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     if(!isMedic && intensity > 0.35){
       drawPanicBloom(ctx, cx, cy, baseRadius, intensity);
     }
