@@ -19,6 +19,8 @@ export function baseStringFor(mode){
     case Mode.ACID:   return { mode, tension:0.50, amplitude:0.6, phase:0.1 };
     case Mode.BASE:   return { mode, tension:0.50, amplitude:0.6, phase:0.6 };
     case Mode.CLF3:   return { mode, tension:0.05, amplitude:0.0, phase:0.0 };
+    case Mode.MYCELIUM:
+      return { mode, tension:0.80, amplitude:0.15, phase:Math.random()*TAU };
     case Mode.CALM:   return { mode, tension:0.90, amplitude:0.1, phase:0.0 };
     case Mode.PANIC:  return { mode, tension:0.20, amplitude:0.9, phase:0.8 };
     case Mode.MEDIC: {
@@ -199,6 +201,79 @@ export function stepCryofoam(){
     const existing = world.strings[nIdx];
     if(existing && existing.mode === Mode.ACID) continue;
     ensureCryofoam(nIdx, { ttl: FOAM_EXPANSION_TTL });
+  }
+}
+
+export function stepMycelium(){
+  if(!world.strings) return;
+  const total = world.W * world.H;
+  const dAmp = new Float32Array(total);
+  const dPhase = new Float32Array(total);
+  const growth = [];
+
+  for(let y=1; y<world.H-1; y++){
+    for(let x=1; x<world.W-1; x++){
+      const k = idx(x,y);
+      if(world.wall[k]) continue;
+      const S = world.strings[k];
+      if(!S || S.mode !== Mode.MYCELIUM) continue;
+
+      S.phase = wrapTau(S.phase + 0.12);
+      S.amplitude = Math.max(0, S.amplitude * 0.995);
+
+      const o2 = world.o2[k];
+      const heat = world.heat[k];
+      const tensionDelta = 0.002 * (o2 - 0.5) - 0.004 * Math.max(0, heat - 0.4);
+      S.tension = clamp01(S.tension + tensionDelta);
+
+      for(const [dx,dy] of DIRS4){
+        const nx = x + dx;
+        const ny = y + dy;
+        if(!inBounds(nx,ny)) continue;
+        const j = idx(nx,ny);
+        if(world.wall[j]) continue;
+        const NS = world.strings[j];
+        if(NS && NS.mode === Mode.MYCELIUM){
+          const g = couple(S, NS, 0.02);
+          if(g !== 0){
+            dAmp[j] += 0.6 * g;
+            const dphi = Math.sin(S.phase - NS.phase);
+            dPhase[j] += 0.05 * g * dphi;
+          }
+        } else if(!NS){
+          if(S.tension > 0.72 && S.amplitude > 0.16 && heat < 0.55){
+            growth.push({ index:j, seedPhase:S.phase, seedTension:S.tension });
+          }
+        }
+      }
+
+      if(S.tension < 0.18 || heat > 0.85){
+        world.strings[k] = undefined;
+      }
+    }
+  }
+
+  for(let i=0; i<total; i++){
+    const S = world.strings[i];
+    if(!S || S.mode !== Mode.MYCELIUM) continue;
+    if(dAmp[i] !== 0) S.amplitude = clamp01(S.amplitude + dAmp[i]);
+    if(dPhase[i] !== 0) S.phase = wrapTau(S.phase + dPhase[i]);
+    if(S.amplitude > 0.2){
+      S.tension = clamp01(S.tension + 0.0008 * (S.amplitude - 0.2));
+    }
+  }
+
+  for(const { index, seedPhase, seedTension } of growth){
+    if(world.wall[index]) continue;
+    if(world.strings[index]) continue;
+    if(Math.random() < 0.15){
+      world.strings[index] = {
+        mode: Mode.MYCELIUM,
+        tension: clamp01(seedTension - 0.05),
+        amplitude: 0.08,
+        phase: wrapTau(seedPhase + (Math.random() - 0.5) * 0.4),
+      };
+    }
   }
 }
 

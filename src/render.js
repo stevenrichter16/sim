@@ -1,5 +1,5 @@
 import { Mode, clamp01 } from './constants.js';
-import { world, idx, getViewState, setViewOffset, isTelemetryEnabled, getInspectedTile } from './state.js';
+import { world, idx, inBounds, getViewState, setViewOffset, isTelemetryEnabled, getInspectedTile } from './state.js';
 import { drainParticleBursts, drainFlashes } from './effects.js';
 import { debugConfig } from './debug.js';
 import { roles } from './config.js';
@@ -144,6 +144,9 @@ export function draw(){
       else if(S.mode===Mode.CLF3){
         drawShadedTile(ctx, baseX, baseY, world.cell, '#7eed75', { outline:'#1f7d24', sheen:0.1 });
       }
+      else if(S.mode===Mode.MYCELIUM){
+        drawMyceliumTile(ctx, baseX, baseY, world.cell, S, tile, frameTicker);
+      }
     }
   }
   for(const a of world.agents){
@@ -195,6 +198,7 @@ export function draw(){
     }
   }
   drawHelpField(ctx);
+  drawRouteField(ctx);
   drawFlashes(ctx);
   drawParticles(ctx);
   drawHeatHaze(ctx);
@@ -243,6 +247,128 @@ function drawHelpField(ctx){
   }
   ctx.restore();
 }
+
+function drawRouteField(ctx){
+  const field = world.routeField;
+  if(!field) return;
+  const cell = world.cell;
+  if(cell <= 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for(let y=0;y<world.H;y++){
+    for(let x=0;x<world.W;x++){
+      const index = idx(x,y);
+      const value = field[index];
+      if(value <= 0.01) continue;
+      const norm = Math.min(1, value);
+      const alpha = clamp01(0.2 + norm * 0.35);
+      if(alpha <= 0.02) continue;
+      const baseX = x * cell + cell/2;
+      const baseY = y * cell + cell/2;
+      const radius = Math.max(1, cell * (0.14 + norm * 0.35));
+      const inner = Math.max(0, radius * 0.3);
+      const gradient = ctx.createRadialGradient(baseX, baseY, inner, baseX, baseY, radius);
+      gradient.addColorStop(0, `rgba(90, 220, 120, ${alpha})`);
+      gradient.addColorStop(0.6, `rgba(60, 180, 90, ${alpha * 0.45})`);
+      gradient.addColorStop(1, 'rgba(20, 60, 30, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(baseX, baseY, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawMyceliumTile(ctx, x, y, size, S, tileIndex, ticker){
+  const TAU = Math.PI * 2;
+  const phase = ((S?.phase ?? 0) % TAU + TAU) % TAU;
+  const amplitude = clamp01(S?.amplitude ?? 0);
+  const tension = clamp01(S?.tension ?? 0);
+  const phaseNorm = phase / TAU;
+  const baseHue = (0.28 + phaseNorm * 0.08 + amplitude * 0.05) % 1;
+  const saturation = clamp01(0.48 + amplitude * 0.35);
+  const light = clamp01(0.28 + tension * 0.25);
+  const [baseR, baseG, baseB] = hslToRgb(baseHue, saturation, light);
+  const baseColor = `rgb(${baseR},${baseG},${baseB})`;
+  const outline = `rgba(${Math.max(0, baseR-45)}, ${Math.max(0, baseG-65)}, ${Math.max(0, baseB-55)}, 0.9)`;
+  drawShadedTile(ctx, x, y, size, baseColor, { outline, sheen:0.16 });
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const pulse = 0.4 + amplitude * 0.7;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, size, size);
+  ctx.clip();
+  const layers = 4;
+  ctx.lineCap = 'round';
+  for(let layer=0; layer<layers; layer++){
+    const layerPhase = phase + layer * 0.9;
+    const layerAmp = amplitude * (0.6 + layer * 0.18);
+    const layerTension = tension * (0.7 + layer * 0.12);
+    const thickness = Math.max(1, size * (0.06 + layerAmp * 0.18));
+    const hueOffset = (baseHue + layer * 0.04) % 1;
+    const [lr, lg, lb] = hslToRgb(hueOffset, clamp01(saturation + layer * 0.12), clamp01(light + layer * 0.05));
+    ctx.strokeStyle = `rgba(${lr}, ${lg}, ${lb}, ${0.18 + layerTension * 0.4})`;
+    ctx.lineWidth = thickness;
+    const segments = 5;
+    const startAngle = layerPhase + ticker * 0.05;
+    const radius = size * (0.15 + layer * 0.12 + pulse * 0.1);
+    ctx.beginPath();
+    for(let i=0;i<=segments;i++){
+      const t = i / segments;
+      const ang = startAngle + Math.sin(t * Math.PI * 2 + layerPhase) * 0.6;
+      const px = cx + Math.cos(ang) * radius * (0.4 + t * 0.6);
+      const py = cy + Math.sin(ang * 0.55) * radius * (0.4 + (1 - t) * 0.6);
+      if(i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+  const connectionDirs = [[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]];
+  const tileX = tileIndex % world.W;
+  const tileY = (tileIndex / world.W) | 0;
+  const drawBranch = (startX, startY, endX, endY, strength, hueShift = 0) => {
+    const midT = 0.35 + strength * 0.25;
+    const ctrl1x = lerpValue(startX, endX, midT) + Math.sin(startX + ticker * 0.04 + hueShift) * size * 0.12 * (1 - strength);
+    const ctrl1y = lerpValue(startY, endY, midT) + Math.cos(startY + ticker * 0.05 + hueShift) * size * 0.12 * strength;
+    const ctrl2x = lerpValue(startX, endX, 0.65) + Math.sin(endY + ticker * 0.06 + hueShift * 1.7) * size * 0.1;
+    const ctrl2y = lerpValue(startY, endY, 0.65) + Math.cos(endX + ticker * 0.07 + hueShift * 2.1) * size * 0.1;
+    const [lr, lg, lb] = hslToRgb((baseHue + hueShift) % 1, clamp01(saturation + strength * 0.3), clamp01(light + strength * 0.18));
+    ctx.strokeStyle = `rgba(${lr}, ${lg}, ${lb}, ${0.18 + strength * 0.45})`;
+    ctx.lineWidth = Math.max(1, size * (0.05 + strength * 0.12));
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.bezierCurveTo(ctrl1x, ctrl1y, ctrl2x, ctrl2y, endX, endY);
+    ctx.stroke();
+  };
+  for(const [dx,dy] of connectionDirs){
+    const nx = tileX + dx;
+    const ny = tileY + dy;
+    if(!inBounds(nx, ny)) continue;
+    const nIdx = idx(nx, ny);
+    const nS = world.strings[nIdx];
+    if(!nS || nS.mode !== Mode.MYCELIUM) continue;
+    const neighborPhase = ((nS.phase ?? 0) % TAU + TAU) % TAU;
+    const neighborAmp = clamp01(nS.amplitude ?? 0);
+    const neighborTension = clamp01(nS.tension ?? 0);
+    const targetX = x + dx * size + size / 2;
+    const targetY = y + dy * size + size / 2;
+    const branchStrength = clamp01(0.35 + amplitude * 0.4 + neighborAmp * 0.35);
+    drawBranch(cx, cy, targetX, targetY, branchStrength, dx * 0.07 + dy * 0.08 + neighborPhase / TAU * 0.04);
+  }
+  const glowRadius = size * (0.35 + pulse * 0.45);
+  const glowGradient = ctx.createRadialGradient(cx, cy, size * 0.12, cx, cy, glowRadius);
+  glowGradient.addColorStop(0, `rgba(${Math.min(255, baseR + 55)}, ${Math.min(255, baseG + 80)}, ${Math.min(255, baseB + 70)}, ${0.22 + amplitude * 0.45})`);
+  glowGradient.addColorStop(1, 'rgba(8, 16, 10, 0)');
+  ctx.fillStyle = glowGradient;
+  ctx.beginPath();
+  ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+
+
 
 function drawInspectionHighlight(ctx){
   const inspected = getInspectedTile();
@@ -677,6 +803,19 @@ function panicGradient(intensity){
 }
 
 const clamp=(val,min,max)=> val < min ? min : val > max ? max : val;
+const lerpValue = (a,b,t)=> a + (b - a) * t;
+
+
+
+
+
+function hash2(x,y){
+  let h = x * 374761393 + y * 668265263;
+  h = (h ^ (h >> 13)) >>> 0;
+  h = (h * 1274126177) >>> 0;
+  h ^= h >> 16;
+  return h / 4294967295;
+}
 
 function clampViewToCanvas(){
   const view = getViewState();

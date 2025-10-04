@@ -7,6 +7,7 @@ export const Mode = Object.freeze({
   ACID: 21,
   BASE: 22,
   CLF3: 41,
+  MYCELIUM: 61,
   CALM: 101,
   PANIC: 102,
   MEDIC: 103,

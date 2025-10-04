@@ -17,6 +17,7 @@ import {
   reactFireWater,
   reactAcidBase,
   stepCryofoam,
+  stepMycelium,
 } from './materials.js';
 
 const medicAssignments = new Map();
@@ -53,6 +54,7 @@ export class Agent{
       this._medicPickNewScoutDir();
     }
     this.phaseShock = 0;
+    this.lastRouteIdx = -1;
   }
   _medicAcquireTarget(){
     const aura = this.medicConfig;
@@ -151,12 +153,49 @@ export class Agent{
       }
     }
     if(bestValue > hereValue + 0.004){
+      if(world.routeField){
+        world.routeField[hereIndex] = Math.min(1, world.routeField[hereIndex] + 0.045);
+      }
       this.x = bestX;
       this.y = bestY;
       this.medicPath = [];
       if(this.medicTarget){
         this.medicRepathTimer = Math.min(this.medicRepathTimer, 1);
       }
+      this.lastRouteIdx = hereIndex;
+      return true;
+    }
+    return false;
+  }
+
+  _medicFollowRoute(field){
+    if(!field) return false;
+    const hereIndex = idx(this.x, this.y);
+    const hereValue = field[hereIndex] ?? 0;
+    let bestValue = hereValue;
+    let bestX = this.x;
+    let bestY = this.y;
+    for(const [dx,dy] of DIRS4){
+      const nx = this.x + dx;
+      const ny = this.y + dy;
+      if(!inBounds(nx,ny)) continue;
+      const ni = idx(nx, ny);
+      if(world.wall[ni] || world.fire.has(ni)) continue;
+      const val = field[ni] ?? 0;
+      if(ni === this.lastRouteIdx && val < hereValue + 0.01) continue;
+      if(val > bestValue + 0.002){
+        bestValue = val;
+        bestX = nx;
+        bestY = ny;
+      }
+    }
+    if(bestValue > hereValue + 0.002){
+      if(world.routeField){
+        world.routeField[hereIndex] = Math.min(1, world.routeField[hereIndex] + 0.02);
+      }
+      this.x = bestX;
+      this.y = bestY;
+      this.lastRouteIdx = hereIndex;
       return true;
     }
     return false;
@@ -171,8 +210,10 @@ export class Agent{
       if(inBounds(nx,ny)){
         const ni = idx(nx, ny);
         if(!world.wall[ni] && !world.fire.has(ni)){
+          const hereIndex = idx(this.x, this.y);
           this.x = nx;
           this.y = ny;
+          this.lastRouteIdx = hereIndex;
           if(Math.random() < 0.2) this._medicPickNewScoutDir();
           return;
         }
@@ -187,6 +228,8 @@ export class Agent{
       return;
     }
     if(!this.medicTarget){
+      const routeField = world.routeField;
+      if(routeField && this._medicFollowRoute(routeField)) return;
       this._medicWander();
       return;
     }
@@ -203,8 +246,13 @@ export class Agent{
       this.medicPath = [];
       return;
     }
+    const hereIndex = idx(this.x, this.y);
+    if(world.routeField){
+      world.routeField[hereIndex] = Math.min(1, world.routeField[hereIndex] + 0.015);
+    }
     this.x = nx;
     this.y = ny;
+    this.lastRouteIdx = hereIndex;
   }
 
   _medicReleaseTarget(){
@@ -502,10 +550,19 @@ let acidBasePairs = new Set();
         world.helpField[i] = v < 0.0001 ? 0 : v;
       }
     }
+    if(world.routeField){
+      diffuse(world.routeField, 0.1);
+      for(let i=0;i<world.routeField.length;i++){
+        if(world.wall[i]) continue;
+        const v = world.routeField[i] * 0.992;
+        world.routeField[i] = v < 0.0001 ? 0 : v;
+      }
+    }
     const base = settings.o2Base;
     for(let i=0;i<world.o2.length;i++) if(!world.wall[i]&&!world.vent[i]) world.o2[i]+= (base - world.o2[i]) * 0.002;
     for(let i=0;i<world.vent.length;i++) if(world.vent[i]) world.o2[i] = Math.min(base, world.o2[i] + 0.02);
 
+    stepMycelium();
     handlePhaseTransitions();
     stepCryofoam();
 

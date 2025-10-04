@@ -617,6 +617,14 @@ export function initInput({ canvas, draw }){
       draw();
       return;
     }
+    if(brush==='mycelium'){
+      world.wall[i]=0;
+      world.vent[i]=0;
+      world.fire.delete(i);
+      world.strings[i]=baseStringFor(Mode.MYCELIUM);
+      draw();
+      return;
+    }
   }
 
   canvas.addEventListener('pointerdown',(ev)=>{
