@@ -1,0 +1,284 @@
+{
+  "metadata": {
+    "version": 1,
+    "description": "Stigmergic tag coefficients used to modulate shared-field emissions, coupling, and state responses.",
+    "notes": [
+      "All coefficient values are additive offsets that will be combined with system defaults.",
+      "Unless otherwise stated, downstream systems should multiply response values by the evaluated coupling magnitude before applying deltas.",
+      "Negative emission values represent sinks (e.g., cooling or oxygen consumption)."
+    ]
+  },
+  "defaults": {
+    "emission": {
+      "heat": 0.0,
+      "o2": 0.0
+    },
+    "coupling": {
+      "gain": 0.0,
+      "phaseBias": 0.0,
+      "damping": 0.0
+    },
+    "response": {
+      "amplitude": {
+        "self": 0.0,
+        "neighbor": 0.0
+      },
+      "tension": {
+        "self": 0.0,
+        "neighbor": 0.0
+      },
+      "heat": {
+        "self": 0.0,
+        "neighbor": 0.0
+      }
+    },
+    "permeability": {
+      "heat": 0.0,
+      "o2": 0.0
+    }
+  },
+  "emission": {
+    "heat": {
+      "state.fire": 0.9,
+      "behavior.combusting": 0.6,
+      "volatility.high": 0.35,
+      "behavior.corrosive": 0.15,
+      "state.foam": -0.45,
+      "behavior.cooling": -0.7,
+      "behavior.extinguishing": -0.3,
+      "temp.cold": -0.4,
+      "temp.hot": 0.2,
+      "behavior.healing": -0.1,
+      "property.insulating": -0.25,
+      "element.oxygen": 0.05,
+      "element.water": -0.1,
+      "env.overheated": 0.25,
+      "env.frozen": -0.2
+    },
+    "o2": {
+      "behavior.combusting": -0.5,
+      "state.fire": -0.1,
+      "behavior.oxidizer": -0.2,
+      "element.oxygen": 0.45,
+      "behavior.extinguishing": 0.3,
+      "behavior.cooling": 0.05,
+      "state.foam": 0.2,
+      "volatility.high": -0.05,
+      "env.o2.high": 0.12,
+      "env.o2.low": -0.12,
+      "behavior.corrosive": -0.04,
+      "behavior.healing": 0.02,
+      "property.insulating": -0.03
+    }
+  },
+  "coupling": {
+    "gain": {
+      "phase.sync": 0.25,
+      "phase.offbeat": -0.4,
+      "phase.random": -0.18,
+      "volatility.high": 0.2,
+      "volatility.inert": -0.25,
+      "behavior.combusting": 0.15,
+      "behavior.extinguishing": -0.15,
+      "behavior.cooling": -0.12,
+      "behavior.corrosive": 0.08,
+      "behavior.healing": -0.1,
+      "state.foam": -0.35,
+      "state.fire": 0.12,
+      "property.insulating": -0.5,
+      "bio.stressed": 0.1,
+      "behavior.oxidizer": 0.1,
+      "state.agent": 0.05
+    },
+    "phaseBias": {
+      "behavior.combusting": 0.18,
+      "behavior.extinguishing": -0.22,
+      "behavior.cooling": -0.12,
+      "phase.offbeat": -0.05,
+      "phase.random": 0.08,
+      "volatility.high": 0.06,
+      "state.foam": -0.04,
+      "behavior.corrosive": 0.1,
+      "behavior.healing": -0.07,
+      "state.fire": 0.05,
+      "element.oxygen": 0.03,
+      "element.water": -0.03
+    },
+    "damping": {
+      "behavior.combusting": -0.03,
+      "volatility.high": -0.02,
+      "behavior.extinguishing": 0.08,
+      "behavior.cooling": 0.04,
+      "behavior.healing": 0.02,
+      "state.foam": 0.06,
+      "property.insulating": 0.03,
+      "state.fire": -0.01,
+      "bio.stressed": -0.015,
+      "behavior.corrosive": 0.01
+    }
+  },
+  "response": {
+    "amplitude": {
+      "self": {
+        "behavior.combusting": 0.55,
+        "state.fire": 0.25,
+        "volatility.high": 0.25,
+        "behavior.reactive": 0.2,
+        "behavior.extinguishing": -0.6,
+        "behavior.cooling": -0.35,
+        "behavior.healing": -0.25,
+        "bio.stressed": 0.2,
+        "state.foam": -0.4,
+        "behavior.corrosive": 0.1,
+        "behavior.oxidizer": 0.05,
+        "element.oxygen": 0.05,
+        "element.water": -0.2
+      },
+      "neighbor": {
+        "behavior.oxidizer": 0.35,
+        "element.oxygen": 0.25,
+        "behavior.extinguishing": -0.8,
+        "behavior.cooling": -0.4,
+        "state.foam": -0.5,
+        "volatility.high": 0.15,
+        "behavior.healing": -0.3,
+        "bio.stressed": 0.1,
+        "behavior.reactive": 0.1,
+        "behavior.corrosive": 0.12,
+        "element.water": -0.25,
+        "state.agent": 0.05
+      }
+    },
+    "tension": {
+      "self": {
+        "behavior.cooling": 0.2,
+        "behavior.healing": 0.3,
+        "behavior.extinguishing": 0.1,
+        "behavior.combusting": -0.12,
+        "volatility.high": -0.15,
+        "volatility.inert": 0.08,
+        "bio.stressed": -0.35,
+        "state.foam": 0.25,
+        "state.fire": -0.2,
+        "behavior.corrosive": -0.2,
+        "property.insulating": 0.1,
+        "element.oxygen": 0.05,
+        "element.water": 0.08
+      },
+      "neighbor": {
+        "behavior.healing": 0.25,
+        "behavior.cooling": 0.15,
+        "behavior.extinguishing": 0.1,
+        "behavior.corrosive": -0.25,
+        "behavior.combusting": -0.1,
+        "bio.stressed": -0.1,
+        "state.foam": 0.2,
+        "state.fire": -0.12,
+        "element.water": 0.1,
+        "element.oxygen": 0.05,
+        "behavior.reactive": -0.05
+      }
+    },
+    "heat": {
+      "self": {
+        "behavior.combusting": 12.0,
+        "state.fire": 1.5,
+        "volatility.high": 2.0,
+        "behavior.corrosive": 0.5,
+        "behavior.extinguishing": 0.2,
+        "behavior.cooling": -3.5,
+        "behavior.healing": -1.0,
+        "state.foam": -2.5
+      },
+      "neighbor": {
+        "behavior.corrosive": 6.0,
+        "behavior.extinguishing": 0.2,
+        "behavior.cooling": -2.0,
+        "behavior.combusting": 1.5,
+        "behavior.healing": -0.5,
+        "state.foam": -1.5,
+        "element.water": -0.6,
+        "element.oxygen": 0.4,
+        "volatility.high": 0.8
+      }
+    }
+  },
+  "permeability": {
+    "heat": {
+      "state.fire": 0.2,
+      "behavior.combusting": 0.1,
+      "behavior.extinguishing": -0.3,
+      "behavior.cooling": -0.25,
+      "state.foam": -0.5,
+      "property.insulating": -0.6,
+      "behavior.corrosive": 0.05,
+      "volatility.high": 0.15,
+      "volatility.inert": -0.1,
+      "element.water": -0.2
+    },
+    "o2": {
+      "state.fire": 0.15,
+      "behavior.combusting": -0.1,
+      "behavior.extinguishing": 0.25,
+      "behavior.cooling": 0.1,
+      "state.foam": -0.35,
+      "property.insulating": -0.4,
+      "element.oxygen": 0.4,
+      "behavior.oxidizer": 0.3,
+      "volatility.high": 0.05,
+      "volatility.inert": -0.05,
+      "behavior.corrosive": -0.08
+    }
+  },
+  "derivedTagObservers": {
+    "env.o2.high": {
+      "field": "o2",
+      "method": "ema-compare",
+      "window": 24,
+      "delta": 0.06,
+      "decay": 0.92
+    },
+    "env.o2.low": {
+      "field": "o2",
+      "method": "ema-compare",
+      "window": 24,
+      "delta": -0.06,
+      "decay": 0.92
+    },
+    "env.overheated": {
+      "field": "heat",
+      "method": "zscore",
+      "window": 16,
+      "threshold": 1.2,
+      "decay": 0.9
+    },
+    "env.frozen": {
+      "field": "heat",
+      "method": "zscore",
+      "window": 16,
+      "threshold": -1.1,
+      "decay": 0.9
+    },
+    "phase.sync": {
+      "field": "phase",
+      "method": "variance",
+      "neighborhood": 2,
+      "threshold": 0.15,
+      "weight": 0.9
+    },
+    "phase.offbeat": {
+      "field": "phase",
+      "method": "variance",
+      "neighborhood": 2,
+      "threshold": 0.35,
+      "weight": 0.7
+    },
+    "phase.random": {
+      "field": "phase",
+      "method": "spectral-noise",
+      "window": 12,
+      "threshold": 0.4,
+      "weight": 0.5
+    }
+  }
+}

@@ -177,11 +177,53 @@ export function draw(){
       ctx.restore();
     }
   }
+  drawHelpField(ctx);
   drawFlashes(ctx);
   drawParticles(ctx);
   drawHeatHaze(ctx);
   drawOverlays(ctx);
   if(isTelemetryEnabled()) drawInspectionHighlight(ctx);
+  ctx.restore();
+}
+
+function drawHelpField(ctx){
+  const field = world.helpField;
+  if(!field) return;
+  const cell = world.cell;
+  if(cell <= 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  for(let y=0;y<world.H;y++){
+    for(let x=0;x<world.W;x++){
+      const index = idx(x,y);
+      const value = field[index];
+      if(value <= 0.01) continue;
+      const norm = Math.min(1, value);
+      const coreAlpha = clamp01(0.25 + norm * 0.45);
+      if(coreAlpha <= 0.02) continue;
+      const baseX = x * cell + cell/2;
+      const baseY = y * cell + cell/2;
+      const radius = Math.max(1.5, cell * (0.18 + norm * 5.45));
+      const inner = Math.max(0, radius * 0.35);
+      const gradient = ctx.createRadialGradient(baseX, baseY, inner, baseX, baseY, radius);
+      const coreR = 255;
+      const coreG = clamp255(20 + norm * 25);
+      const coreB = clamp255(18 + norm * 20);
+      const midR = clamp255(220 + norm * 20);
+      const midG = clamp255(30 + norm * 30);
+      const midB = clamp255(26 + norm * 25);
+      const outerR = clamp255(160 + norm * 35);
+      const outerG = clamp255(22 + norm * 20);
+      const outerB = clamp255(18 + norm * 18);
+      gradient.addColorStop(0, `rgba(${coreR}, ${coreG}, ${coreB}, ${Math.min(1, 0.55 + norm * 0.4)})`);
+      gradient.addColorStop(0.5, `rgba(${midR}, ${midG}, ${midB}, ${coreAlpha * 0.45})`);
+      gradient.addColorStop(1, `rgba(${outerR}, ${outerG}, ${outerB}, 0)`);
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(baseX, baseY, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   ctx.restore();
 }
 

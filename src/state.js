@@ -7,6 +7,7 @@ export const world = {
   cell: 9,
   heat: null,
   o2: null,
+  helpField: null,
   wall: null,
   vent: null,
   fire: null,
@@ -60,6 +61,7 @@ export function resetWorld(o2BaseValue){
   const size = world.W * world.H;
   world.heat = new Float32Array(size);
   world.o2   = new Float32Array(size);
+  world.helpField = new Float32Array(size);
   world.wall = new Uint8Array(size);
   world.vent = new Uint8Array(size);
   world.fire = new Set();
@@ -69,6 +71,7 @@ export function resetWorld(o2BaseValue){
   world.clfBurners = new Map();
   world.foamTimers = new Map();
   world.o2.fill(o2BaseValue);
+  world.helpField.fill(0);
 
   for(let x=0;x<world.W;x++){
     world.wall[idx(x,0)] = 1;

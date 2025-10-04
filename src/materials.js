@@ -49,7 +49,9 @@ export function couple(A,B,k=1.0){
   const dphi = Math.min(d, TAU - d);
   const phaseGain = Math.exp(-(dphi*dphi)/(2*0.25*0.25));
   const gate = 1.0/(0.5 + A.tension + B.tension);
-  return k * phaseGain * gate * Math.max(0, A.amplitude + B.amplitude);
+  const couple_value = k * phaseGain * gate * Math.max(0, A.amplitude + B.amplitude);
+  //console.log(couple_value)
+  return couple_value
 }
 
 export function addHeatXY(x,y,dh){
@@ -250,7 +252,7 @@ export function reactFireO2(i, settings){
   if(F.mode !== Mode.FIRE) return;
   const o = world.o2[i];
   const O = { mode:Mode.OXYGEN, tension:0.55, amplitude:clamp01(o/0.30), phase:0.0 };
-  const s = couple(F,O,0.06);
+  const s = couple(F,O,0.6);
   const isClfInferno = world.clfBurners.has(i);
   const gain = isClfInferno ? 1.4 : 0.8;
   F.amplitude += gain*s;

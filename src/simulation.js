@@ -21,6 +21,10 @@ import {
 
 const medicAssignments = new Map();
 
+const HELP_DIFF = 0.12;
+const HELP_DECAY = 0.02;
+const HELP_DEPOSIT = 0.10;
+
 export class Agent{
   constructor(x,y,mode){
     this.x = x;
@@ -45,6 +49,7 @@ export class Agent{
       this.medicPath = [];
       this.medicScanTimer = 0;
       this.medicRepathTimer = 0;
+      this._medicPickNewScoutDir();
     }
   }
   _medicAcquireTarget(){
@@ -117,8 +122,72 @@ export class Agent{
     this.medicPath = path.reverse();
   }
 
+  _medicPickNewScoutDir(){
+    const dirs = DIRS4;
+    const choice = dirs[(Math.random()*dirs.length)|0];
+    this.medicScoutDir = { dx: choice[0], dy: choice[1] };
+  }
+
+  _medicClimbHelp(field){
+    if(!field) return false;
+    const hereIndex = idx(this.x, this.y);
+    const hereValue = field[hereIndex] ?? 0;
+    let bestValue = hereValue;
+    let bestX = this.x;
+    let bestY = this.y;
+    for(const [dx,dy] of DIRS4){
+      const nx = this.x + dx;
+      const ny = this.y + dy;
+      if(!inBounds(nx,ny)) continue;
+      const ni = idx(nx, ny);
+      if(world.wall[ni] || world.fire.has(ni)) continue;
+      const val = field[ni] ?? 0;
+      if(val > bestValue){
+        bestValue = val;
+        bestX = nx;
+        bestY = ny;
+      }
+    }
+    if(bestValue > hereValue + 0.004){
+      this.x = bestX;
+      this.y = bestY;
+      this.medicPath = [];
+      if(this.medicTarget){
+        this.medicRepathTimer = Math.min(this.medicRepathTimer, 1);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  _medicWander(){
+    if(!this.medicScoutDir) this._medicPickNewScoutDir();
+    for(let attempt=0; attempt<4; attempt++){
+      const dir = this.medicScoutDir;
+      const nx = this.x + dir.dx;
+      const ny = this.y + dir.dy;
+      if(inBounds(nx,ny)){
+        const ni = idx(nx, ny);
+        if(!world.wall[ni] && !world.fire.has(ni)){
+          this.x = nx;
+          this.y = ny;
+          if(Math.random() < 0.2) this._medicPickNewScoutDir();
+          return;
+        }
+      }
+      this._medicPickNewScoutDir();
+    }
+  }
+
   _medicAdvance(){
-    if(!this.medicTarget) return;
+    const helpField = world.helpField;
+    if(helpField && this._medicClimbHelp(helpField)){
+      return;
+    }
+    if(!this.medicTarget){
+      this._medicWander();
+      return;
+    }
     const target = this.medicTarget;
     if(target.S?.mode !== Mode.PANIC && target.S?.tension > this.medicConfig.burstTriggerTension){
       this._medicReleaseTarget();
@@ -150,7 +219,7 @@ export class Agent{
   }
 
   _doStep(bins){
-    if(Math.random()<0.45){
+    if(!this.isMedic && Math.random()<0.45){
       const dirs = DIRS4;
       const [dx,dy]=dirs[(Math.random()*dirs.length)|0];
       const nx=this.x+dx, ny=this.y+dy;
@@ -252,6 +321,21 @@ export class Agent{
     } else {
       if(this.S.amplitude>thresholds.panic.amplitudeHigh && this.S.tension<thresholds.panic.tensionLow) this.S.mode=Mode.PANIC;
       else if(this.S.amplitude<thresholds.panic.amplitudeLow) this.S.mode=Mode.CALM;
+    }
+
+    if(this.S?.mode === Mode.PANIC && world.helpField){
+      const intensity = this.panicLevel ?? 0;
+      if(intensity > 0){
+        const k = idx(this.x, this.y);
+        const current = world.helpField[k] || 0;
+        const deficit = clamp01(1 - current);
+        if(deficit > 0){
+          const baseDeposit = HELP_DEPOSIT * intensity * deficit;
+          const jitter = (Math.random() - 0.5) * baseDeposit * 0.4;
+          const delta = Math.max(0, baseDeposit + jitter);
+          world.helpField[k] = clamp01(current + delta);
+        }
+      }
     }
   }
   step(){ this._doStep(null); }
@@ -393,6 +477,15 @@ let acidBasePairs = new Set();
     if(paused && !force) return false;
     diffuse(world.heat, settings.dHeat);
     diffuse(world.o2, settings.dO2);
+    if(world.helpField){
+      diffuse(world.helpField, HELP_DIFF);
+      const keep = 1 - HELP_DECAY;
+      for(let i=0;i<world.helpField.length;i++){
+        if(world.wall[i]) continue;
+        const v = world.helpField[i] * keep;
+        world.helpField[i] = v < 0.0001 ? 0 : v;
+      }
+    }
     const base = settings.o2Base;
     for(let i=0;i<world.o2.length;i++) if(!world.wall[i]&&!world.vent[i]) world.o2[i]+= (base - world.o2[i]) * 0.002;
     for(let i=0;i<world.vent.length;i++) if(world.vent[i]) world.o2[i] = Math.min(base, world.o2[i] + 0.02);
