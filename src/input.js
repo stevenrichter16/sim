@@ -20,6 +20,8 @@ import {
   getInspectedTile,
   setPaused,
   isPaused,
+  setSimSpeed,
+  getSimSpeed,
 } from './state.js';
 import { baseStringFor, ensureCryofoam } from './materials.js';
 
@@ -58,6 +60,9 @@ export function initInput({ canvas, draw }){
   const toggleTelemetryBtn = document.getElementById('toggleTelemetry');
   const togglePauseBtn = document.getElementById('togglePause');
   const stepOnceBtn = document.getElementById('stepOnce');
+  const fastStepBtn = document.getElementById('fastStep');
+  const simSpeedSlider = document.getElementById('simSpeed');
+  const simSpeedVal = document.getElementById('simSpeedVal');
   const toggleRecorderBtn = document.getElementById('toggleRecorder');
   const seedWarmBtn = document.getElementById('seedWarm');
   const telemetryPanel = document.getElementById('telemetryPanel');
@@ -893,6 +898,12 @@ export function initInput({ canvas, draw }){
         updateMetrics({ reset:true });
       };
     }
+    if(fastStepBtn){
+      fastStepBtn.onclick = ()=>{
+        const mult = Math.max(1, (parseInt(simSpeedSlider?.value ?? '1', 10) || 1) * 10);
+        simulation.fastForward(mult);
+      };
+    }
   }
 
   if(zoomInBtn) zoomInBtn.addEventListener('click',()=> applyZoom(1.25));
@@ -930,6 +941,18 @@ export function initInput({ canvas, draw }){
         }
       }
     });
+  }
+
+  if(simSpeedSlider){
+    const applySpeed = ()=>{
+      const value = parseInt(simSpeedSlider.value, 10) || 1;
+      setSimSpeed(value);
+      if(simSpeedVal) simSpeedVal.textContent = String(value);
+    };
+    simSpeedSlider.value = String(getSimSpeed());
+    if(simSpeedVal) simSpeedVal.textContent = String(getSimSpeed());
+    simSpeedSlider.addEventListener('input', applySpeed);
+    applySpeed();
   }
 
   setRecorderButtonState(debugConfig.enableRecorder);

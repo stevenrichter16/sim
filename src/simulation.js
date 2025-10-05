@@ -1,5 +1,5 @@
-import { Mode, DIRS4, clamp01, wrapTau } from './constants.js';
-import { world, idx, inBounds, resetWorld, metricsState } from './state.js';
+import { Mode, DIRS4, clamp01, wrapTau, lerp } from './constants.js';
+import { world, idx, inBounds, resetWorld, metricsState, getSimSpeed } from './state.js';
 import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
@@ -26,6 +26,119 @@ const HELP_DIFF = 0.12;
 const HELP_DECAY = 0.02;
 const HELP_DEPOSIT = 0.10;
 const MAX_PHASE_SHOCK = 1.2;
+
+function localCrowdPenalty(x,y){
+  let penalty = 0;
+  let seen = 0;
+  for(const agent of world.agents){
+    const dx = Math.abs(agent.x - x);
+    const dy = Math.abs(agent.y - y);
+    if(dx > 2 || dy > 2) continue;
+    const dist = dx + dy;
+    if(dist === 0){
+      penalty += 0.45;
+    } else if(dist === 1){
+      penalty += 0.28;
+    } else if(dist === 2){
+      penalty += 0.14;
+    }
+    if(++seen >= 12) break;
+    if(penalty >= 1.0) return 1.0;
+  }
+  return penalty;
+}
+
+function safetyScore(x,y){
+  if(!inBounds(x,y)) return -Infinity;
+  const k = idx(x,y);
+  if(world.wall[k]) return -Infinity;
+  const heat = world.heat[k] ?? 0;
+  const o2 = world.o2[k] ?? 0;
+  const S = world.strings[k];
+  const fireAmp = (S?.mode === Mode.FIRE) ? clamp01(S.amplitude ?? 0) : 0;
+  const crowd = localCrowdPenalty(x,y);
+  return (1 - heat) * 0.55 + o2 * 0.28 + (1 - fireAmp) * 0.07 - crowd * 0.35;
+}
+
+function bestDirectionByHeat(x,y,radius=2){
+  const here = safetyScore(x,y);
+  let best = { dx:0, dy:0, h: here };
+  for(let r=1; r<=radius; r++){
+    for(let dx=-r; dx<=r; dx++){
+      for(let dy=-r; dy<=r; dy++){
+        if(Math.abs(dx) + Math.abs(dy) !== r) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if(!inBounds(nx,ny)) continue;
+        const k = idx(nx,ny);
+        if(world.wall[k]) continue;
+        const h = world.heat[k];
+        if(h < best.h - 0.001){
+          const stepX = dx === 0 ? 0 : dx / Math.abs(dx);
+          const stepY = dy === 0 ? 0 : dy / Math.abs(dy);
+          best = { dx: stepX, dy: stepY, h };
+        }
+      }
+    }
+    if(best.h < here - 0.02) break;
+  }
+  return best;
+}
+
+function setHeadingFromVector(S, dx, dy){
+  if(dx === 0 && dy === 0) return;
+  S.phase = wrapTau(Math.atan2(dy, dx));
+}
+
+function stepAlongPhase(agent){
+  const ang = agent.S.phase ?? 0;
+  let best = { dx:0, dy:0, diff: Infinity };
+  for(const [dx,dy] of DIRS4){
+    const nx = agent.x + dx;
+    const ny = agent.y + dy;
+    if(!inBounds(nx,ny) || world.wall[idx(nx,ny)]) continue;
+    const dirAng = Math.atan2(dy, dx);
+    let diff = Math.abs(ang - dirAng);
+    if(diff > Math.PI) diff = TAU - diff;
+    if(diff < best.diff){
+      best = { dx, dy, diff };
+    }
+  }
+  if(best.diff < Infinity){
+    agent.x += best.dx;
+    agent.y += best.dy;
+    return true;
+  }
+  return false;
+}
+
+function tryRandomStep(agent){
+  const dirs = DIRS4;
+  for(let attempt=0; attempt<4; attempt++){
+    const [dx,dy]=dirs[(Math.random()*dirs.length)|0];
+    const nx=agent.x+dx, ny=agent.y+dy;
+    if(inBounds(nx,ny) && !world.wall[idx(nx,ny)]){
+      agent.x=nx; agent.y=ny; return true;
+    }
+  }
+  return false;
+}
+
+function twoStepEscapeOK(x,y){
+  const hereHeat = world.heat[idx(x,y)] ?? 0;
+  for(const [dx,dy] of DIRS4){
+    const mx = x + dx;
+    const my = y + dy;
+    if(!inBounds(mx,my) || world.wall[idx(mx,my)]) continue;
+    const midHeat = world.heat[idx(mx,my)] ?? 1;
+    if(midHeat > hereHeat + 0.05) continue;
+    const best = bestDirectionByHeat(mx,my,2);
+    if(best.h < hereHeat - 0.05){
+      return { nx: mx, ny: my };
+    }
+  }
+  return null;
+}
 
 export class Agent{
   constructor(x,y,mode){
@@ -269,11 +382,64 @@ export class Agent{
   }
 
   _doStep(bins){
-    if(!this.isMedic && Math.random()<0.45){
-      const dirs = DIRS4;
-      const [dx,dy]=dirs[(Math.random()*dirs.length)|0];
-      const nx=this.x+dx, ny=this.y+dy;
-      if(inBounds(nx,ny)&&!world.wall[idx(nx,ny)]){ this.x=nx; this.y=ny; }
+    if(!this.isMedic){
+      const panicWeight = clamp01((this.S?.amplitude ?? 0) - 0.3 + (0.6 - (this.S?.tension ?? 0)));
+      const safetyBias = lerp(0.35, 0.9, panicWeight);
+      const hereIdx = idx(this.x, this.y);
+      const hereHeat = world.heat[hereIdx] ?? 0;
+      let minNeighborHeat = Infinity;
+      for(const [dx,dy] of DIRS4){
+        const nx = this.x + dx;
+        const ny = this.y + dy;
+        if(!inBounds(nx,ny)) continue;
+        const h = world.heat[idx(nx,ny)] ?? 1;
+        if(h < minNeighborHeat) minNeighborHeat = h;
+      }
+      const overwhelmed = (hereHeat > thresholds.heat.highThreshold) &&
+                          (minNeighborHeat >= hereHeat - 0.01) &&
+                          ((this.S?.amplitude ?? 0) > 0.6) &&
+                          ((this.S?.tension ?? 0) < 0.45);
+      if(overwhelmed){
+        const dir = bestDirectionByHeat(this.x, this.y, 2);
+        if(dir.h < hereHeat - 0.02){
+          setHeadingFromVector(this.S, dir.dx, dir.dy);
+          if(stepAlongPhase(this)) return;
+        }
+        const tunnel = twoStepEscapeOK(this.x, this.y);
+        if(tunnel){
+          this.x = tunnel.nx;
+          this.y = tunnel.ny;
+          return;
+        }
+        if(stepAlongPhase(this)) return;
+      }
+      let moved = false;
+      if(Math.random() < safetyBias){
+        const currentScore = safetyScore(this.x, this.y);
+        let bestX=this.x, bestY=this.y, bestScore=currentScore;
+        for(const [dx,dy] of DIRS4){
+          const nx=this.x+dx;
+          const ny=this.y+dy;
+          if(!inBounds(nx,ny)) continue;
+          const s = safetyScore(nx,ny) + (Math.random()-0.5)*0.002;
+          if(s > bestScore + 0.0005){
+            bestScore = s;
+            bestX = nx;
+            bestY = ny;
+          }
+        }
+        if(bestX !== this.x || bestY !== this.y){
+          this.x = bestX;
+          this.y = bestY;
+          moved = true;
+        }
+      }
+      if(!moved){
+        const randomBias = 0.25 + panicWeight * 0.55;
+        if(Math.random() < randomBias){
+          moved = tryRandomStep(this);
+        }
+      }
     }
     let acc=0,sumPhase=0,n=0;
     const BIN=4;
@@ -372,6 +538,11 @@ export class Agent{
     }
 
     this.S.amplitude*=0.998;
+    const currentSafety = safetyScore(this.x, this.y);
+    if(currentSafety > 0.8){
+      this.S.tension = clamp01(this.S.tension + 0.0025);
+      this.S.amplitude = Math.max(0, this.S.amplitude - 0.0025);
+    }
     const panicIntensity = clamp01((this.S.amplitude - 0.2) * 0.8 + (0.5 - this.S.tension));
     this.panicLevel = panicIntensity;
     if(this.isMedic){
@@ -539,6 +710,10 @@ let acidBasePairs = new Set();
 
   function stepSimulation(settings, { force=false } = {}){
     if(paused && !force) return false;
+    const speedMultiplier = force ? 1 : getSimSpeed();
+    for(let speedStep = 0; speedStep < speedMultiplier; speedStep++){
+
+    if(paused && !force) return false;
     diffuse(world.heat, settings.dHeat);
     diffuse(world.o2, settings.dO2);
     if(world.helpField){
@@ -705,18 +880,13 @@ let acidBasePairs = new Set();
       world.heat[i] = Math.max(0, Math.min(1, world.heat[i]));
     }
 
-    if(updateMetrics){
-      updateMetrics({ reset:false });
-    }
-    stepCount++;
-    simTime += 100;
+        }
+    if(updateMetrics){ updateMetrics({ reset:false }); }
+    stepCount += speedMultiplier;
+    simTime += 100 * speedMultiplier;
     const rec = ensureRecorder();
     if(rec){
-      rec.record({
-        frame: stepCount,
-        time: simTime,
-        settings,
-      });
+      rec.record({ frame: stepCount, time: simTime, settings });
     }
     return true;
   }
@@ -730,9 +900,16 @@ let acidBasePairs = new Set();
     }
     acc += dt;
     const settings = getSettings();
-    while(acc >= 100){
+    const speed = getSimSpeed();
+    let ticks = 0;
+    while(acc >= 100 && ticks < speed){
       stepSimulation(settings);
       acc -= 100;
+      ticks++;
+    }
+    if(acc >= 100){
+      // prevent large backlog by dropping extra accumulated time
+      acc = 0;
     }
     draw();
     requestAnimationFrame(frame);
@@ -747,6 +924,13 @@ let acidBasePairs = new Set();
       if(stepSimulation(settings, { force:true })){
         draw();
       }
+    },
+    fastForward(mult=10){
+      const settings = getSettings();
+      for(let i=0;i<mult;i++){
+        stepSimulation(settings, { force:true });
+      }
+      draw();
     },
     setPaused(value){ paused = value; if(!paused){ last=performance.now(); } },
     worldInit,

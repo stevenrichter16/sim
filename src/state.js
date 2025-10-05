@@ -19,6 +19,10 @@ export const world = {
   foamTimers: new Map(),
 };
 
+export const simControl = {
+  speedMultiplier: 1,
+};
+
 export const metricsState = {
   prevO2Sum: null,
   prevFireSum: null,
@@ -142,6 +146,14 @@ export function getViewState(){
 
 export function setPaused(value){
   uiState.paused = !!value;
+}
+
+export function setSimSpeed(mult){
+  simControl.speedMultiplier = Math.max(1, Math.min(10, Math.floor(mult)));
+}
+
+export function getSimSpeed(){
+  return simControl.speedMultiplier;
 }
 
 export function isPaused(){

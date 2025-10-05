@@ -25,8 +25,13 @@
             <button class="btn" id="toggleTelemetry" type="button">📊 Telemetry</button>
             <button class="btn" id="togglePause" type="button">⏸️ Pause</button>
             <button class="btn" id="stepOnce" type="button">⏭️ Step</button>
+            <button class="btn" id="fastStep" type="button">⏩ Step ×10</button>
             <button class="btn" id="toggleRecorder" type="button">📼 Recorder Off</button>
             <button class="btn" id="seedWarm" type="button">🔥 Warm Grid</button>
+            <label class="speed-label" for="simSpeed">Speed ×
+              <input class="slider speed-slider" id="simSpeed" type="range" min="1" max="10" step="1" value="1">
+              <span class="kbd" id="simSpeedVal">1</span>
+            </label>
           </div>
 
           <!-- Brush palette (tap to select) -->
