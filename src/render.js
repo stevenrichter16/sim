@@ -197,8 +197,7 @@ export function draw(){
       ctx.restore();
     }
   }
-  drawHelpField(ctx);
-  drawRouteField(ctx);
+  drawPheromoneSlices(ctx);
   drawFlashes(ctx);
   drawParticles(ctx);
   drawHeatHaze(ctx);
@@ -207,74 +206,53 @@ export function draw(){
   ctx.restore();
 }
 
-function drawHelpField(ctx){
-  const field = world.helpField;
-  if(!field) return;
+function drawPheromoneSlices(ctx){
   const cell = world.cell;
   if(cell <= 0) return;
+  const fields = [
+    { data: world.helpField, color: '#ff6a3d', threshold: 0.015 },
+    { data: world.panicField, color: '#ff4f96', threshold: 0.015 },
+    { data: world.safeField, color: '#73ffe0', threshold: 0.015 },
+    { data: world.escapeField, color: '#6ec6ff', threshold: 0.015 },
+    { data: world.routeField, color: '#64dd88', threshold: 0.015 },
+  ];
+  if(!fields.some(f => f.data)) return;
   ctx.save();
-  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 0.85;
   for(let y=0;y<world.H;y++){
     for(let x=0;x<world.W;x++){
       const index = idx(x,y);
-      const value = field[index];
-      if(value <= 0.01) continue;
-      const norm = Math.min(1, value);
-      const coreAlpha = clamp01(0.25 + norm * 0.45);
-      if(coreAlpha <= 0.02) continue;
-      const baseX = x * cell + cell/2;
-      const baseY = y * cell + cell/2;
-      const radius = Math.max(1.5, cell * (0.18 + norm * 5.45));
-      const inner = Math.max(0, radius * 0.35);
-      const gradient = ctx.createRadialGradient(baseX, baseY, inner, baseX, baseY, radius);
-      const coreR = 255;
-      const coreG = clamp255(20 + norm * 25);
-      const coreB = clamp255(18 + norm * 20);
-      const midR = clamp255(220 + norm * 20);
-      const midG = clamp255(30 + norm * 30);
-      const midB = clamp255(26 + norm * 25);
-      const outerR = clamp255(160 + norm * 35);
-      const outerG = clamp255(22 + norm * 20);
-      const outerB = clamp255(18 + norm * 18);
-      gradient.addColorStop(0, `rgba(${coreR}, ${coreG}, ${coreB}, ${Math.min(1, 0.55 + norm * 0.4)})`);
-      gradient.addColorStop(0.5, `rgba(${midR}, ${midG}, ${midB}, ${coreAlpha * 0.45})`);
-      gradient.addColorStop(1, `rgba(${outerR}, ${outerG}, ${outerB}, 0)`);
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(baseX, baseY, radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  ctx.restore();
-}
-
-function drawRouteField(ctx){
-  const field = world.routeField;
-  if(!field) return;
-  const cell = world.cell;
-  if(cell <= 0) return;
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  for(let y=0;y<world.H;y++){
-    for(let x=0;x<world.W;x++){
-      const index = idx(x,y);
-      const value = field[index];
-      if(value <= 0.01) continue;
-      const norm = Math.min(1, value);
-      const alpha = clamp01(0.2 + norm * 0.35);
-      if(alpha <= 0.02) continue;
-      const baseX = x * cell + cell/2;
-      const baseY = y * cell + cell/2;
-      const radius = Math.max(1, cell * (0.14 + norm * 0.35));
-      const inner = Math.max(0, radius * 0.3);
-      const gradient = ctx.createRadialGradient(baseX, baseY, inner, baseX, baseY, radius);
-      gradient.addColorStop(0, `rgba(90, 220, 120, ${alpha})`);
-      gradient.addColorStop(0.6, `rgba(60, 180, 90, ${alpha * 0.45})`);
-      gradient.addColorStop(1, 'rgba(20, 60, 30, 0)');
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(baseX, baseY, radius, 0, Math.PI * 2);
-      ctx.fill();
+      const slices = [];
+      for(const f of fields){
+        if(!f.data) continue;
+        const value = f.data[index];
+        if(value <= f.threshold) continue;
+        slices.push({ value, color: f.color });
+      }
+      if(!slices.length) continue;
+      slices.sort((a,b)=> b.value - a.value);
+      let total = 0;
+      for(const s of slices) total += s.value;
+      if(total <= 0) continue;
+      const baseX = x * cell;
+      const baseY = y * cell;
+      let offset = 0;
+      for(let i=0;i<slices.length;i++){
+        const slice = slices[i];
+        let width;
+        if(i === slices.length - 1){
+          width = cell - offset;
+        } else {
+          const fraction = slice.value / total;
+          width = Math.max(1, Math.round(fraction * cell));
+          if(offset + width > cell) width = cell - offset;
+        }
+        if(width <= 0) continue;
+        ctx.fillStyle = slice.color;
+        ctx.fillRect(baseX + offset, baseY, width, cell);
+        offset += width;
+        if(offset >= cell) break;
+      }
     }
   }
   ctx.restore();

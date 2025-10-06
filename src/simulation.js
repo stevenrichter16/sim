@@ -1,4 +1,4 @@
-import { Mode, DIRS4, clamp01, wrapTau, lerp } from './constants.js';
+import { Mode, DIRS4, clamp01, wrapTau, lerp, TAU } from './constants.js';
 import { world, idx, inBounds, resetWorld, metricsState, getSimSpeed } from './state.js';
 import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
@@ -26,6 +26,62 @@ const HELP_DIFF = 0.12;
 const HELP_DECAY = 0.02;
 const HELP_DEPOSIT = 0.10;
 const MAX_PHASE_SHOCK = 1.2;
+const PANIC_DIFF = 0.08;
+const PANIC_DECAY = 0.03;
+const PANIC_DEPOSIT = 0.05;
+const SAFE_DIFF = 0.05;
+const SAFE_DECAY = 0.01;
+const SAFE_DEPOSIT = 0.02;
+const ESCAPE_DIFF = 0.14;
+const ESCAPE_DECAY = 0.06;
+const ESCAPE_DEPOSIT = 0.04;
+
+function hazardHere(k){
+  const heat = world.heat[k] ?? 0;
+  const panic = world.panicField ? world.panicField[k] ?? 0 : 0;
+  const o2 = world.o2[k] ?? 0;
+  return clamp01(0.6 * heat + 0.3 * panic + 0.1 * (1 - o2));
+}
+
+function mayExplore(agent){
+  const k = idx(agent.x, agent.y);
+  const safeHere = world.safeField ? world.safeField[k] ?? 0 : 0;
+  const hzHere = hazardHere(k);
+  const tension = agent.S?.tension ?? 0.5;
+  const amplitude = agent.S?.amplitude ?? 0.2;
+  const curiosity = clamp01((tension - 0.5) - (amplitude - 0.3));
+  const okSafe = safeHere > 0.65;
+  const okHazard = hzHere < 0.25;
+  const okMood = curiosity > 0.2;
+  return okSafe && okHazard && okMood ? curiosity : 0;
+}
+
+function tryCuriosityStep(agent){
+  const here = idx(agent.x, agent.y);
+  const safeHere = world.safeField ? world.safeField[here] ?? 0 : 0;
+  let best = { score: -Infinity, x: agent.x, y: agent.y };
+  for(const [dx,dy] of DIRS4){
+    const nx = agent.x + dx;
+    const ny = agent.y + dy;
+    if(!inBounds(nx, ny)) continue;
+    const nk = idx(nx, ny);
+    if(world.wall[nk]) continue;
+    const safeNext = world.safeField ? world.safeField[nk] ?? 0 : 0;
+    const edgeBias = Math.max(0, safeHere - safeNext);
+    if(edgeBias <= 0) continue;
+    const hz = hazardHere(nk);
+    if(hz > 0.35) continue;
+    const novelty = world.visited ? 1 - (world.visited[nk] ?? 0) : 1;
+    const score = 0.3 * edgeBias + 0.7 * novelty - 0.25 * hz + (Math.random() - 0.5) * 0.0005;
+    if(score > best.score) best = { score, x: nx, y: ny };
+  }
+  if(best.score > -Infinity && (best.x !== agent.x || best.y !== agent.y)){
+    agent.x = best.x;
+    agent.y = best.y;
+    return true;
+  }
+  return false;
+}
 
 function localCrowdPenalty(x,y){
   let penalty = 0;
@@ -56,13 +112,17 @@ function safetyScore(x,y){
   const o2 = world.o2[k] ?? 0;
   const S = world.strings[k];
   const fireAmp = (S?.mode === Mode.FIRE) ? clamp01(S.amplitude ?? 0) : 0;
+  const panic = world.panicField ? world.panicField[k] : 0;
+  const help = world.helpField ? world.helpField[k] : 0;
+  const safe = world.safeField ? world.safeField[k] : 0;
+  const escapeTrail = world.escapeField ? world.escapeField[k] : 0;
   const crowd = localCrowdPenalty(x,y);
-  return (1 - heat) * 0.55 + o2 * 0.28 + (1 - fireAmp) * 0.07 - crowd * 0.35;
+  return (1 - heat) * 0.5 + o2 * 0.24 + (1 - fireAmp) * 0.05 + safe * 0.18 + escapeTrail * 0.12 - panic * 0.3 - help * 0.25 - crowd * 0.35;
 }
 
 function bestDirectionByHeat(x,y,radius=2){
-  const here = safetyScore(x,y);
-  let best = { dx:0, dy:0, h: here };
+  const hereHeat = world.heat[idx(x,y)] ?? 1;
+  let best = { dx:0, dy:0, h: hereHeat };
   for(let r=1; r<=radius; r++){
     for(let dx=-r; dx<=r; dx++){
       for(let dy=-r; dy<=r; dy++){
@@ -80,7 +140,7 @@ function bestDirectionByHeat(x,y,radius=2){
         }
       }
     }
-    if(best.h < here - 0.02) break;
+    if(best.h < hereHeat - 0.02) break;
   }
   return best;
 }
@@ -382,11 +442,13 @@ export class Agent{
   }
 
   _doStep(bins){
+    let panicWeight = 0;
     if(!this.isMedic){
-      const panicWeight = clamp01((this.S?.amplitude ?? 0) - 0.3 + (0.6 - (this.S?.tension ?? 0)));
+      panicWeight = clamp01((this.S?.amplitude ?? 0) - 0.3 + (0.6 - (this.S?.tension ?? 0)));
       const safetyBias = lerp(0.35, 0.9, panicWeight);
       const hereIdx = idx(this.x, this.y);
       const hereHeat = world.heat[hereIdx] ?? 0;
+      let escapeDeposited = false;
       let minNeighborHeat = Infinity;
       for(const [dx,dy] of DIRS4){
         const nx = this.x + dx;
@@ -396,25 +458,44 @@ export class Agent{
         if(h < minNeighborHeat) minNeighborHeat = h;
       }
       const overwhelmed = (hereHeat > thresholds.heat.highThreshold) &&
-                          (minNeighborHeat >= hereHeat - 0.01) &&
+                          (minNeighborHeat >= hereHeat - 0.05) &&
                           ((this.S?.amplitude ?? 0) > 0.6) &&
                           ((this.S?.tension ?? 0) < 0.45);
+      const markEscapeTrail = ()=>{
+        if(!world.escapeField) return;
+        const newIdx = idx(this.x, this.y);
+        const newHeat = world.heat[newIdx] ?? 0;
+        if(newHeat < hereHeat){
+          world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + ESCAPE_DEPOSIT);
+          world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + ESCAPE_DEPOSIT * 0.5);
+          escapeDeposited = true;
+        }
+      };
       if(overwhelmed){
         const dir = bestDirectionByHeat(this.x, this.y, 2);
-        if(dir.h < hereHeat - 0.02){
+        if(dir.h <= hereHeat - 0.02){
           setHeadingFromVector(this.S, dir.dx, dir.dy);
-          if(stepAlongPhase(this)) return;
+          if(stepAlongPhase(this)){ markEscapeTrail(); return; }
         }
         const tunnel = twoStepEscapeOK(this.x, this.y);
         if(tunnel){
           this.x = tunnel.nx;
           this.y = tunnel.ny;
+          markEscapeTrail();
           return;
         }
-        if(stepAlongPhase(this)) return;
+        if(stepAlongPhase(this)){ markEscapeTrail(); return; }
       }
       let moved = false;
-      if(Math.random() < safetyBias){
+      {
+        const curiosity = mayExplore(this);
+        if(curiosity && Math.random() < (0.12 + 0.5 * curiosity)){
+          if(tryCuriosityStep(this)){
+            moved = true;
+          }
+        }
+      }
+      if(!moved && Math.random() < safetyBias){
         const currentScore = safetyScore(this.x, this.y);
         let bestX=this.x, bestY=this.y, bestScore=currentScore;
         for(const [dx,dy] of DIRS4){
@@ -438,6 +519,17 @@ export class Agent{
         const randomBias = 0.25 + panicWeight * 0.55;
         if(Math.random() < randomBias){
           moved = tryRandomStep(this);
+        }
+      }
+      if(!escapeDeposited && overwhelmed && world.escapeField){
+        const newIdx = idx(this.x, this.y);
+        if(newIdx !== hereIdx){
+          const newHeat = world.heat[newIdx] ?? 0;
+          if(newHeat < hereHeat){
+            world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + ESCAPE_DEPOSIT);
+            world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + ESCAPE_DEPOSIT * 0.5);
+            escapeDeposited = true;
+          }
         }
       }
     }
@@ -539,9 +631,18 @@ export class Agent{
 
     this.S.amplitude*=0.998;
     const currentSafety = safetyScore(this.x, this.y);
-    if(currentSafety > 0.8){
+    if(currentSafety > 0.43){
       this.S.tension = clamp01(this.S.tension + 0.0025);
       this.S.amplitude = Math.max(0, this.S.amplitude - 0.0025);
+      if(world.safeField){
+        const val = world.safeField[tileIdx] || 0;
+        world.safeField[tileIdx] = Math.min(1, val + SAFE_DEPOSIT * (1 - panicWeight));
+      }
+    }
+    if(world.visited){
+      const prevVisited = world.visited[tileIdx] ?? 0;
+      world.visited[tileIdx] = Math.min(1, prevVisited + 0.02);
+     // console.log('visited', tileIdx, world.visited[tileIdx])
     }
     const panicIntensity = clamp01((this.S.amplitude - 0.2) * 0.8 + (0.5 - this.S.tension));
     this.panicLevel = panicIntensity;
@@ -564,6 +665,10 @@ export class Agent{
           const jitter = (Math.random() - 0.5) * baseDeposit * 0.4;
           const delta = Math.max(0, baseDeposit + jitter);
           world.helpField[k] = clamp01(current + delta);
+        }
+        if(world.panicField){
+          const p = world.panicField[k] || 0;
+          world.panicField[k] = Math.min(1, p + PANIC_DEPOSIT * intensity);
         }
       }
     }
@@ -716,23 +821,53 @@ let acidBasePairs = new Set();
     if(paused && !force) return false;
     diffuse(world.heat, settings.dHeat);
     diffuse(world.o2, settings.dO2);
-    if(world.helpField){
-      diffuse(world.helpField, HELP_DIFF);
-      const keep = 1 - HELP_DECAY;
-      for(let i=0;i<world.helpField.length;i++){
-        if(world.wall[i]) continue;
-        const v = world.helpField[i] * keep;
-        world.helpField[i] = v < 0.0001 ? 0 : v;
+      if(world.helpField){
+        diffuse(world.helpField, HELP_DIFF);
+        const keep = 1 - HELP_DECAY;
+        for(let i=0;i<world.helpField.length;i++){
+          if(world.wall[i]) continue;
+          const v = world.helpField[i] * keep;
+          world.helpField[i] = v < 0.0001 ? 0 : v;
+        }
       }
-    }
-    if(world.routeField){
-      diffuse(world.routeField, 0.1);
-      for(let i=0;i<world.routeField.length;i++){
-        if(world.wall[i]) continue;
-        const v = world.routeField[i] * 0.992;
-        world.routeField[i] = v < 0.0001 ? 0 : v;
+      if(world.routeField){
+        diffuse(world.routeField, 0.1);
+        for(let i=0;i<world.routeField.length;i++){
+          if(world.wall[i]) continue;
+          const v = world.routeField[i] * 0.992;
+          world.routeField[i] = v < 0.0001 ? 0 : v;
+        }
       }
-    }
+      if(world.panicField){
+        diffuse(world.panicField, PANIC_DIFF);
+        for(let i=0;i<world.panicField.length;i++){
+          if(world.wall[i]) continue;
+          const v = world.panicField[i] * (1 - PANIC_DECAY);
+          world.panicField[i] = v < 0.0001 ? 0 : v;
+        }
+      }
+      if(world.safeField){
+        diffuse(world.safeField, SAFE_DIFF);
+        for(let i=0;i<world.safeField.length;i++){
+          if(world.wall[i]) continue;
+          const v = world.safeField[i] * (1 - SAFE_DECAY);
+          world.safeField[i] = v < 0.0001 ? 0 : v;
+        }
+      }
+      if(world.escapeField){
+        diffuse(world.escapeField, ESCAPE_DIFF);
+        for(let i=0;i<world.escapeField.length;i++){
+          if(world.wall[i]) continue;
+          const v = world.escapeField[i] * (1 - ESCAPE_DECAY);
+          world.escapeField[i] = v < 0.0001 ? 0 : v;
+        }
+      }
+      if(world.visited){
+        for(let i=0;i<world.visited.length;i++){
+          const v = world.visited[i] * 0.999;
+          world.visited[i] = v < 0.0001 ? 0 : v;
+        }
+      }
     const base = settings.o2Base;
     for(let i=0;i<world.o2.length;i++) if(!world.wall[i]&&!world.vent[i]) world.o2[i]+= (base - world.o2[i]) * 0.002;
     for(let i=0;i<world.vent.length;i++) if(world.vent[i]) world.o2[i] = Math.min(base, world.o2[i] + 0.02);

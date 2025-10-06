@@ -9,6 +9,10 @@ export const world = {
   o2: null,
   helpField: null,
   routeField: null,
+  panicField: null,
+  safeField: null,
+  escapeField: null,
+  visited: null,
   wall: null,
   vent: null,
   fire: null,
@@ -68,6 +72,10 @@ export function resetWorld(o2BaseValue){
   world.o2   = new Float32Array(size);
   world.helpField = new Float32Array(size);
   world.routeField = new Float32Array(size);
+  world.panicField = new Float32Array(size);
+  world.safeField = new Float32Array(size);
+  world.escapeField = new Float32Array(size);
+  world.visited = new Float32Array(size);
   world.wall = new Uint8Array(size);
   world.vent = new Uint8Array(size);
   world.fire = new Set();
@@ -79,6 +87,10 @@ export function resetWorld(o2BaseValue){
   world.o2.fill(o2BaseValue);
   world.helpField.fill(0);
   world.routeField.fill(0);
+  world.panicField.fill(0);
+  world.safeField.fill(0);
+  world.escapeField.fill(0);
+  world.visited.fill(0);
 
   for(let x=0;x<world.W;x++){
     world.wall[idx(x,0)] = 1;

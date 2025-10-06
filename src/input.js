@@ -552,6 +552,38 @@ export function initInput({ canvas, draw }){
     return {x,y};
   }
 
+  const PHEROMONE_BRUSHES = Object.freeze({
+    'pheromone-help': { field: 'helpField', value: 1 },
+    'pheromone-panic': { field: 'panicField', value: 1 },
+    'pheromone-route': { field: 'routeField', value: 1 },
+    'pheromone-safe': { field: 'safeField', value: 1 },
+    'pheromone-escape': { field: 'escapeField', value: 1 },
+  });
+
+  const PHEROMONE_FIELDS = Object.freeze([
+    'helpField',
+    'panicField',
+    'routeField',
+    'safeField',
+    'escapeField',
+  ]);
+
+  function depositPheromone(fieldName, tileIdx, amount = 1){
+    const field = world[fieldName];
+    if(!field || tileIdx < 0 || tileIdx >= field.length) return;
+    const current = field[tileIdx] ?? 0;
+    field[tileIdx] = Math.max(current, amount);
+  }
+
+  function clearPheromones(tileIdx){
+    for(const fieldName of PHEROMONE_FIELDS){
+      const field = world[fieldName];
+      if(field && tileIdx >= 0 && tileIdx < field.length){
+        field[tileIdx] = 0;
+      }
+    }
+  }
+
   function place(x,y){
     if(!inBounds(x,y)) return;
     const i=idx(x,y);
@@ -563,6 +595,7 @@ export function initInput({ canvas, draw }){
       world.fire.delete(i);
       world.vent[i]=0;
       world.wall[i]=0;
+      clearPheromones(i);
       draw();
       return;
     }
@@ -627,6 +660,12 @@ export function initInput({ canvas, draw }){
       world.vent[i]=0;
       world.fire.delete(i);
       world.strings[i]=baseStringFor(Mode.MYCELIUM);
+      draw();
+      return;
+    }
+    const pheromone = PHEROMONE_BRUSHES[brush];
+    if(pheromone){
+      depositPheromone(pheromone.field, i, pheromone.value);
       draw();
       return;
     }
