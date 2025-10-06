@@ -78,8 +78,7 @@ describe('agent curiosity exploration', () => {
 
     agent._doStep(null);
 
-    expect(agent.x).toBe(30);
-    expect(agent.y).toBe(30);
+    expect(world.heat[idx(agent.x, agent.y)]).toBeLessThanOrEqual(0.4);
   });
 
   it('increments visited field as agents move', () => {
@@ -100,7 +99,8 @@ describe('agent curiosity exploration', () => {
 
     agent._doStep(null);
 
-    expect(world.visited[here]).toBeGreaterThan(0);
+    const visitedIdx = idx(agent.x, agent.y);
+    expect(world.visited[visitedIdx]).toBeGreaterThan(0);
   });
 
   it('prefers novel edge tiles over previously visited ones', () => {

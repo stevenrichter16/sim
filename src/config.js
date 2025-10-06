@@ -49,3 +49,17 @@ export const roles = {
     maxAssignmentsPerTarget: 1,
   },
 };
+
+export const fieldConfig = {
+  help:   { D: 0.12, tHalf: 6,   depositBase: 0.10 },
+  route:  { D: 0.10, tHalf: 30,  depositBase: 0.04 },
+  panic:  { D: 0.10, tHalf: 8,   depositBase: 0.05 },
+  safe:   { D: 0.09, tHalf: 25,  depositBase: 0.02 },
+  escape: { D: 0.11, tHalf: 10,  depositBase: 0.04 },
+  visited:{              tHalf: 20 },
+  sound:  { D: 0.28, tHalf: 15,  depositBase: 0.10 },
+};
+
+export function decayMultiplierFromHalfLife(tHalf, dt = 1){
+  return Math.pow(0.5, dt / Math.max(1e-6, tHalf));
+}

@@ -42,6 +42,11 @@ export const metricsState = {
     tension: new Array(20).fill(0),
     heat: new Array(20).fill(0),
   },
+  diagnostics: {
+    fieldTotals: { help:0, route:0, panic:0, safe:0, escape:0 },
+    hotAgents: 0,
+    overwhelmedAgents: 0,
+  },
 };
 
 export const uiState = {

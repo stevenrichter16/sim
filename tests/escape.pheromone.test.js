@@ -79,7 +79,7 @@ describe('escape pheromone deposition', () => {
     expect(world.escapeField[here]).toBe(0);
     expect(world.escapeField[coolIdx]).toBe(0);
 
-    agent._doStep(null);
+    sim.stepOnce();
 
     expect(idx(agent.x, agent.y)).not.toBe(here);
     let hasEscape = false;
@@ -106,7 +106,7 @@ describe('escape pheromone deposition', () => {
       world.heat[nIdx] = 0.9;
       world.wall[nIdx] = 1;
     }
-    agent._doStep(null);
+    sim.stepOnce();
 
     expect(world.escapeField[here]).toBe(0);
     let zeroEverywhere = true;

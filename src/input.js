@@ -51,6 +51,9 @@ export function initInput({ canvas, draw }){
   const mAmpAvg = document.getElementById('mAmpAvg');
   const mTensionAvg = document.getElementById('mTensionAvg');
   const mHeatAvg = document.getElementById('mHeatAvg');
+  const mFieldTotals = document.getElementById('mFieldTotals');
+  const mHotAgents = document.getElementById('mHotAgents');
+  const mOverwhelmed = document.getElementById('mOverwhelmed');
   const mModeCounts = document.getElementById('mModeCounts');
   const histAmpContainer = document.getElementById('histAmp');
   const histTensionContainer = document.getElementById('histTension');
@@ -78,6 +81,19 @@ export function initInput({ canvas, draw }){
   const historyScrubber = document.getElementById('historyScrubber');
   const historySlider = document.getElementById('historyIndex');
   const historyLabel = document.getElementById('historyLabel');
+  const overlayToggleKeys = {
+    Digit1: 'help',
+    Digit2: 'panic',
+    Digit3: 'safe',
+    Digit4: 'escape',
+    Digit5: 'route',
+  };
+
+  function toggleOverlaySlice(name){
+    const current = !!debugConfig.overlay?.[name];
+    setDebugFlag(`overlay.${name}`, !current);
+    draw();
+  }
   const legendPanel = document.getElementById('legendPanel');
   const metricsToggle = document.getElementById('metricsToggle');
   const metricsSummary = document.getElementById('metricsSummary');
@@ -500,6 +516,9 @@ export function initInput({ canvas, draw }){
       setDebugFlag('overlay.tension', !debugConfig.overlay.tension);
       draw();
       ev.preventDefault();
+    } else if(overlayToggleKeys[ev.code] && !ev.repeat){
+      toggleOverlaySlice(overlayToggleKeys[ev.code]);
+      ev.preventDefault();
     }
   }, { passive:false });
 
@@ -740,7 +759,7 @@ export function initInput({ canvas, draw }){
     o2Cut: parseFloat(o2Cut?.value ?? '0.16'),
   });
 
-  function updateMetrics({ reset=false }={}){
+  function updateMetrics({ reset=false, diagnostics }={}){
     if(reset){
       metricsState.prevO2Sum = null;
       metricsState.prevFireSum = null;
@@ -752,6 +771,9 @@ export function initInput({ canvas, draw }){
       if(mTensionAvg) mTensionAvg.textContent = '—';
       if(mHeatAvg) mHeatAvg.textContent = '—';
       if(mModeCounts) mModeCounts.textContent = '';
+      if(mFieldTotals) mFieldTotals.textContent = '—';
+      if(mHotAgents) mHotAgents.textContent = '—';
+      if(mOverwhelmed) mOverwhelmed.textContent = '—';
       renderHistogram(histAmplitudeBars, metricsState.histograms.amplitude);
       renderHistogram(histTensionBars, metricsState.histograms.tension);
       renderHistogram(histHeatBars, metricsState.histograms.heat);
@@ -827,6 +849,19 @@ export function initInput({ canvas, draw }){
     renderHistogram(histAmplitudeBars, histAmp);
     renderHistogram(histTensionBars, histTen);
     renderHistogram(histHeatBars, histHeat);
+    if(diagnostics){
+      metricsState.diagnostics = diagnostics;
+      const totals = diagnostics.fieldTotals || {};
+      if(mFieldTotals){
+        mFieldTotals.textContent = ['H', (totals.help ?? 0).toFixed(2),
+                                    'R', (totals.route ?? 0).toFixed(2),
+                                    'P', (totals.panic ?? 0).toFixed(2),
+                                    'S', (totals.safe ?? 0).toFixed(2),
+                                    'E', (totals.escape ?? 0).toFixed(2)].join(' ');
+      }
+      if(mHotAgents) mHotAgents.textContent = String(diagnostics.hotAgents ?? 0);
+      if(mOverwhelmed) mOverwhelmed.textContent = String(diagnostics.overwhelmedAgents ?? 0);
+    }
     updateHistoryUI();
   }
 

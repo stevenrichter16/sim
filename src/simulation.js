@@ -3,7 +3,7 @@ import { world, idx, inBounds, resetWorld, metricsState, getSimSpeed } from './s
 import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
-import { thresholds, roles } from './config.js';
+import { thresholds, roles, fieldConfig, decayMultiplierFromHalfLife } from './config.js';
 import {
   baseStringFor,
   Sget,
@@ -22,19 +22,67 @@ import {
 
 const medicAssignments = new Map();
 
-const HELP_DIFF = 0.12;
-const HELP_DECAY = 0.02;
-const HELP_DEPOSIT = 0.10;
 const MAX_PHASE_SHOCK = 1.2;
-const PANIC_DIFF = 0.08;
-const PANIC_DECAY = 0.03;
-const PANIC_DEPOSIT = 0.05;
-const SAFE_DIFF = 0.05;
-const SAFE_DECAY = 0.01;
-const SAFE_DEPOSIT = 0.02;
-const ESCAPE_DIFF = 0.14;
-const ESCAPE_DECAY = 0.06;
-const ESCAPE_DEPOSIT = 0.04;
+
+const diagnosticsFrame = {
+  fieldTotals: { help:0, route:0, panic:0, safe:0, escape:0 },
+  hotAgents: 0,
+  overwhelmedAgents: 0,
+};
+
+function updateField(field, cfg, { skipWalls = true } = {}){
+  if(!field || !cfg) return;
+  diffuse(field, cfg?.D ?? 0);
+  const keep = decayMultiplierFromHalfLife(cfg?.tHalf ?? 1);
+  for(let i=0;i<field.length;i++){
+    if(skipWalls && world.wall[i]) continue;
+    const v = field[i] * keep;
+    field[i] = v < 0.0001 ? 0 : v;
+  }
+}
+
+function clampField01(field){
+  if(!field) return;
+  for(let i=0;i<field.length;i++){
+    const v = field[i];
+    if(v <= 0) field[i] = 0;
+    else if(v >= 1) field[i] = 1;
+  }
+}
+
+function sumField(field){
+  if(!field) return 0;
+  let total = 0;
+  for(let i=0;i<field.length;i++) total += field[i];
+  return total;
+}
+
+function movementWeightsFor(agent){
+  if(agent?.isMedic){
+    return { safety:0.2, help:0.9, route:0.3, panic:-0.2, safe:0.0, escape:0.2 };
+  }
+  return { safety:0.6, help:-0.2, route:0.3, panic:-0.5, safe:0.4, escape:0.25 };
+}
+
+function scoredNeighbor(agent, nx, ny, weights){
+  if(!inBounds(nx,ny)) return -Infinity;
+  const k = idx(nx, ny);
+  if(world.wall[k]) return -Infinity;
+  const safety = Math.max(0, Math.min(1, safetyScore(nx, ny)));
+  const help = world.helpField ? world.helpField[k] ?? 0 : 0;
+  const route = world.routeField ? world.routeField[k] ?? 0 : 0;
+  const panic = world.panicField ? world.panicField[k] ?? 0 : 0;
+  const safe = world.safeField ? world.safeField[k] ?? 0 : 0;
+  const escape = world.escapeField ? world.escapeField[k] ?? 0 : 0;
+  return (
+    (weights.safety ?? 0) * safety +
+    (weights.help ?? 0)   * help +
+    (weights.route ?? 0)  * route +
+    (weights.panic ?? 0)  * panic +
+    (weights.safe ?? 0)   * safe +
+    (weights.escape ?? 0) * escape
+  );
+}
 
 function hazardHere(k){
   const heat = world.heat[k] ?? 0;
@@ -111,13 +159,9 @@ function safetyScore(x,y){
   const heat = world.heat[k] ?? 0;
   const o2 = world.o2[k] ?? 0;
   const S = world.strings[k];
-  const fireAmp = (S?.mode === Mode.FIRE) ? clamp01(S.amplitude ?? 0) : 0;
-  const panic = world.panicField ? world.panicField[k] : 0;
-  const help = world.helpField ? world.helpField[k] : 0;
-  const safe = world.safeField ? world.safeField[k] : 0;
-  const escapeTrail = world.escapeField ? world.escapeField[k] : 0;
+  const fireAmp = clamp01(S?.mode === Mode.FIRE ? (S?.amplitude ?? 0) : 0);
   const crowd = localCrowdPenalty(x,y);
-  return (1 - heat) * 0.5 + o2 * 0.24 + (1 - fireAmp) * 0.05 + safe * 0.18 + escapeTrail * 0.12 - panic * 0.3 - help * 0.25 - crowd * 0.35;
+  return clamp01(0.55 * (1 - heat) + 0.28 * o2 + 0.10 * (1 - fireAmp) - 0.07 * crowd);
 }
 
 function bestDirectionByHeat(x,y,radius=2){
@@ -327,7 +371,8 @@ export class Agent{
     }
     if(bestValue > hereValue + 0.004){
       if(world.routeField){
-        world.routeField[hereIndex] = Math.min(1, world.routeField[hereIndex] + 0.045);
+        const deposit = fieldConfig.route?.depositBase ?? 0.04;
+        world.routeField[hereIndex] = Math.min(1, (world.routeField[hereIndex] || 0) + deposit);
       }
       this.x = bestX;
       this.y = bestY;
@@ -364,7 +409,8 @@ export class Agent{
     }
     if(bestValue > hereValue + 0.002){
       if(world.routeField){
-        world.routeField[hereIndex] = Math.min(1, world.routeField[hereIndex] + 0.02);
+        const deposit = fieldConfig.route?.depositBase ?? 0.04;
+        world.routeField[hereIndex] = Math.min(1, (world.routeField[hereIndex] || 0) + deposit);
       }
       this.x = bestX;
       this.y = bestY;
@@ -421,7 +467,8 @@ export class Agent{
     }
     const hereIndex = idx(this.x, this.y);
     if(world.routeField){
-      world.routeField[hereIndex] = Math.min(1, world.routeField[hereIndex] + 0.015);
+      const deposit = fieldConfig.route?.depositBase ?? 0.04;
+      world.routeField[hereIndex] = Math.min(1, (world.routeField[hereIndex] || 0) + deposit);
     }
     this.x = nx;
     this.y = ny;
@@ -442,12 +489,14 @@ export class Agent{
   }
 
   _doStep(bins){
+    const hereIdx = idx(this.x, this.y);
+    const hereHeat = world.heat[hereIdx] ?? 0;
+    if(hereHeat > thresholds.heat.highThreshold){
+      diagnosticsFrame.hotAgents += 1;
+    }
     let panicWeight = 0;
     if(!this.isMedic){
       panicWeight = clamp01((this.S?.amplitude ?? 0) - 0.3 + (0.6 - (this.S?.tension ?? 0)));
-      const safetyBias = lerp(0.35, 0.9, panicWeight);
-      const hereIdx = idx(this.x, this.y);
-      const hereHeat = world.heat[hereIdx] ?? 0;
       let escapeDeposited = false;
       let minNeighborHeat = Infinity;
       for(const [dx,dy] of DIRS4){
@@ -461,13 +510,15 @@ export class Agent{
                           (minNeighborHeat >= hereHeat - 0.05) &&
                           ((this.S?.amplitude ?? 0) > 0.6) &&
                           ((this.S?.tension ?? 0) < 0.45);
+      if(overwhelmed) diagnosticsFrame.overwhelmedAgents += 1;
       const markEscapeTrail = ()=>{
         if(!world.escapeField) return;
         const newIdx = idx(this.x, this.y);
         const newHeat = world.heat[newIdx] ?? 0;
         if(newHeat < hereHeat){
-          world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + ESCAPE_DEPOSIT);
-          world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + ESCAPE_DEPOSIT * 0.5);
+          const deposit = fieldConfig.escape?.depositBase ?? 0.04;
+          world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + deposit);
+          world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + deposit * 0.5);
           escapeDeposited = true;
         }
       };
@@ -495,16 +546,19 @@ export class Agent{
           }
         }
       }
-      if(!moved && Math.random() < safetyBias){
-        const currentScore = safetyScore(this.x, this.y);
-        let bestX=this.x, bestY=this.y, bestScore=currentScore;
+      if(!moved){
+        const weights = movementWeightsFor(this);
+        let bestX = this.x;
+        let bestY = this.y;
+        let bestScore = scoredNeighbor(this, this.x, this.y, weights);
         for(const [dx,dy] of DIRS4){
-          const nx=this.x+dx;
-          const ny=this.y+dy;
-          if(!inBounds(nx,ny)) continue;
-          const s = safetyScore(nx,ny) + (Math.random()-0.5)*0.002;
-          if(s > bestScore + 0.0005){
-            bestScore = s;
+          const nx = this.x + dx;
+          const ny = this.y + dy;
+          const score = scoredNeighbor(this, nx, ny, weights);
+          if(score === -Infinity) continue;
+          const jitter = (Math.random() - 0.5) * 0.001;
+          if(score + jitter > bestScore + 0.0005){
+            bestScore = score + jitter;
             bestX = nx;
             bestY = ny;
           }
@@ -526,8 +580,9 @@ export class Agent{
         if(newIdx !== hereIdx){
           const newHeat = world.heat[newIdx] ?? 0;
           if(newHeat < hereHeat){
-            world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + ESCAPE_DEPOSIT);
-            world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + ESCAPE_DEPOSIT * 0.5);
+            const deposit = fieldConfig.escape?.depositBase ?? 0.04;
+            world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + deposit);
+            world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + deposit * 0.5);
             escapeDeposited = true;
           }
         }
@@ -634,9 +689,12 @@ export class Agent{
     if(currentSafety > 0.43){
       this.S.tension = clamp01(this.S.tension + 0.0025);
       this.S.amplitude = Math.max(0, this.S.amplitude - 0.0025);
-      if(world.safeField){
-        const val = world.safeField[tileIdx] || 0;
-        world.safeField[tileIdx] = Math.min(1, val + SAFE_DEPOSIT * (1 - panicWeight));
+    }
+    if(world.safeField){
+      const val = world.safeField[tileIdx] || 0;
+      if(currentSafety > 0.7 && (this.S?.tension ?? 0) > 0.6){
+        const deposit = fieldConfig.safe?.depositBase ?? 0.02;
+        world.safeField[tileIdx] = Math.min(1, val + deposit);
       }
     }
     if(world.visited){
@@ -655,20 +713,20 @@ export class Agent{
     }
 
     if(this.S?.mode === Mode.PANIC && world.helpField){
-      const intensity = this.panicLevel ?? 0;
-      if(intensity > 0){
-        const k = tileIdx;
-        const current = world.helpField[k] || 0;
-        const deficit = clamp01(1 - current);
-        if(deficit > 0){
-          const baseDeposit = HELP_DEPOSIT * intensity * deficit;
-          const jitter = (Math.random() - 0.5) * baseDeposit * 0.4;
-          const delta = Math.max(0, baseDeposit + jitter);
-          world.helpField[k] = clamp01(current + delta);
+      const k = tileIdx;
+      const amp = clamp01(this.S?.amplitude ?? 0);
+      if(amp > 0){
+        const currentHelp = world.helpField[k] || 0;
+        const dHelp = (fieldConfig.help?.depositBase ?? 0.1) * amp * (1 - currentHelp);
+        if(dHelp > 0){
+          world.helpField[k] = Math.min(1, currentHelp + dHelp);
         }
         if(world.panicField){
-          const p = world.panicField[k] || 0;
-          world.panicField[k] = Math.min(1, p + PANIC_DEPOSIT * intensity);
+          const currentPanic = world.panicField[k] || 0;
+          const dPanic = (fieldConfig.panic?.depositBase ?? 0.05) * amp * (1 - currentPanic);
+          if(dPanic > 0){
+            world.panicField[k] = Math.min(1, currentPanic + dPanic);
+          }
         }
       }
     }
@@ -817,57 +875,24 @@ let acidBasePairs = new Set();
     if(paused && !force) return false;
     const speedMultiplier = force ? 1 : getSimSpeed();
     for(let speedStep = 0; speedStep < speedMultiplier; speedStep++){
+      diagnosticsFrame.hotAgents = 0;
+      diagnosticsFrame.overwhelmedAgents = 0;
 
     if(paused && !force) return false;
     diffuse(world.heat, settings.dHeat);
     diffuse(world.o2, settings.dO2);
-      if(world.helpField){
-        diffuse(world.helpField, HELP_DIFF);
-        const keep = 1 - HELP_DECAY;
-        for(let i=0;i<world.helpField.length;i++){
-          if(world.wall[i]) continue;
-          const v = world.helpField[i] * keep;
-          world.helpField[i] = v < 0.0001 ? 0 : v;
-        }
-      }
-      if(world.routeField){
-        diffuse(world.routeField, 0.1);
-        for(let i=0;i<world.routeField.length;i++){
-          if(world.wall[i]) continue;
-          const v = world.routeField[i] * 0.992;
-          world.routeField[i] = v < 0.0001 ? 0 : v;
-        }
-      }
-      if(world.panicField){
-        diffuse(world.panicField, PANIC_DIFF);
-        for(let i=0;i<world.panicField.length;i++){
-          if(world.wall[i]) continue;
-          const v = world.panicField[i] * (1 - PANIC_DECAY);
-          world.panicField[i] = v < 0.0001 ? 0 : v;
-        }
-      }
-      if(world.safeField){
-        diffuse(world.safeField, SAFE_DIFF);
-        for(let i=0;i<world.safeField.length;i++){
-          if(world.wall[i]) continue;
-          const v = world.safeField[i] * (1 - SAFE_DECAY);
-          world.safeField[i] = v < 0.0001 ? 0 : v;
-        }
-      }
-      if(world.escapeField){
-        diffuse(world.escapeField, ESCAPE_DIFF);
-        for(let i=0;i<world.escapeField.length;i++){
-          if(world.wall[i]) continue;
-          const v = world.escapeField[i] * (1 - ESCAPE_DECAY);
-          world.escapeField[i] = v < 0.0001 ? 0 : v;
-        }
-      }
-      if(world.visited){
-        for(let i=0;i<world.visited.length;i++){
-          const v = world.visited[i] * 0.999;
-          world.visited[i] = v < 0.0001 ? 0 : v;
-        }
-      }
+      updateField(world.helpField, fieldConfig.help);
+      updateField(world.routeField, fieldConfig.route);
+      updateField(world.panicField, fieldConfig.panic);
+      updateField(world.safeField, fieldConfig.safe);
+      updateField(world.escapeField, fieldConfig.escape);
+      updateField(world.visited, fieldConfig.visited, { skipWalls: false });
+      clampField01(world.helpField);
+      clampField01(world.routeField);
+      clampField01(world.panicField);
+      clampField01(world.safeField);
+      clampField01(world.escapeField);
+      clampField01(world.visited);
     const base = settings.o2Base;
     for(let i=0;i<world.o2.length;i++) if(!world.wall[i]&&!world.vent[i]) world.o2[i]+= (base - world.o2[i]) * 0.002;
     for(let i=0;i<world.vent.length;i++) if(world.vent[i]) world.o2[i] = Math.min(base, world.o2[i] + 0.02);
@@ -1016,7 +1041,20 @@ let acidBasePairs = new Set();
     }
 
         }
-    if(updateMetrics){ updateMetrics({ reset:false }); }
+    const totals = {
+      help: sumField(world.helpField),
+      route: sumField(world.routeField),
+      panic: sumField(world.panicField),
+      safe: sumField(world.safeField),
+      escape: sumField(world.escapeField),
+    };
+    diagnosticsFrame.fieldTotals = totals;
+    const diagnosticsPayload = {
+      fieldTotals: totals,
+      hotAgents: diagnosticsFrame.hotAgents,
+      overwhelmedAgents: diagnosticsFrame.overwhelmedAgents,
+    };
+    if(updateMetrics){ updateMetrics({ reset:false, diagnostics: diagnosticsPayload }); }
     stepCount += speedMultiplier;
     simTime += 100 * speedMultiplier;
     const rec = ensureRecorder();

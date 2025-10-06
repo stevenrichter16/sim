@@ -6,6 +6,11 @@ export const debugConfig = {
     heat: false,
     amplitude: false,
     tension: false,
+    help: true,
+    panic: true,
+    safe: true,
+    escape: true,
+    route: true,
   },
 };
 

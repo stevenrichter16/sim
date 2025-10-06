@@ -209,16 +209,16 @@ export function draw(){
 function drawPheromoneSlices(ctx){
   const cell = world.cell;
   if(cell <= 0) return;
-  const fields = [
-    { data: world.helpField, color: '#ff6a3d', threshold: 0.015 },
-    { data: world.panicField, color: '#ff4f96', threshold: 0.015 },
-    { data: world.safeField, color: '#73ffe0', threshold: 0.015 },
-    { data: world.escapeField, color: '#6ec6ff', threshold: 0.015 },
-    { data: world.routeField, color: '#64dd88', threshold: 0.015 },
-  ];
+  const overlay = debugConfig.overlay || {};
+  const fields = [];
+  if(overlay.help !== false)   fields.push({ key:'help',   data: world.helpField,   color: '#ff6a3d', threshold: 0.01 });
+  if(overlay.panic !== false)  fields.push({ key:'panic',  data: world.panicField,  color: '#ff4f96', threshold: 0.01 });
+  if(overlay.safe !== false)   fields.push({ key:'safe',   data: world.safeField,   color: '#73ffe0', threshold: 0.01 });
+  if(overlay.escape !== false) fields.push({ key:'escape', data: world.escapeField, color: '#6ec6ff', threshold: 0.01 });
+  if(overlay.route !== false)  fields.push({ key:'route',  data: world.routeField,  color: '#64dd88', threshold: 0.01 });
   if(!fields.some(f => f.data)) return;
   ctx.save();
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 0.6;
   for(let y=0;y<world.H;y++){
     for(let x=0;x<world.W;x++){
       const index = idx(x,y);
