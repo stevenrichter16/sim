@@ -23,6 +23,10 @@ import {
 const medicAssignments = new Map();
 
 const MAX_PHASE_SHOCK = 1.2;
+const PANIC_RUN_TICKS = 6;
+const PANIC_MIN_HEAT_DROP = 0.005;
+const PANIC_FAILURE_LIMIT = 5;
+const PANIC_RELIEF_DELTA = 0.05;
 
 const diagnosticsFrame = {
   fieldTotals: { help:0, route:0, panic:0, safe:0, escape:0 },
@@ -284,6 +288,12 @@ export class Agent{
     }
     this.phaseShock = 0;
     this.lastRouteIdx = -1;
+
+    // panic escape helpers (set during overwhelmed heat responses)
+    this.panicRunTicks = 0;
+    this.panicRunDx = 0;
+    this.panicRunDy = 0;
+    this.panicFailureCount = 0;
   }
   _medicAcquireTarget(){
     const aura = this.medicConfig;
@@ -359,6 +369,16 @@ export class Agent{
     const dirs = DIRS4;
     const choice = dirs[(Math.random()*dirs.length)|0];
     this.medicScoutDir = { dx: choice[0], dy: choice[1] };
+  }
+
+  _resetPanicRun(){
+    this.panicRunTicks = 0;
+    this.panicRunDx = 0;
+    this.panicRunDy = 0;
+  }
+
+  _resetPanicFailure(){
+    this.panicFailureCount = 0;
   }
 
   _medicClimbHelp(field){
@@ -535,19 +555,111 @@ export class Agent{
         }
       };
       if(overwhelmed){
-        const dir = bestDirectionByHeat(this.x, this.y, 2);
-        if(dir.h <= hereHeat - 0.02){
-          setHeadingFromVector(this.S, dir.dx, dir.dy);
-          if(stepAlongPhase(this)){ markEscapeTrail(); return; }
+        let registeredFailure = true;
+        const attemptPanicRunStep = () => {
+          if(this.panicRunTicks <= 0) return false;
+          const nx = this.x + this.panicRunDx;
+          const ny = this.y + this.panicRunDy;
+          if(!inBounds(nx, ny)){
+            this._resetPanicRun();
+            return false;
+          }
+          const nIdx = idx(nx, ny);
+          if(world.wall[nIdx] || world.fire.has(nIdx)){
+            this._resetPanicRun();
+            return false;
+          }
+          const nextHeat = world.heat[nIdx] ?? 1;
+          this.x = nx;
+          this.y = ny;
+          this.panicRunTicks = Math.max(0, this.panicRunTicks - 1);
+          this._resetPanicFailure();
+          registeredFailure = false;
+          if(nextHeat < hereHeat) markEscapeTrail();
+          return true;
+        };
+
+        if(this.panicRunTicks > 0 && attemptPanicRunStep()){
+          return;
         }
+
+        const dir = bestDirectionByHeat(this.x, this.y, 2);
+        const hasDirection = (dir.dx !== 0 || dir.dy !== 0);
+        const heatDrop = hereHeat - dir.h;
+        if(hasDirection && heatDrop >= PANIC_MIN_HEAT_DROP){
+          this.panicRunDx = dir.dx;
+          this.panicRunDy = dir.dy;
+          this.panicRunTicks = PANIC_RUN_TICKS;
+          setHeadingFromVector(this.S, dir.dx, dir.dy);
+          if(attemptPanicRunStep()){
+            return;
+          }
+        }
+
         const tunnel = twoStepEscapeOK(this.x, this.y);
         if(tunnel){
+          this._resetPanicRun();
+          this._resetPanicFailure();
           this.x = tunnel.nx;
           this.y = tunnel.ny;
           markEscapeTrail();
           return;
         }
-        if(stepAlongPhase(this)){ markEscapeTrail(); return; }
+
+        // After sustained failures, allow a desperate move toward stronger relief signals
+        if(this.panicFailureCount >= PANIC_FAILURE_LIMIT){
+          const safeHere = world.safeField ? world.safeField[hereIdx] ?? 0 : 0;
+          const escapeHere = world.escapeField ? world.escapeField[hereIdx] ?? 0 : 0;
+          const safetyHere = safetyScore(this.x, this.y);
+          const reliefHere = Math.max(safeHere, escapeHere, safetyHere);
+          let bestRelief = reliefHere;
+          let bestReliefStep = null;
+          for(const [dx,dy] of DIRS4){
+            const nx = this.x + dx;
+            const ny = this.y + dy;
+            if(!inBounds(nx,ny)) continue;
+            const nIdx = idx(nx, ny);
+            if(world.wall[nIdx]) continue;
+            const safeNext = world.safeField ? world.safeField[nIdx] ?? 0 : 0;
+            const escapeNext = world.escapeField ? world.escapeField[nIdx] ?? 0 : 0;
+            const safetyNext = safetyScore(nx, ny);
+            const reliefNext = Math.max(safeNext, escapeNext, safetyNext);
+            if(reliefNext > bestRelief + PANIC_RELIEF_DELTA){
+              bestRelief = reliefNext;
+              bestReliefStep = { nx, ny, heat: world.heat[nIdx] ?? 1 };
+            }
+          }
+          if(bestReliefStep){
+            this._resetPanicRun();
+            this._resetPanicFailure();
+            const { nx, ny, heat } = bestReliefStep;
+            this.x = nx;
+            this.y = ny;
+            if(heat < hereHeat) markEscapeTrail();
+            return;
+          }
+        }
+
+        if(stepAlongPhase(this)){
+          const steppedIdx = idx(this.x, this.y);
+          const steppedHeat = world.heat[steppedIdx] ?? 1;
+          this._resetPanicRun();
+          if(steppedHeat < hereHeat){
+            this._resetPanicFailure();
+            markEscapeTrail();
+          } else {
+            this.panicFailureCount = Math.min(PANIC_FAILURE_LIMIT, this.panicFailureCount + 1);
+          }
+          return;
+        }
+
+        this._resetPanicRun();
+        if(registeredFailure){
+          this.panicFailureCount = Math.min(PANIC_FAILURE_LIMIT, this.panicFailureCount + 1);
+        }
+      } else {
+        this._resetPanicRun();
+        this._resetPanicFailure();
       }
       let moved = false;
       {
