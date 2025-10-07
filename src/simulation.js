@@ -57,11 +57,21 @@ function sumField(field){
   return total;
 }
 
+function assertField01(name, field){
+  if(!field) return;
+  for(let i=0;i<field.length;i++){
+    const v = field[i];
+    if(!(v >= 0 && v <= 1)){
+      throw new Error(`${name}[${i}] out of [0,1]: ${v}`);
+    }
+  }
+}
+
 function movementWeightsFor(agent){
   if(agent?.isMedic){
-    return { safety:0.2, help:0.9, route:0.3, panic:-0.2, safe:0.0, escape:0.2 };
+    return { safety:0.2, help:0.9, route:0.3, panic:-0.2, safe:0.0, escape:0.2, visited:-0.05 };
   }
-  return { safety:0.6, help:-0.2, route:0.3, panic:-0.5, safe:0.4, escape:0.25 };
+  return { safety:0.6, help:-0.2, route:0.3, panic:-0.5, safe:0.4, escape:0.25, visited:-0.3 };
 }
 
 function scoredNeighbor(agent, nx, ny, weights){
@@ -74,13 +84,15 @@ function scoredNeighbor(agent, nx, ny, weights){
   const panic = world.panicField ? world.panicField[k] ?? 0 : 0;
   const safe = world.safeField ? world.safeField[k] ?? 0 : 0;
   const escape = world.escapeField ? world.escapeField[k] ?? 0 : 0;
+  const visited = world.visited ? world.visited[k] ?? 0 : 0;
   return (
     (weights.safety ?? 0) * safety +
     (weights.help ?? 0)   * help +
     (weights.route ?? 0)  * route +
     (weights.panic ?? 0)  * panic +
     (weights.safe ?? 0)   * safe +
-    (weights.escape ?? 0) * escape
+    (weights.escape ?? 0) * escape +
+    (weights.visited ?? 0) * visited
   );
 }
 
@@ -120,7 +132,7 @@ function tryCuriosityStep(agent){
     const hz = hazardHere(nk);
     if(hz > 0.35) continue;
     const novelty = world.visited ? 1 - (world.visited[nk] ?? 0) : 1;
-    const score = 0.3 * edgeBias + 0.7 * novelty - 0.25 * hz + (Math.random() - 0.5) * 0.0005;
+    const score = 0.5 * edgeBias + 0.8 * novelty - 0.4 * hz + (Math.random() - 0.5) * 0.0005;
     if(score > best.score) best = { score, x: nx, y: ny };
   }
   if(best.score > -Infinity && (best.x !== agent.x || best.y !== agent.y)){
@@ -692,9 +704,23 @@ export class Agent{
     }
     if(world.safeField){
       const val = world.safeField[tileIdx] || 0;
-      if(currentSafety > 0.7 && (this.S?.tension ?? 0) > 0.6){
+     // console.log("Current Safety:", currentSafety);
+     // console.log("Tension:", this.S?.tension);
+      if(currentSafety > 0.62 && (this.S?.tension ?? 0) > 0.6){
+        //console.log('SAFE drop', tileIdx, currentSafety.toFixed(2), this.S.tension.toFixed(2));
         const deposit = fieldConfig.safe?.depositBase ?? 0.02;
         world.safeField[tileIdx] = Math.min(1, val + deposit);
+      }
+      const safeStrength = world.safeField[tileIdx] || 0;
+      if(safeStrength > 0){
+        const tensionBoost = fieldConfig.safe?.calmTensionBoost ?? 0;
+        const amplitudeDrop = fieldConfig.safe?.calmAmplitudeDrop ?? 0;
+        if(tensionBoost > 0){
+          this.S.tension = clamp01(this.S.tension + safeStrength * tensionBoost);
+        }
+        if(amplitudeDrop > 0){
+          this.S.amplitude = Math.max(0, this.S.amplitude - safeStrength * amplitudeDrop);
+        }
       }
     }
     if(world.visited){
@@ -893,6 +919,15 @@ let acidBasePairs = new Set();
       clampField01(world.safeField);
       clampField01(world.escapeField);
       clampField01(world.visited);
+      const shouldAssert = debugConfig?.assertions && (typeof process === 'undefined' || process.env.NODE_ENV !== 'production');
+      if(shouldAssert){
+        assertField01('help', world.helpField);
+        assertField01('route', world.routeField);
+        assertField01('panic', world.panicField);
+        assertField01('safe', world.safeField);
+        assertField01('escape', world.escapeField);
+        assertField01('visited', world.visited);
+      }
     const base = settings.o2Base;
     for(let i=0;i<world.o2.length;i++) if(!world.wall[i]&&!world.vent[i]) world.o2[i]+= (base - world.o2[i]) * 0.002;
     for(let i=0;i<world.vent.length;i++) if(world.vent[i]) world.o2[i] = Math.min(base, world.o2[i] + 0.02);
@@ -1041,6 +1076,26 @@ let acidBasePairs = new Set();
     }
 
         }
+    let stuckAgents = 0;
+    const HOT_THRESH = thresholds.heat.highThreshold ?? 0.75;
+    const EPS = 0.01;
+    for(const agent of world.agents){
+      const k = idx(agent.x, agent.y);
+      const heatHere = world.heat[k] ?? 0;
+      if(heatHere <= HOT_THRESH) continue;
+      let trapped = true;
+      for(const [dx,dy] of DIRS4){
+        const nx = agent.x + dx;
+        const ny = agent.y + dy;
+        if(!inBounds(nx,ny)) continue;
+        const nk = idx(nx, ny);
+        if(world.wall[nk]) continue;
+        const nh = world.heat[nk] ?? 1;
+        if(nh < heatHere - EPS){ trapped = false; break; }
+      }
+      if(trapped) stuckAgents += 1;
+    }
+
     const totals = {
       help: sumField(world.helpField),
       route: sumField(world.routeField),
@@ -1053,6 +1108,7 @@ let acidBasePairs = new Set();
       fieldTotals: totals,
       hotAgents: diagnosticsFrame.hotAgents,
       overwhelmedAgents: diagnosticsFrame.overwhelmedAgents,
+      stuckAgents,
     };
     if(updateMetrics){ updateMetrics({ reset:false, diagnostics: diagnosticsPayload }); }
     stepCount += speedMultiplier;

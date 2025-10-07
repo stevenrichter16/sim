@@ -54,6 +54,7 @@ export function initInput({ canvas, draw }){
   const mFieldTotals = document.getElementById('mFieldTotals');
   const mHotAgents = document.getElementById('mHotAgents');
   const mOverwhelmed = document.getElementById('mOverwhelmed');
+  const mStuckAgents = document.getElementById('mStuckAgents');
   const mModeCounts = document.getElementById('mModeCounts');
   const histAmpContainer = document.getElementById('histAmp');
   const histTensionContainer = document.getElementById('histTension');
@@ -764,6 +765,11 @@ export function initInput({ canvas, draw }){
       metricsState.prevO2Sum = null;
       metricsState.prevFireSum = null;
       metricsState.aggregates.modeCounts = new Map();
+      metricsState.aggregates.avgAmplitude = 0;
+      metricsState.aggregates.avgTension = 0;
+      metricsState.aggregates.heatAverage = 0;
+      metricsState.aggregates.fireIntensity = 0;
+      metricsState.aggregates.stuckAgents = 0;
       metricsState.histograms.amplitude.fill(0);
       metricsState.histograms.tension.fill(0);
       metricsState.histograms.heat.fill(0);
@@ -774,6 +780,7 @@ export function initInput({ canvas, draw }){
       if(mFieldTotals) mFieldTotals.textContent = '—';
       if(mHotAgents) mHotAgents.textContent = '—';
       if(mOverwhelmed) mOverwhelmed.textContent = '—';
+      if(mStuckAgents) mStuckAgents.textContent = '—';
       renderHistogram(histAmplitudeBars, metricsState.histograms.amplitude);
       renderHistogram(histTensionBars, metricsState.histograms.tension);
       renderHistogram(histHeatBars, metricsState.histograms.heat);
@@ -861,6 +868,8 @@ export function initInput({ canvas, draw }){
       }
       if(mHotAgents) mHotAgents.textContent = String(diagnostics.hotAgents ?? 0);
       if(mOverwhelmed) mOverwhelmed.textContent = String(diagnostics.overwhelmedAgents ?? 0);
+      if(mStuckAgents) mStuckAgents.textContent = String(diagnostics.stuckAgents ?? 0);
+      metricsState.aggregates.stuckAgents = diagnostics.stuckAgents ?? 0;
     }
     updateHistoryUI();
   }

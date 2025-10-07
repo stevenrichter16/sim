@@ -2,6 +2,7 @@ export const debugConfig = {
   enableRecorder: false,
   recorderSize: 120,
   logReactions: false,
+  assertions: false,
   overlay: {
     heat: false,
     amplitude: false,

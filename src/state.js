@@ -36,6 +36,7 @@ export const metricsState = {
     fireIntensity: 0,
     heatAverage: 0,
     modeCounts: new Map(),
+    stuckAgents: 0,
   },
   histograms: {
     amplitude: new Array(20).fill(0),
