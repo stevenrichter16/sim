@@ -1,3 +1,5 @@
+import { FACTIONS } from './factions.js';
+
 const GRID_WIDTH = 80;
 const GRID_HEIGHT = 45;
 
@@ -16,6 +18,7 @@ export const world = {
   memY: null,
   doorField: null,
   doorTiles: new Set(),
+  safeFieldsByFaction: null,
   visited: null,
   wall: null,
   vent: null,
@@ -89,6 +92,7 @@ export function resetWorld(o2BaseValue){
   world.memY = new Float32Array(size);
   world.doorField = new Float32Array(size);
   world.doorTiles = new Set();
+  world.safeFieldsByFaction = FACTIONS.map(() => new Float32Array(size));
   world.visited = new Float32Array(size);
   world.wall = new Uint8Array(size);
   world.vent = new Uint8Array(size);
@@ -107,6 +111,11 @@ export function resetWorld(o2BaseValue){
   world.memX.fill(0);
   world.memY.fill(0);
   world.doorField.fill(0);
+  if(world.safeFieldsByFaction){
+    for(const field of world.safeFieldsByFaction){
+      field.fill(0);
+    }
+  }
   world.visited.fill(0);
 
   for(let x=0;x<world.W;x++){

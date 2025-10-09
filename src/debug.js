@@ -1,20 +1,28 @@
+import { FACTIONS } from './factions.js';
+
+const overlayDefaults = {
+  heat: false,
+  amplitude: false,
+  tension: false,
+  help: true,
+  panic: true,
+  safe: true,
+  escape: true,
+  route: true,
+  memory: false,
+  door: false,
+};
+
+for(const faction of FACTIONS){
+  overlayDefaults[`safeFaction${faction.id}`] = false;
+}
+
 export const debugConfig = {
   enableRecorder: false,
   recorderSize: 120,
   logReactions: false,
   assertions: false,
-  overlay: {
-    heat: false,
-    amplitude: false,
-    tension: false,
-    help: true,
-    panic: true,
-    safe: true,
-    escape: true,
-    route: true,
-    memory: false,
-    door: false,
-  },
+  overlay: overlayDefaults,
 };
 
 export function setDebugFlag(path, value){

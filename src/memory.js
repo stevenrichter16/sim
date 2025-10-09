@@ -1,16 +1,24 @@
-const TWO_PI = Math.PI * 2;
-const BUCKETS = 16;
+import { FACTIONS } from './factions.js';
 
-const angleForBucket = index => index * (TWO_PI / BUCKETS);
+const TWO_PI = Math.PI * 2;
+export const MEMORY_BUCKETS = 48;
+
+const angleForBucket = index => index * (TWO_PI / MEMORY_BUCKETS);
+
+const BASE_TAGS = Object.freeze({
+  ROUTE:  angleForBucket(12),
+  HELP:   angleForBucket(18),
+  PANIC:  angleForBucket(24),
+  ESCAPE: angleForBucket(30),
+  FIRE:   angleForBucket(36),
+  WATER:  angleForBucket(42),
+});
+
+export const factionSafePhases = FACTIONS.map(f => angleForBucket(f.safePhaseBucket));
 
 export const MTAG = Object.freeze({
-  SAFE:   angleForBucket(0),
-  ROUTE:  angleForBucket(2),
-  HELP:   angleForBucket(4),
-  PANIC:  angleForBucket(6),
-  ESCAPE: angleForBucket(8),
-  FIRE:   angleForBucket(10),
-  WATER:  angleForBucket(12),
+  ...BASE_TAGS,
+  factionSafePhases,
 });
 
 export function depositTagged(memX, memY, idx, weight, phase){

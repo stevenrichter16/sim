@@ -24,6 +24,7 @@ import {
   getSimSpeed,
 } from './state.js';
 import { baseStringFor, ensureCryofoam } from './materials.js';
+import { FACTIONS, DEFAULT_FACTION_ID, factionByKey } from './factions.js';
 import { Agent } from './simulation.js';
 
 const MODE_LABEL = Object.fromEntries(
@@ -36,8 +37,10 @@ const MODE_LABEL = Object.fromEntries(
 export function initInput({ canvas, draw }){
   const brushGrid = document.getElementById('brushGrid');
   const toggleDrawBtn = document.getElementById('toggleDraw');
-  const spawnCalmBtn = document.getElementById('spawnCalm');
-  const spawnPanicBtn = document.getElementById('spawnPanic');
+  const spawnCalmABtn = document.getElementById('spawnCalmA');
+  const spawnCalmBBtn = document.getElementById('spawnCalmB');
+  const spawnPanicABtn = document.getElementById('spawnPanicA');
+  const spawnPanicBBtn = document.getElementById('spawnPanicB');
   const spawnMedicBtn = document.getElementById('spawnMedic');
   const sparkBtn = document.getElementById('spark');
   const clearBtn = document.getElementById('clear');
@@ -93,6 +96,14 @@ export function initInput({ canvas, draw }){
     Digit6: 'door',
   };
 
+  FACTIONS.forEach((faction, index) => {
+    if(index < 3){
+      overlayToggleKeys[`Digit${7 + index}`] = `safeFaction${faction.id}`;
+    }
+  });
+  if(FACTIONS[0]) overlayToggleKeys.KeyA = `safeFaction${FACTIONS[0].id}`;
+  if(FACTIONS[1]) overlayToggleKeys.KeyB = `safeFaction${FACTIONS[1].id}`;
+
   function toggleOverlaySlice(name){
     const current = !!debugConfig.overlay?.[name];
     setDebugFlag(`overlay.${name}`, !current);
@@ -140,8 +151,11 @@ export function initInput({ canvas, draw }){
   let historyOffset = 0;
   let legendRendered = false;
   let lastInspectState = null;
+  const DEFAULT_FACTION_KEY = FACTIONS[DEFAULT_FACTION_ID]?.key ?? (FACTIONS[0]?.key ?? 'A');
+  const ALT_FACTION_KEY = FACTIONS[1]?.key ?? DEFAULT_FACTION_KEY;
   let dragAgent = null;
   let dragBrush = null;
+  let dragFactionKey = DEFAULT_FACTION_KEY;
 
   const ensureAgentMode = (agent, mode)=>{
     agent.role = mode;
@@ -627,7 +641,7 @@ export function initInput({ canvas, draw }){
     }
   }
 
-  function place(x,y){
+  function place(x,y, ev){
     if(!inBounds(x,y)) return;
     const i=idx(x,y);
     world.clfCanisters?.delete(i);
@@ -636,6 +650,7 @@ export function initInput({ canvas, draw }){
     if(brush!=='spawn-calm' && brush!=='spawn-panic'){
       dragAgent = null;
       dragBrush = null;
+      dragFactionKey = DEFAULT_FACTION_KEY;
     }
     if(brush==='eraser'){
       world.strings[i]=undefined;
@@ -652,6 +667,8 @@ export function initInput({ canvas, draw }){
     }
     if(brush==='spawn-calm' || brush==='spawn-panic'){
       const mode = brush==='spawn-calm' ? Mode.CALM : Mode.PANIC;
+      const factionKey = (dragAgent && dragBrush === brush) ? dragFactionKey : (ev?.altKey ? ALT_FACTION_KEY : DEFAULT_FACTION_KEY);
+      const factionEntry = factionByKey(factionKey);
       if(world.wall[i]) world.wall[i] = 0;
       const existing = dragAgent && dragBrush === brush ? dragAgent : agentAt(x,y);
       let agent = existing;
@@ -660,17 +677,24 @@ export function initInput({ canvas, draw }){
           agent.x = x;
           agent.y = y;
         }
+        agent.factionId = factionEntry.id;
+        agent.factionKey = factionEntry.key;
+        agent.faction = factionEntry.key;
         if(agent.S?.mode !== mode){
           ensureAgentMode(agent, mode);
         }
       } else {
-        agent = new Agent(x, y, mode);
+        agent = new Agent(x, y, mode, factionEntry.id);
         ensureAgentMode(agent, mode);
+        agent.factionId = factionEntry.id;
+        agent.factionKey = factionEntry.key;
+        agent.faction = factionEntry.key;
         if(!world.agents) world.agents = [];
         world.agents.push(agent);
       }
       dragAgent = agent;
       dragBrush = brush;
+      dragFactionKey = factionEntry.key;
       draw();
       return;
     }
@@ -800,7 +824,7 @@ export function initInput({ canvas, draw }){
       toggleDrawBtn.textContent='🛑 Stop';
     }
     const {x,y}=xyFromPointer(ev);
-    place(x,y);
+    place(x,y, ev);
   });
 
   canvas.addEventListener('pointermove',(ev)=>{
@@ -820,7 +844,7 @@ export function initInput({ canvas, draw }){
     }
     if(!isPointerDown || !drawing) return;
     const {x,y}=xyFromPointer(ev);
-    place(x,y);
+    place(x,y, ev);
   });
 
   const endPointer = ()=>{
@@ -833,6 +857,7 @@ export function initInput({ canvas, draw }){
     }
     dragAgent = null;
     dragBrush = null;
+    dragFactionKey = DEFAULT_FACTION_KEY;
   };
 
   canvas.addEventListener('pointerup', endPointer);
@@ -1041,15 +1066,25 @@ export function initInput({ canvas, draw }){
       simulation.setRecorderEnabled(debugConfig.enableRecorder);
     }
     updateHistoryUI();
-    if(spawnCalmBtn){
-      spawnCalmBtn.onclick = ()=>{
-        simulation.spawnNPC(Mode.CALM);
-      };
+    if(spawnCalmABtn && FACTIONS[0]){
+      spawnCalmABtn.textContent = `🙂 NPC Calm ${FACTIONS[0].key}`;
+      spawnCalmABtn.onclick = () => simulation.spawnNPC(Mode.CALM, FACTIONS[0].key);
     }
-    if(spawnPanicBtn){
-      spawnPanicBtn.onclick = ()=>{
-        simulation.spawnNPC(Mode.PANIC);
-      };
+    if(spawnCalmBBtn && FACTIONS[1]){
+      spawnCalmBBtn.textContent = `🙂 NPC Calm ${FACTIONS[1].key}`;
+      spawnCalmBBtn.onclick = () => simulation.spawnNPC(Mode.CALM, FACTIONS[1].key);
+    } else if(spawnCalmBBtn){
+      spawnCalmBBtn.style.display = 'none';
+    }
+    if(spawnPanicABtn && FACTIONS[0]){
+      spawnPanicABtn.textContent = `😱 NPC Panic ${FACTIONS[0].key}`;
+      spawnPanicABtn.onclick = () => simulation.spawnNPC(Mode.PANIC, FACTIONS[0].key);
+    }
+    if(spawnPanicBBtn && FACTIONS[1]){
+      spawnPanicBBtn.textContent = `😱 NPC Panic ${FACTIONS[1].key}`;
+      spawnPanicBBtn.onclick = () => simulation.spawnNPC(Mode.PANIC, FACTIONS[1].key);
+    } else if(spawnPanicBBtn){
+      spawnPanicBBtn.style.display = 'none';
     }
     if(spawnMedicBtn){
       spawnMedicBtn.onclick = ()=>{

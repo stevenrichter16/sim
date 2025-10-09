@@ -1,8 +1,9 @@
-import { Mode, clamp01 } from './constants.js';
+import { Mode, TAU, clamp01 } from './constants.js';
 import { world, idx, inBounds, getViewState, setViewOffset, isTelemetryEnabled, getInspectedTile } from './state.js';
 import { drainParticleBursts, drainFlashes } from './effects.js';
 import { debugConfig } from './debug.js';
 import { roles } from './config.js';
+import { FACTIONS, DEFAULT_FACTION_ID, factionById } from './factions.js';
 
 const clamp255 = (value) => Math.max(0, Math.min(255, Math.round(value)));
 
@@ -152,11 +153,23 @@ export function draw(){
   for(const a of world.agents){
     const intensity = clamp01(a.panicLevel ?? 0);
     const isMedic = a.S?.mode === Mode.MEDIC;
+    const faction = factionById(a.factionId ?? DEFAULT_FACTION_ID);
+    const factionRgb = hexToRgb(faction.color);
+    const fr = factionRgb?.r ?? 75;
+    const fg = factionRgb?.g ?? 220;
+    const fb = factionRgb?.b ?? 255;
     if(isMedic){
       ctx.fillStyle = '#4bffa5';
     } else {
-      const color = panicGradient(intensity);
-      ctx.fillStyle = color;
+      const panicColor = panicGradient(intensity);
+      const panicRgb = hexToRgb(panicColor);
+      if(panicRgb){
+        const weightPanic = 0.4;
+        const weightFaction = 0.6;
+        ctx.fillStyle = `rgb(${Math.round(panicRgb.r*weightPanic + fr*weightFaction)}, ${Math.round(panicRgb.g*weightPanic + fg*weightFaction)}, ${Math.round(panicRgb.b*weightPanic + fb*weightFaction)})`;
+      } else {
+        ctx.fillStyle = faction.color;
+      }
     }
     const cx = a.x*world.cell+world.cell/2;
     const cy = a.y*world.cell+world.cell/2;
@@ -184,6 +197,15 @@ export function draw(){
     ctx.beginPath();
     ctx.arc(cx, cy, baseRadius, 0, Math.PI*2);
     ctx.fill();
+    const outlineColor = faction.outline || faction.color;
+    if(isMedic){
+      ctx.strokeStyle = '#1aff7a';
+      ctx.lineWidth = Math.max(1, world.cell * 0.12);
+    } else {
+      ctx.strokeStyle = outlineColor;
+      ctx.lineWidth = Math.max(1, world.cell * 0.18);
+    }
+    ctx.stroke();
     if(isMedic){
       const medicConfig = roles.medic || {};
       ctx.save();
@@ -213,7 +235,15 @@ function drawPheromoneSlices(ctx){
   const fields = [];
   if(overlay.help !== false)   fields.push({ key:'help',   data: world.helpField,   color: '#ff6a3d', threshold: 0.01 });
   if(overlay.panic !== false)  fields.push({ key:'panic',  data: world.panicField,  color: '#ff4f96', threshold: 0.01 });
-  if(overlay.safe !== false)   fields.push({ key:'safe',   data: world.safeField,   color: '#73ffe0', threshold: 0.01 });
+  if(overlay.safe !== false)   fields.push({ key:'safe',   data: world.safeField,   color: '#95ffe9', threshold: 0.01 });
+  if(world.safeFieldsByFaction){
+    for(const faction of FACTIONS){
+      const overlayKey = `safeFaction${faction.id}`;
+      if(overlay[overlayKey] && world.safeFieldsByFaction[faction.id]){
+        fields.push({ key:overlayKey, data: world.safeFieldsByFaction[faction.id], color: faction.safeFieldColor || faction.color, threshold: 0.01 });
+      }
+    }
+  }
   if(overlay.escape !== false) fields.push({ key:'escape', data: world.escapeField, color: '#6ec6ff', threshold: 0.01 });
   if(overlay.route !== false)  fields.push({ key:'route',  data: world.routeField,  color: '#64dd88', threshold: 0.01 });
   if(overlay.door !== false)   fields.push({ key:'door',   data: world.doorField,   color: '#ffd166', threshold: 0.01 });
@@ -279,7 +309,6 @@ function drawPheromoneSlices(ctx){
 }
 
 function drawMyceliumTile(ctx, x, y, size, S, tileIndex, ticker){
-  const TAU = Math.PI * 2;
   const phase = ((S?.phase ?? 0) % TAU + TAU) % TAU;
   const amplitude = clamp01(S?.amplitude ?? 0);
   const tension = clamp01(S?.tension ?? 0);

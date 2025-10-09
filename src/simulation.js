@@ -4,7 +4,8 @@ import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
 import { thresholds, roles, fieldConfig, decayMultiplierFromHalfLife } from './config.js';
-import { MTAG, depositTagged } from './memory.js';
+import { FACTIONS, DEFAULT_FACTION_ID, factionById, factionByKey } from './factions.js';
+import { MTAG, depositTagged, projectOnto, factionSafePhases } from './memory.js';
 import {
   baseStringFor,
   Sget,
@@ -38,6 +39,18 @@ const diagnosticsFrame = {
   hotAgents: 0,
   overwhelmedAgents: 0,
 };
+
+function normalizeFaction(ref){
+  return typeof ref === 'number' ? factionById(ref) : factionByKey(ref);
+}
+
+function safePhaseForId(fid){
+  return factionSafePhases[fid] ?? factionSafePhases[DEFAULT_FACTION_ID];
+}
+
+function safeDepositForFaction(faction){
+  return faction.safeDeposit ?? (fieldConfig.safe?.depositBase ?? 0.02);
+}
 
 function updateField(field, cfg, { skipWalls = true } = {}){
   if(!field || !cfg) return;
@@ -78,9 +91,9 @@ function assertField01(name, field){
 
 function movementWeightsFor(agent){
   if(agent?.isMedic){
-    return { safety:0.2, help:0.9, route:0.3, panic:-0.2, safe:0.0, escape:0.2, visited:-0.05 };
+    return { safety:0.2, help:0.9, route:0.3, panic:-0.2, safe:0.0, escape:0.2, visited:-0.05, mySafeMem:0.0, rivalSafeMem:0.0, mySafeField:0.0, rivalSafeField:0.0 };
   }
-  return { safety:0.6, help:-0.2, route:0.3, panic:-0.5, safe:0.4, escape:0.25, visited:-0.3 };
+  return { safety:0.5, help:-0.3, route:0.25, panic:-0.55, safe:0.0, escape:0.25, visited:-0.35, mySafeMem:0.26, rivalSafeMem:-0.24, mySafeField:0.42, rivalSafeField:-0.2 };
 }
 
 function scoredNeighbor(agent, nx, ny, weights){
@@ -94,14 +107,38 @@ function scoredNeighbor(agent, nx, ny, weights){
   const safe = world.safeField ? world.safeField[k] ?? 0 : 0;
   const escape = world.escapeField ? world.escapeField[k] ?? 0 : 0;
   const visited = world.visited ? world.visited[k] ?? 0 : 0;
+  const factionId = agent?.factionId ?? DEFAULT_FACTION_ID;
+  const mySafeMem = projectOnto(world.memX, world.memY, k, safePhaseForId(factionId));
+  let rivalSafeMem = 0;
+  let mySafeField = 0;
+  let rivalSafeField = 0;
+  if(world.safeFieldsByFaction){
+    const myField = world.safeFieldsByFaction[factionId];
+    if(myField) mySafeField = myField[k] ?? 0;
+    for(const faction of FACTIONS){
+      if(faction.id === factionId) continue;
+      rivalSafeMem = Math.max(rivalSafeMem, projectOnto(world.memX, world.memY, k, safePhaseForId(faction.id)));
+      const rivalField = world.safeFieldsByFaction[faction.id];
+      if(rivalField) rivalSafeField = Math.max(rivalSafeField, rivalField[k] ?? 0);
+    }
+  } else {
+    for(const faction of FACTIONS){
+      if(faction.id === factionId) continue;
+      rivalSafeMem = Math.max(rivalSafeMem, projectOnto(world.memX, world.memY, k, safePhaseForId(faction.id)));
+    }
+  }
   return (
     (weights.safety ?? 0) * safety +
     (weights.help ?? 0)   * help +
     (weights.route ?? 0)  * route +
     (weights.panic ?? 0)  * panic +
     (weights.safe ?? 0)   * safe +
+    (weights.mySafeField ?? 0) * mySafeField +
+    (weights.rivalSafeField ?? 0) * rivalSafeField +
     (weights.escape ?? 0) * escape +
-    (weights.visited ?? 0) * visited
+    (weights.visited ?? 0) * visited +
+    (weights.mySafeMem ?? 0) * mySafeMem +
+    (weights.rivalSafeMem ?? 0) * rivalSafeMem
   );
 }
 
@@ -266,13 +303,17 @@ function twoStepEscapeOK(x,y){
 }
 
 export class Agent{
-  constructor(x,y,mode){
+  constructor(x,y,mode,factionRef=DEFAULT_FACTION_ID){
     this.x = x;
     this.y = y;
     this.S = baseStringFor(mode);
     this.panicLevel = 0;
     this.role = mode;
     this.isMedic = mode === Mode.MEDIC;
+    const faction = normalizeFaction(factionRef);
+    this.factionId = faction.id;
+    this.factionKey = faction.key;
+    this.faction = faction.key; // legacy compatibility
     if(this.isMedic){
       this.medicConfig = roles.medic || {
         auraRadius: 3,
@@ -855,13 +896,28 @@ export class Agent{
     }
     if(world.safeField){
       const val = world.safeField[tileIdx] || 0;
-     // console.log("Current Safety:", currentSafety);
-     // console.log("Tension:", this.S?.tension);
       if(currentSafety > 0.62 && (this.S?.tension ?? 0) > 0.6){
-        //console.log('SAFE drop', tileIdx, currentSafety.toFixed(2), this.S.tension.toFixed(2));
-        const deposit = fieldConfig.safe?.depositBase ?? 0.02;
-        world.safeField[tileIdx] = Math.min(1, val + deposit);
-        depositTagged(world.memX, world.memY, tileIdx, deposit, MTAG.SAFE);
+        const baseDeposit = fieldConfig.safe?.depositBase ?? 0.02;
+        world.safeField[tileIdx] = Math.min(1, val + baseDeposit);
+        const faction = factionById(this.factionId ?? DEFAULT_FACTION_ID);
+        const myPhase = safePhaseForId(faction.id);
+        depositTagged(world.memX, world.memY, tileIdx, baseDeposit, myPhase);
+        const factionSafeDeposit = safeDepositForFaction(faction);
+        if(world.safeFieldsByFaction){
+          const myField = world.safeFieldsByFaction[faction.id];
+          if(myField) myField[tileIdx] = Math.min(1, (myField[tileIdx] ?? 0) + factionSafeDeposit);
+          const rivalMemoryPenalty = baseDeposit * 0.4;
+          for(const other of FACTIONS){
+            if(other.id === faction.id) continue;
+            const rivalPhase = safePhaseForId(other.id);
+            depositTagged(world.memX, world.memY, tileIdx, -rivalMemoryPenalty, rivalPhase);
+            const rivalField = world.safeFieldsByFaction[other.id];
+            if(rivalField){
+              const diminish = factionSafeDeposit * 0.25;
+              rivalField[tileIdx] = Math.max(0, (rivalField[tileIdx] ?? 0) - diminish);
+            }
+          }
+        }
       }
       const safeStrength = world.safeField[tileIdx] || 0;
       if(safeStrength > 0){
@@ -976,13 +1032,14 @@ export function populateDemoScenario(){
   world.agents[world.agents.length-1].y = cy+1;
 }
 
-export function spawnNPC(mode){
+export function spawnNPC(mode, factionRef=DEFAULT_FACTION_ID){
   let tries=200;
+  const faction = normalizeFaction(factionRef);
   while(tries--){
     const x=1+((Math.random()*(world.W-2))|0);
     const y=1+((Math.random()*(world.H-2))|0);
     if(!world.wall[idx(x,y)]){
-      world.agents.push(new Agent(x,y,mode));
+      world.agents.push(new Agent(x,y,mode,faction.id));
       break;
     }
   }
@@ -1066,6 +1123,11 @@ let acidBasePairs = new Set();
       updateField(world.panicField, fieldConfig.panic);
       updateField(world.safeField, fieldConfig.safe);
       updateField(world.escapeField, fieldConfig.escape);
+      if(world.safeFieldsByFaction){
+        for(const field of world.safeFieldsByFaction){
+          updateField(field, fieldConfig.safe);
+        }
+      }
       if(world.doorField){
         if(world.doorTiles && world.doorTiles.size){
           for(const k of world.doorTiles){
@@ -1085,6 +1147,11 @@ let acidBasePairs = new Set();
       clampField01(world.panicField);
       clampField01(world.safeField);
       clampField01(world.escapeField);
+      if(world.safeFieldsByFaction){
+        for(const field of world.safeFieldsByFaction){
+          clampField01(field);
+        }
+      }
       if(world.doorField) clampField01(world.doorField);
       clampField01(world.visited);
       if(world.memX && world.memY){
@@ -1104,6 +1171,9 @@ let acidBasePairs = new Set();
         assertField01('panic', world.panicField);
         assertField01('safe', world.safeField);
         assertField01('escape', world.escapeField);
+        if(world.safeFieldsByFaction){
+          world.safeFieldsByFaction.forEach((field, idx)=> assertField01(`safeFaction${idx}`, field));
+        }
         assertField01('door', world.doorField);
         assertField01('visited', world.visited);
       }
@@ -1283,6 +1353,11 @@ let acidBasePairs = new Set();
       escape: sumField(world.escapeField),
       door: sumField(world.doorField),
     };
+    if(world.safeFieldsByFaction){
+      world.safeFieldsByFaction.forEach((field, idx)=>{
+        totals[`safeFaction${idx}`] = sumField(field);
+      });
+    }
     diagnosticsFrame.fieldTotals = totals;
     const diagnosticsPayload = {
       fieldTotals: totals,
