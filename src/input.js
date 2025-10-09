@@ -24,6 +24,7 @@ import {
   getSimSpeed,
 } from './state.js';
 import { baseStringFor, ensureCryofoam } from './materials.js';
+import { Agent } from './simulation.js';
 
 const MODE_LABEL = Object.fromEntries(
   Object.entries(Mode).map(([name, value])=>{
@@ -88,6 +89,8 @@ export function initInput({ canvas, draw }){
     Digit3: 'safe',
     Digit4: 'escape',
     Digit5: 'route',
+    KeyM: 'memory',
+    Digit6: 'door',
   };
 
   function toggleOverlaySlice(name){
@@ -137,6 +140,26 @@ export function initInput({ canvas, draw }){
   let historyOffset = 0;
   let legendRendered = false;
   let lastInspectState = null;
+  let dragAgent = null;
+  let dragBrush = null;
+
+  const ensureAgentMode = (agent, mode)=>{
+    agent.role = mode;
+    agent.isMedic = mode === Mode.MEDIC;
+    agent.S = baseStringFor(mode);
+    agent.S.mode = mode;
+    agent.panicLevel = mode === Mode.PANIC ? 1 : 0;
+    agent.medicTarget = null;
+    agent.medicPath = [];
+  };
+
+  const agentAt = (x,y)=>{
+    if(!world.agents) return null;
+    for(const agent of world.agents){
+      if(agent.x === x && agent.y === y) return agent;
+    }
+    return null;
+  };
   let metricsExpanded = false;
 
   function formatCondition(cond){
@@ -610,12 +633,54 @@ export function initInput({ canvas, draw }){
     world.clfCanisters?.delete(i);
     world.clfBurners?.delete(i);
     const brush=getBrush();
+    if(brush!=='spawn-calm' && brush!=='spawn-panic'){
+      dragAgent = null;
+      dragBrush = null;
+    }
     if(brush==='eraser'){
       world.strings[i]=undefined;
       world.fire.delete(i);
       world.vent[i]=0;
       world.wall[i]=0;
+      if(world.doorTiles){
+        world.doorTiles.delete(i);
+        if(world.doorField) world.doorField[i] = 0;
+      }
       clearPheromones(i);
+      draw();
+      return;
+    }
+    if(brush==='spawn-calm' || brush==='spawn-panic'){
+      const mode = brush==='spawn-calm' ? Mode.CALM : Mode.PANIC;
+      if(world.wall[i]) world.wall[i] = 0;
+      const existing = dragAgent && dragBrush === brush ? dragAgent : agentAt(x,y);
+      let agent = existing;
+      if(agent){
+        if(agent.x !== x || agent.y !== y) {
+          agent.x = x;
+          agent.y = y;
+        }
+        if(agent.S?.mode !== mode){
+          ensureAgentMode(agent, mode);
+        }
+      } else {
+        agent = new Agent(x, y, mode);
+        ensureAgentMode(agent, mode);
+        if(!world.agents) world.agents = [];
+        world.agents.push(agent);
+      }
+      dragAgent = agent;
+      dragBrush = brush;
+      draw();
+      return;
+    }
+    if(brush==='door'){
+      world.wall[i] = 0;
+      world.fire.delete(i);
+      world.vent[i] = 0;
+      world.strings[i] = undefined;
+      world.doorTiles?.add(i);
+      if(world.doorField) world.doorField[i] = 1;
       draw();
       return;
     }
@@ -624,6 +689,8 @@ export function initInput({ canvas, draw }){
       world.vent[i]=0;
       world.strings[i]=undefined;
       world.fire.delete(i);
+      world.doorTiles?.delete(i);
+      if(world.doorField) world.doorField[i] = 0;
       draw();
       return;
     }
@@ -636,32 +703,44 @@ export function initInput({ canvas, draw }){
       world.vent[i]=0;
       world.fire.add(i);
       world.strings[i]=baseStringFor(Mode.FIRE);
+      world.doorTiles?.delete(i);
+      if(world.doorField) world.doorField[i] = 0;
       draw();
       return;
     }
     if(brush==='water'){
       world.strings[i]=baseStringFor(Mode.WATER);
+      world.doorTiles?.delete(i);
+      if(world.doorField) world.doorField[i] = 0;
       draw();
       return;
     }
     if(brush==='acid'){
       world.strings[i]=baseStringFor(Mode.ACID);
+      world.doorTiles?.delete(i);
+      if(world.doorField) world.doorField[i] = 0;
       draw();
       return;
     }
     if(brush==='base'){
       world.strings[i]=baseStringFor(Mode.BASE);
+      world.doorTiles?.delete(i);
+      if(world.doorField) world.doorField[i] = 0;
       draw();
       return;
     }
     if(brush==='ice'){
       world.strings[i]=baseStringFor(Mode.ICE);
       world.heat[i] = Math.min(world.heat[i], 0.2);
+      world.doorTiles?.delete(i);
+      if(world.doorField) world.doorField[i] = 0;
       draw();
       return;
     }
     if(brush==='cryofoam'){
       ensureCryofoam(i);
+      world.doorTiles?.delete(i);
+      if(world.doorField) world.doorField[i] = 0;
       draw();
       return;
     }
@@ -672,6 +751,8 @@ export function initInput({ canvas, draw }){
       world.strings[i]=baseStringFor(Mode.CLF3);
       if(!world.clfCanisters) world.clfCanisters = new Map();
       world.clfCanisters.set(i,{ integrity:1, yield:5 });
+      world.doorTiles?.delete(i);
+      if(world.doorField) world.doorField[i] = 0;
       draw();
       return;
     }
@@ -680,6 +761,8 @@ export function initInput({ canvas, draw }){
       world.vent[i]=0;
       world.fire.delete(i);
       world.strings[i]=baseStringFor(Mode.MYCELIUM);
+      world.doorTiles?.delete(i);
+      if(world.doorField) world.doorField[i] = 0;
       draw();
       return;
     }
@@ -748,6 +831,8 @@ export function initInput({ canvas, draw }){
       panStartClient=null;
       panStartOffset=null;
     }
+    dragAgent = null;
+    dragBrush = null;
   };
 
   canvas.addEventListener('pointerup', endPointer);

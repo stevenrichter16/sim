@@ -12,6 +12,10 @@ export const world = {
   panicField: null,
   safeField: null,
   escapeField: null,
+  memX: null,
+  memY: null,
+  doorField: null,
+  doorTiles: new Set(),
   visited: null,
   wall: null,
   vent: null,
@@ -44,7 +48,7 @@ export const metricsState = {
     heat: new Array(20).fill(0),
   },
   diagnostics: {
-    fieldTotals: { help:0, route:0, panic:0, safe:0, escape:0 },
+    fieldTotals: { help:0, route:0, panic:0, safe:0, escape:0, door:0 },
     hotAgents: 0,
     overwhelmedAgents: 0,
   },
@@ -81,6 +85,10 @@ export function resetWorld(o2BaseValue){
   world.panicField = new Float32Array(size);
   world.safeField = new Float32Array(size);
   world.escapeField = new Float32Array(size);
+  world.memX = new Float32Array(size);
+  world.memY = new Float32Array(size);
+  world.doorField = new Float32Array(size);
+  world.doorTiles = new Set();
   world.visited = new Float32Array(size);
   world.wall = new Uint8Array(size);
   world.vent = new Uint8Array(size);
@@ -96,6 +104,9 @@ export function resetWorld(o2BaseValue){
   world.panicField.fill(0);
   world.safeField.fill(0);
   world.escapeField.fill(0);
+  world.memX.fill(0);
+  world.memY.fill(0);
+  world.doorField.fill(0);
   world.visited.fill(0);
 
   for(let x=0;x<world.W;x++){

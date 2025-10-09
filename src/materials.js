@@ -2,12 +2,14 @@ import { Mode, TAU, DIRS4, clamp01, lerp, wrapTau } from './constants.js';
 import { world, idx, inBounds } from './state.js';
 import { emitParticleBurst, emitFlash } from './effects.js';
 import { thresholds, roles } from './config.js';
+import { MTAG, depositTagged } from './memory.js';
 
 const FOAM_BASE_TTL = 10;
 const FOAM_HEAT_CAP = thresholds.cryofoam.heatCap;
 const FOAM_EXPANSION_HEAT = 0.25;
 const FOAM_EXPANSION_TTL = 6;
 const FOAM_DIAGONALS = Object.freeze([[1,1],[1,-1],[-1,1],[-1,-1]]);
+const FIRE_MEMORY_DEPOSIT = 0.08;
 
 export function baseStringFor(mode){
   switch(mode){
@@ -332,6 +334,9 @@ export function reactFireO2(i, settings){
   const gain = isClfInferno ? 1.4 : 0.8;
   F.amplitude += gain*s;
   addHeatXY(i % world.W, (i / world.W) | 0, 12*s);
+  if(world.memX && world.memY){
+    depositTagged(world.memX, world.memY, i, FIRE_MEMORY_DEPOSIT * s, MTAG.FIRE);
+  }
   const drop = (isClfInferno ? 0.18 : 0.5) * s;
   world.o2[i] = Math.max(0, world.o2[i] - drop);
   const cut = settings.o2Cut;

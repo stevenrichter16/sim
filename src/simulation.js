@@ -4,6 +4,7 @@ import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
 import { thresholds, roles, fieldConfig, decayMultiplierFromHalfLife } from './config.js';
+import { MTAG, depositTagged } from './memory.js';
 import {
   baseStringFor,
   Sget,
@@ -27,9 +28,13 @@ const PANIC_RUN_TICKS = 6;
 const PANIC_MIN_HEAT_DROP = 0.005;
 const PANIC_FAILURE_LIMIT = 5;
 const PANIC_RELIEF_DELTA = 0.05;
+const DOOR_STEP_EPS = 0.002;
+const MEMORY_DIFFUSION = 0.10;
+const MEMORY_DECAY = 0.985;
+const MEMORY_EPSILON = 1e-4;
 
 const diagnosticsFrame = {
-  fieldTotals: { help:0, route:0, panic:0, safe:0, escape:0 },
+  fieldTotals: { help:0, route:0, panic:0, safe:0, escape:0, door:0 },
   hotAgents: 0,
   overwhelmedAgents: 0,
 };
@@ -156,11 +161,11 @@ function localCrowdPenalty(x,y){
     if(dx > 2 || dy > 2) continue;
     const dist = dx + dy;
     if(dist === 0){
-      penalty += 0.45;
+      penalty +=0;// 0.45;
     } else if(dist === 1){
-      penalty += 0.28;
+      penalty += 0;//0.28;
     } else if(dist === 2){
-      penalty += 0.14;
+      penalty += 0;//0.14;
     }
     if(++seen >= 12) break;
     if(penalty >= 1.0) return 1.0;
@@ -405,6 +410,7 @@ export class Agent{
       if(world.routeField){
         const deposit = fieldConfig.route?.depositBase ?? 0.04;
         world.routeField[hereIndex] = Math.min(1, (world.routeField[hereIndex] || 0) + deposit);
+        depositTagged(world.memX, world.memY, hereIndex, deposit, MTAG.ROUTE);
       }
       this.x = bestX;
       this.y = bestY;
@@ -443,6 +449,7 @@ export class Agent{
       if(world.routeField){
         const deposit = fieldConfig.route?.depositBase ?? 0.04;
         world.routeField[hereIndex] = Math.min(1, (world.routeField[hereIndex] || 0) + deposit);
+        depositTagged(world.memX, world.memY, hereIndex, deposit, MTAG.ROUTE);
       }
       this.x = bestX;
       this.y = bestY;
@@ -501,6 +508,7 @@ export class Agent{
     if(world.routeField){
       const deposit = fieldConfig.route?.depositBase ?? 0.04;
       world.routeField[hereIndex] = Math.min(1, (world.routeField[hereIndex] || 0) + deposit);
+      depositTagged(world.memX, world.memY, hereIndex, deposit, MTAG.ROUTE);
     }
     this.x = nx;
     this.y = ny;
@@ -551,10 +559,39 @@ export class Agent{
           const deposit = fieldConfig.escape?.depositBase ?? 0.04;
           world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + deposit);
           world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + deposit * 0.5);
+          depositTagged(world.memX, world.memY, newIdx, deposit, MTAG.ESCAPE);
+          depositTagged(world.memX, world.memY, hereIdx, deposit * 0.5, MTAG.ESCAPE);
           escapeDeposited = true;
         }
       };
       if(overwhelmed){
+        if(world.doorField && world.doorTiles && world.doorTiles.size){
+          const hereDoor = world.doorField[hereIdx] ?? 0;
+          let bestDoor = hereDoor;
+          let doorX = this.x;
+          let doorY = this.y;
+          for(const [dx,dy] of DIRS4){
+            const nx = this.x + dx;
+            const ny = this.y + dy;
+            if(!inBounds(nx,ny)) continue;
+            const nIdx = idx(nx, ny);
+            if(world.wall[nIdx]) continue;
+            const val = world.doorField[nIdx] ?? 0;
+            if(val > bestDoor + DOOR_STEP_EPS){
+              bestDoor = val;
+              doorX = nx;
+              doorY = ny;
+            }
+          }
+          if(bestDoor > hereDoor + DOOR_STEP_EPS){
+            this.x = doorX;
+            this.y = doorY;
+            this._resetPanicRun();
+            this._resetPanicFailure();
+            markEscapeTrail();
+            return;
+          }
+        }
         let registeredFailure = true;
         const attemptPanicRunStep = () => {
           if(this.panicRunTicks <= 0) return false;
@@ -707,6 +744,8 @@ export class Agent{
             const deposit = fieldConfig.escape?.depositBase ?? 0.04;
             world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + deposit);
             world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + deposit * 0.5);
+            depositTagged(world.memX, world.memY, newIdx, deposit, MTAG.ESCAPE);
+            depositTagged(world.memX, world.memY, hereIdx, deposit * 0.5, MTAG.ESCAPE);
             escapeDeposited = true;
           }
         }
@@ -822,6 +861,7 @@ export class Agent{
         //console.log('SAFE drop', tileIdx, currentSafety.toFixed(2), this.S.tension.toFixed(2));
         const deposit = fieldConfig.safe?.depositBase ?? 0.02;
         world.safeField[tileIdx] = Math.min(1, val + deposit);
+        depositTagged(world.memX, world.memY, tileIdx, deposit, MTAG.SAFE);
       }
       const safeStrength = world.safeField[tileIdx] || 0;
       if(safeStrength > 0){
@@ -858,12 +898,14 @@ export class Agent{
         const dHelp = (fieldConfig.help?.depositBase ?? 0.1) * amp * (1 - currentHelp);
         if(dHelp > 0){
           world.helpField[k] = Math.min(1, currentHelp + dHelp);
+          depositTagged(world.memX, world.memY, k, dHelp, MTAG.HELP);
         }
         if(world.panicField){
           const currentPanic = world.panicField[k] || 0;
           const dPanic = (fieldConfig.panic?.depositBase ?? 0.05) * amp * (1 - currentPanic);
           if(dPanic > 0){
             world.panicField[k] = Math.min(1, currentPanic + dPanic);
+            depositTagged(world.memX, world.memY, k, dPanic, MTAG.PANIC);
           }
         }
       }
@@ -1024,13 +1066,37 @@ let acidBasePairs = new Set();
       updateField(world.panicField, fieldConfig.panic);
       updateField(world.safeField, fieldConfig.safe);
       updateField(world.escapeField, fieldConfig.escape);
+      if(world.doorField){
+        if(world.doorTiles && world.doorTiles.size){
+          for(const k of world.doorTiles){
+            world.doorField[k] = 1;
+          }
+        }
+        updateField(world.doorField, fieldConfig.door);
+        if(world.doorTiles && world.doorTiles.size){
+          for(const k of world.doorTiles){
+            world.doorField[k] = 1;
+          }
+        }
+      }
       updateField(world.visited, fieldConfig.visited, { skipWalls: false });
       clampField01(world.helpField);
       clampField01(world.routeField);
       clampField01(world.panicField);
       clampField01(world.safeField);
       clampField01(world.escapeField);
+      if(world.doorField) clampField01(world.doorField);
       clampField01(world.visited);
+      if(world.memX && world.memY){
+        diffuse(world.memX, MEMORY_DIFFUSION);
+        diffuse(world.memY, MEMORY_DIFFUSION);
+        for(let i=0;i<world.memX.length;i++){
+          const mx = world.memX[i] * MEMORY_DECAY;
+          const my = world.memY[i] * MEMORY_DECAY;
+          world.memX[i] = Math.abs(mx) < MEMORY_EPSILON ? 0 : mx;
+          world.memY[i] = Math.abs(my) < MEMORY_EPSILON ? 0 : my;
+        }
+      }
       const shouldAssert = debugConfig?.assertions && (typeof process === 'undefined' || process.env.NODE_ENV !== 'production');
       if(shouldAssert){
         assertField01('help', world.helpField);
@@ -1038,6 +1104,7 @@ let acidBasePairs = new Set();
         assertField01('panic', world.panicField);
         assertField01('safe', world.safeField);
         assertField01('escape', world.escapeField);
+        assertField01('door', world.doorField);
         assertField01('visited', world.visited);
       }
     const base = settings.o2Base;
@@ -1214,6 +1281,7 @@ let acidBasePairs = new Set();
       panic: sumField(world.panicField),
       safe: sumField(world.safeField),
       escape: sumField(world.escapeField),
+      door: sumField(world.doorField),
     };
     diagnosticsFrame.fieldTotals = totals;
     const diagnosticsPayload = {

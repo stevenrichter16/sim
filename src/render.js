@@ -216,16 +216,29 @@ function drawPheromoneSlices(ctx){
   if(overlay.safe !== false)   fields.push({ key:'safe',   data: world.safeField,   color: '#73ffe0', threshold: 0.01 });
   if(overlay.escape !== false) fields.push({ key:'escape', data: world.escapeField, color: '#6ec6ff', threshold: 0.01 });
   if(overlay.route !== false)  fields.push({ key:'route',  data: world.routeField,  color: '#64dd88', threshold: 0.01 });
-  if(!fields.some(f => f.data)) return;
+  if(overlay.door !== false)   fields.push({ key:'door',   data: world.doorField,   color: '#ffd166', threshold: 0.01 });
+  if(overlay.memory){
+    fields.push({
+      key: 'memory',
+      get: (index)=>{
+        if(!world.memX || !world.memY) return 0;
+        const mx = world.memX[index];
+        const my = world.memY[index];
+        return Math.hypot(mx, my);
+      },
+      color: '#bda7ff',
+      threshold: 0.01,
+    });
+  }
+  if(!fields.some(f => f.data || f.get)) return;
   ctx.save();
-  ctx.globalAlpha = 0.6;
+  const baseAlpha = 0.9;
   for(let y=0;y<world.H;y++){
     for(let x=0;x<world.W;x++){
       const index = idx(x,y);
       const slices = [];
       for(const f of fields){
-        if(!f.data) continue;
-        const value = f.data[index];
+        const value = f.get ? f.get(index) : f.data ? f.data[index] : 0;
         if(value <= f.threshold) continue;
         slices.push({ value, color: f.color });
       }
@@ -237,6 +250,13 @@ function drawPheromoneSlices(ctx){
       const baseX = x * cell;
       const baseY = y * cell;
       let offset = 0;
+      if(slices.length === 1){
+        const strength = Math.max(0, Math.min(1, slices[0].value));
+        const scalar = 0.65 + 0.35 * strength;
+        ctx.globalAlpha = baseAlpha * scalar;
+      } else {
+        ctx.globalAlpha = baseAlpha;
+      }
       for(let i=0;i<slices.length;i++){
         const slice = slices[i];
         let width;

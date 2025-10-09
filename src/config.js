@@ -62,6 +62,7 @@ export const fieldConfig = {
     calmAmplitudeDrop: 0.005,
   },
   escape: { D: 0.11, tHalf: 10,  depositBase: 0.04 },
+  door:   { D: 0.10, tHalf: 15 },
   visited:{              tHalf: 20 },
   sound:  { D: 0.28, tHalf: 15,  depositBase: 0.10 },
 };

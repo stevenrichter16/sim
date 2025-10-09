@@ -12,6 +12,8 @@ export const debugConfig = {
     safe: true,
     escape: true,
     route: true,
+    memory: false,
+    door: false,
   },
 };
 
