@@ -19,6 +19,10 @@ export const world = {
   doorField: null,
   doorTiles: new Set(),
   safeFieldsByFaction: null,
+  presenceX: null,
+  presenceY: null,
+  dominantFaction: null,
+  controlLevel: null,
   visited: null,
   wall: null,
   vent: null,
@@ -93,6 +97,10 @@ export function resetWorld(o2BaseValue){
   world.doorField = new Float32Array(size);
   world.doorTiles = new Set();
   world.safeFieldsByFaction = FACTIONS.map(() => new Float32Array(size));
+  world.presenceX = new Float32Array(size);
+  world.presenceY = new Float32Array(size);
+  world.dominantFaction = new Int16Array(size);
+  world.controlLevel = new Float32Array(size);
   world.visited = new Float32Array(size);
   world.wall = new Uint8Array(size);
   world.vent = new Uint8Array(size);
@@ -116,6 +124,10 @@ export function resetWorld(o2BaseValue){
       field.fill(0);
     }
   }
+  world.presenceX.fill(0);
+  world.presenceY.fill(0);
+  world.dominantFaction.fill(-1);
+  world.controlLevel.fill(0);
   world.visited.fill(0);
 
   for(let x=0;x<world.W;x++){

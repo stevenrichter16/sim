@@ -7,6 +7,7 @@ export const FACTIONS = [
     safeFieldColor: '#00c8ff',
     safeDeposit: 0.03,
     safePhaseBucket: 0,
+    affinity: { B: -1 },
   },
   {
     id: 1,
@@ -16,6 +17,7 @@ export const FACTIONS = [
     safeFieldColor: '#48ff7b',
     safeDeposit: 0.03,
     safePhaseBucket: 2,
+    affinity: { A: -1 },
   },
 ];
 
@@ -28,4 +30,13 @@ export function factionById(id){
 export function factionByKey(key){
   const found = FACTIONS.find(f => f.key === key);
   return found || FACTIONS[DEFAULT_FACTION_ID];
+}
+
+export function factionAffinity(aId, bId){
+  if(aId === bId) return 1;
+  const a = factionById(aId);
+  const b = factionById(bId);
+  const key = b.key;
+  if(a.affinity && typeof a.affinity[key] === 'number') return a.affinity[key];
+  return -1;
 }

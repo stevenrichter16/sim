@@ -103,6 +103,7 @@ export function initInput({ canvas, draw }){
   });
   if(FACTIONS[0]) overlayToggleKeys.KeyA = `safeFaction${FACTIONS[0].id}`;
   if(FACTIONS[1]) overlayToggleKeys.KeyB = `safeFaction${FACTIONS[1].id}`;
+  overlayToggleKeys.KeyC = 'control';
 
   function toggleOverlaySlice(name){
     const current = !!debugConfig.overlay?.[name];
@@ -581,6 +582,12 @@ export function initInput({ canvas, draw }){
         return;
       }
       if(val==='toggleDraw') return;
+      if(val==='toggle-control'){
+        const current = !!debugConfig.overlay.control;
+        setDebugFlag('overlay.control', !current);
+        draw();
+        return;
+      }
       selectBrush(val);
     });
   }

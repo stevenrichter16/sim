@@ -220,6 +220,7 @@ export function draw(){
     }
   }
   drawPheromoneSlices(ctx);
+  drawDominanceOverlay(ctx);
   drawFlashes(ctx);
   drawParticles(ctx);
   drawHeatHaze(ctx);
@@ -304,6 +305,28 @@ function drawPheromoneSlices(ctx){
         if(offset >= cell) break;
       }
     }
+  }
+  ctx.restore();
+}
+
+function drawDominanceOverlay(ctx){
+  const overlay = debugConfig.overlay || {};
+  if(!overlay.control) return;
+  if(!world.dominantFaction || !world.controlLevel) return;
+  const cell = world.cell;
+  if(cell <= 0) return;
+  ctx.save();
+  for(let i=0;i<world.dominantFaction.length;i++){
+    const factionId = world.dominantFaction[i];
+    const control = world.controlLevel[i] ?? 0;
+    if(factionId < 0 || control <= 0.05) continue;
+    const faction = factionById(factionId);
+    const rgb = hexToRgb(faction.outline || faction.color);
+    const alpha = clamp01(control * 0.6);
+    ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+    const x = (i % world.W) * cell;
+    const y = ((i / world.W) | 0) * cell;
+    ctx.fillRect(x, y, cell, cell);
   }
   ctx.restore();
 }

@@ -4,7 +4,7 @@ import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
 import { thresholds, roles, fieldConfig, decayMultiplierFromHalfLife } from './config.js';
-import { FACTIONS, DEFAULT_FACTION_ID, factionById, factionByKey } from './factions.js';
+import { FACTIONS, DEFAULT_FACTION_ID, factionById, factionByKey, factionAffinity } from './factions.js';
 import { MTAG, depositTagged, projectOnto, factionSafePhases } from './memory.js';
 import {
   baseStringFor,
@@ -52,6 +52,53 @@ function safeDepositForFaction(faction){
   return faction.safeDeposit ?? (fieldConfig.safe?.depositBase ?? 0.02);
 }
 
+const presenceCosByFaction = factionSafePhases.map(phase => Math.cos(phase));
+const presenceSinByFaction = factionSafePhases.map(phase => Math.sin(phase));
+
+const PRESENCE_DIFFUSION = 0.08;
+const PRESENCE_HALFLIFE = 8;
+const PRESENCE_DEPOSIT = 0.035;
+
+function updatePresenceControl(){
+  if(!world.presenceX || !world.presenceY || !world.dominantFaction || !world.controlLevel) return;
+  const px = world.presenceX;
+  const py = world.presenceY;
+  const dom = world.dominantFaction;
+  const ctrl = world.controlLevel;
+  const factionCount = FACTIONS.length;
+  const cos = presenceCosByFaction;
+  const sin = presenceSinByFaction;
+  for(let i=0;i<px.length;i++){
+    let bestId = -1;
+    let bestPos = 0;
+    let sumPos = 0;
+    const x = px[i];
+    const y = py[i];
+    if(x === 0 && y === 0){
+      dom[i] = -1;
+      ctrl[i] = 0;
+      continue;
+    }
+    for(let f=0; f<factionCount; f++){
+      const proj = x * cos[f] + y * sin[f];
+      if(proj > 0){
+        sumPos += proj;
+        if(proj > bestPos){
+          bestPos = proj;
+          bestId = f;
+        }
+      }
+    }
+    if(bestId >= 0 && sumPos > 0){
+      dom[i] = bestId;
+      ctrl[i] = clamp01(bestPos / sumPos);
+    } else {
+      dom[i] = -1;
+      ctrl[i] = 0;
+    }
+  }
+}
+
 function updateField(field, cfg, { skipWalls = true } = {}){
   if(!field || !cfg) return;
   diffuse(field, cfg?.D ?? 0);
@@ -91,9 +138,41 @@ function assertField01(name, field){
 
 function movementWeightsFor(agent){
   if(agent?.isMedic){
-    return { safety:0.2, help:0.9, route:0.3, panic:-0.2, safe:0.0, escape:0.2, visited:-0.05, mySafeMem:0.0, rivalSafeMem:0.0, mySafeField:0.0, rivalSafeField:0.0 };
+    return {
+      safety:0.22,
+      help:0.9,
+      route:0.28,
+      panic:-0.18,
+      safe:0.0,
+      escape:0.2,
+      visited:-0.05,
+      mySafeMem:0.0,
+      rivalSafeMem:0.0,
+      mySafeField:0.12,
+      rivalSafeField:-0.1,
+      allyPresence:0.0,
+      rivalPresence:-0.05,
+      ourTurf:0.12,
+      rivalTurf:-0.18,
+    };
   }
-  return { safety:0.5, help:-0.3, route:0.25, panic:-0.55, safe:0.0, escape:0.25, visited:-0.35, mySafeMem:0.26, rivalSafeMem:-0.24, mySafeField:0.42, rivalSafeField:-0.2 };
+  return {
+    safety:0.45,
+    help:-0.32,
+    route:0.22,
+    panic:-0.6,
+    safe:0.0,
+    escape:0.2,
+    visited:-0.35,
+    mySafeMem:0.3,
+    rivalSafeMem:-0.28,
+    mySafeField:0.5,
+    rivalSafeField:-0.24,
+    allyPresence:0.38,
+    rivalPresence:-0.42,
+    ourTurf:0.35,
+    rivalTurf:-0.5,
+  };
 }
 
 function scoredNeighbor(agent, nx, ny, weights){
@@ -109,23 +188,70 @@ function scoredNeighbor(agent, nx, ny, weights){
   const visited = world.visited ? world.visited[k] ?? 0 : 0;
   const factionId = agent?.factionId ?? DEFAULT_FACTION_ID;
   const mySafeMem = projectOnto(world.memX, world.memY, k, safePhaseForId(factionId));
-  let rivalSafeMem = 0;
+  let allyPresence = Math.max(0, world.presenceX ? (world.presenceX[k] * presenceCosByFaction[factionId] + world.presenceY[k] * presenceSinByFaction[factionId]) : 0);
+  let rivalPresence = 0;
   let mySafeField = 0;
   let rivalSafeField = 0;
+  let ourTurf = 0;
+  let rivalTurf = 0;
   if(world.safeFieldsByFaction){
     const myField = world.safeFieldsByFaction[factionId];
     if(myField) mySafeField = myField[k] ?? 0;
+  }
+  if(world.presenceX && world.presenceY){
+    const px = world.presenceX[k];
+    const py = world.presenceY[k];
     for(const faction of FACTIONS){
-      if(faction.id === factionId) continue;
-      rivalSafeMem = Math.max(rivalSafeMem, projectOnto(world.memX, world.memY, k, safePhaseForId(faction.id)));
-      const rivalField = world.safeFieldsByFaction[faction.id];
-      if(rivalField) rivalSafeField = Math.max(rivalSafeField, rivalField[k] ?? 0);
+      const otherId = faction.id;
+      const affinity = factionAffinity(factionId, otherId);
+      if(affinity === 0) continue;
+      const cos = presenceCosByFaction[otherId];
+      const sin = presenceSinByFaction[otherId];
+      const proj = px * cos + py * sin;
+      if(proj <= 0) continue;
+      if(otherId === factionId || affinity > 0){
+        allyPresence = Math.max(allyPresence, proj * Math.max(0.1, affinity));
+      } else if(affinity < 0){
+        rivalPresence = Math.max(rivalPresence, proj * -affinity);
+      }
     }
-  } else {
+  }
+  if(world.safeFieldsByFaction){
     for(const faction of FACTIONS){
-      if(faction.id === factionId) continue;
-      rivalSafeMem = Math.max(rivalSafeMem, projectOnto(world.memX, world.memY, k, safePhaseForId(faction.id)));
+      const otherId = faction.id;
+      if(otherId === factionId) continue;
+      const affinity = factionAffinity(factionId, otherId);
+      const field = world.safeFieldsByFaction[otherId];
+      if(!field) continue;
+      const val = field[k] ?? 0;
+      if(val <= 0) continue;
+      if(affinity > 0){
+        mySafeField = Math.max(mySafeField, val * affinity);
+      } else if(affinity < 0){
+        rivalSafeField = Math.max(rivalSafeField, val * -affinity);
+      }
     }
+  }
+  if(world.dominantFaction && world.controlLevel){
+    const dom = world.dominantFaction[k];
+    const conf = world.controlLevel[k] ?? 0;
+    if(dom >= 0 && conf > 0.05){
+      const affinity = factionAffinity(factionId, dom);
+      if(dom === factionId || affinity > 0){
+        ourTurf = Math.max(ourTurf, conf * (dom === factionId ? 1 : affinity));
+      } else if(affinity < 0){
+        rivalTurf = Math.max(rivalTurf, conf * -affinity);
+      }
+    }
+  }
+  let rivalSafeMem = 0;
+  for(const faction of FACTIONS){
+    const otherId = faction.id;
+    if(otherId === factionId) continue;
+    const affinity = factionAffinity(factionId, otherId);
+    if(affinity >= 0) continue;
+    const proj = projectOnto(world.memX, world.memY, k, safePhaseForId(otherId));
+    if(proj > 0) rivalSafeMem = Math.max(rivalSafeMem, proj * -affinity);
   }
   return (
     (weights.safety ?? 0) * safety +
@@ -138,7 +264,11 @@ function scoredNeighbor(agent, nx, ny, weights){
     (weights.escape ?? 0) * escape +
     (weights.visited ?? 0) * visited +
     (weights.mySafeMem ?? 0) * mySafeMem +
-    (weights.rivalSafeMem ?? 0) * rivalSafeMem
+    (weights.rivalSafeMem ?? 0) * rivalSafeMem +
+    (weights.allyPresence ?? 0) * allyPresence +
+    (weights.rivalPresence ?? 0) * rivalPresence +
+    (weights.ourTurf ?? 0) * ourTurf +
+    (weights.rivalTurf ?? 0) * rivalTurf
   );
 }
 
@@ -888,6 +1018,16 @@ export class Agent{
       }
     }
 
+    if(world.presenceX && world.presenceY){
+      const faction = factionById(this.factionId ?? DEFAULT_FACTION_ID);
+      const cos = presenceCosByFaction[faction.id];
+      const sin = presenceSinByFaction[faction.id];
+      const envFactor = clamp01((1 - heatLevel) * (0.6 + (o ?? 0)));
+      const amount = PRESENCE_DEPOSIT * envFactor;
+      world.presenceX[tileIdx] += cos * amount;
+      world.presenceY[tileIdx] += sin * amount;
+    }
+
     this.S.amplitude*=0.998;
     const currentSafety = safetyScore(this.x, this.y);
     if(currentSafety > 0.43){
@@ -906,15 +1046,23 @@ export class Agent{
         if(world.safeFieldsByFaction){
           const myField = world.safeFieldsByFaction[faction.id];
           if(myField) myField[tileIdx] = Math.min(1, (myField[tileIdx] ?? 0) + factionSafeDeposit);
-          const rivalMemoryPenalty = baseDeposit * 0.4;
           for(const other of FACTIONS){
-            if(other.id === faction.id) continue;
-            const rivalPhase = safePhaseForId(other.id);
-            depositTagged(world.memX, world.memY, tileIdx, -rivalMemoryPenalty, rivalPhase);
-            const rivalField = world.safeFieldsByFaction[other.id];
-            if(rivalField){
-              const diminish = factionSafeDeposit * 0.25;
-              rivalField[tileIdx] = Math.max(0, (rivalField[tileIdx] ?? 0) - diminish);
+            const affinity = factionAffinity(faction.id, other.id);
+            if(other.id === faction.id || affinity === 0) continue;
+            const otherPhase = safePhaseForId(other.id);
+            if(affinity > 0){
+              const support = factionSafeDeposit * affinity * 0.35;
+              depositTagged(world.memX, world.memY, tileIdx, support, otherPhase);
+              const otherField = world.safeFieldsByFaction[other.id];
+              if(otherField) otherField[tileIdx] = Math.min(1, (otherField[tileIdx] ?? 0) + support * 0.5);
+            } else if(affinity < 0){
+              const penalty = baseDeposit * (-affinity) * 0.4;
+              depositTagged(world.memX, world.memY, tileIdx, -penalty, otherPhase);
+              const rivalField = world.safeFieldsByFaction[other.id];
+              if(rivalField){
+                const diminish = factionSafeDeposit * (-affinity) * 0.25;
+                rivalField[tileIdx] = Math.max(0, (rivalField[tileIdx] ?? 0) - diminish);
+              }
             }
           }
         }
@@ -1164,6 +1312,16 @@ let acidBasePairs = new Set();
           world.memY[i] = Math.abs(my) < MEMORY_EPSILON ? 0 : my;
         }
       }
+      if(world.presenceX && world.presenceY){
+        diffuse(world.presenceX, PRESENCE_DIFFUSION);
+        diffuse(world.presenceY, PRESENCE_DIFFUSION);
+        const keepPresence = decayMultiplierFromHalfLife(PRESENCE_HALFLIFE);
+        for(let i=0;i<world.presenceX.length;i++){
+          world.presenceX[i] *= keepPresence;
+          world.presenceY[i] *= keepPresence;
+        }
+      }
+      updatePresenceControl();
       const shouldAssert = debugConfig?.assertions && (typeof process === 'undefined' || process.env.NODE_ENV !== 'production');
       if(shouldAssert){
         assertField01('help', world.helpField);

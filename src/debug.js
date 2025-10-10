@@ -11,6 +11,7 @@ const overlayDefaults = {
   route: true,
   memory: false,
   door: false,
+  control: false,
 };
 
 for(const faction of FACTIONS){
