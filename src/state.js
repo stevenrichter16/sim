@@ -23,6 +23,7 @@ export const world = {
   presenceY: null,
   dominantFaction: null,
   controlLevel: null,
+  frontierByFaction: null,
   visited: null,
   wall: null,
   vent: null,
@@ -101,6 +102,7 @@ export function resetWorld(o2BaseValue){
   world.presenceY = new Float32Array(size);
   world.dominantFaction = new Int16Array(size);
   world.controlLevel = new Float32Array(size);
+  world.frontierByFaction = FACTIONS.map(() => new Float32Array(size));
   world.visited = new Float32Array(size);
   world.wall = new Uint8Array(size);
   world.vent = new Uint8Array(size);
@@ -128,6 +130,11 @@ export function resetWorld(o2BaseValue){
   world.presenceY.fill(0);
   world.dominantFaction.fill(-1);
   world.controlLevel.fill(0);
+  if(world.frontierByFaction){
+    for(const field of world.frontierByFaction){
+      field.fill(0);
+    }
+  }
   world.visited.fill(0);
 
   for(let x=0;x<world.W;x++){

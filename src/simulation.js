@@ -5,7 +5,7 @@ import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
 import { thresholds, roles, fieldConfig, decayMultiplierFromHalfLife } from './config.js';
 import { FACTIONS, DEFAULT_FACTION_ID, factionById, factionByKey, factionAffinity } from './factions.js';
-import { MTAG, depositTagged, projectOnto, factionSafePhases } from './memory.js';
+import { MTAG, depositTagged, projectOnto, factionSafePhases, getPresenceCos, getPresenceSin, rebuildPresencePhaseCache } from './memory.js';
 import {
   baseStringFor,
   Sget,
@@ -52,12 +52,11 @@ function safeDepositForFaction(faction){
   return faction.safeDeposit ?? (fieldConfig.safe?.depositBase ?? 0.02);
 }
 
-const presenceCosByFaction = factionSafePhases.map(phase => Math.cos(phase));
-const presenceSinByFaction = factionSafePhases.map(phase => Math.sin(phase));
-
 const PRESENCE_DIFFUSION = 0.08;
 const PRESENCE_HALFLIFE = 8;
 const PRESENCE_DEPOSIT = 0.035;
+const FRONTIER_MIN_CONTEST = 0.25;
+const FRONTIER_DEPOSIT = 0.02;
 
 function updatePresenceControl(){
   if(!world.presenceX || !world.presenceY || !world.dominantFaction || !world.controlLevel) return;
@@ -66,9 +65,16 @@ function updatePresenceControl(){
   const dom = world.dominantFaction;
   const ctrl = world.controlLevel;
   const factionCount = FACTIONS.length;
-  const cos = presenceCosByFaction;
-  const sin = presenceSinByFaction;
+  const cos = getPresenceCos();
+  const sin = getPresenceSin();
   for(let i=0;i<px.length;i++){
+    if(world.wall && world.wall[i]){
+      px[i] = 0;
+      py[i] = 0;
+      dom[i] = -1;
+      ctrl[i] = 0;
+      continue;
+    }
     let bestId = -1;
     let bestPos = 0;
     let sumPos = 0;
@@ -96,6 +102,57 @@ function updatePresenceControl(){
       dom[i] = -1;
       ctrl[i] = 0;
     }
+  }
+}
+
+function updateFrontierFields(){
+  if(!world.frontierByFaction || !world.dominantFaction || !world.controlLevel) return;
+  const dom = world.dominantFaction;
+  const ctrl = world.controlLevel;
+  const frontier = world.frontierByFaction;
+  const contestVals = new Float32Array(dom.length);
+  for(let i=0;i<dom.length;i++){
+    if(dom[i] < 0 || (world.wall && world.wall[i])){
+      contestVals[i] = 0;
+      continue;
+    }
+    const control = ctrl[i] ?? 0;
+    contestVals[i] = 1 - Math.abs(2 * control - 1);
+  }
+  for(const field of frontier) field.fill(0);
+  for(let i=0;i<dom.length;i++){
+    const contest = contestVals[i];
+    if(contest <= FRONTIER_MIN_CONTEST) continue;
+    const x = i % world.W;
+    const y = (i / world.W) | 0;
+    for(const faction of FACTIONS){
+      const fid = faction.id;
+      let hasFriendly = false;
+      let hasHostile = false;
+      for(const [dx,dy] of DIRS4){
+        const nx = x + dx;
+        const ny = y + dy;
+        if(!inBounds(nx, ny)) continue;
+        const ni = idx(nx, ny);
+        if(world.wall && world.wall[ni]) continue;
+        const neighborFaction = dom[ni];
+        if(neighborFaction < 0) continue;
+        const affinity = factionAffinity(fid, neighborFaction);
+        if(neighborFaction === fid || affinity > 0){
+          hasFriendly = true;
+        } else if(affinity < 0){
+          hasHostile = true;
+        }
+      }
+      if(hasFriendly && hasHostile){
+        frontier[fid][i] = Math.min(1, frontier[fid][i] + contest * FRONTIER_DEPOSIT);
+      }
+    }
+  }
+  const frontierCfg = fieldConfig.safe;
+  for(const field of frontier){
+    updateField(field, frontierCfg);
+    clampField01(field);
   }
 }
 
@@ -146,6 +203,7 @@ function movementWeightsFor(agent){
       safe:0.0,
       escape:0.2,
       visited:-0.05,
+      myFrontier:0.15,
       mySafeMem:0.0,
       rivalSafeMem:0.0,
       mySafeField:0.12,
@@ -164,6 +222,7 @@ function movementWeightsFor(agent){
     safe:0.0,
     escape:0.2,
     visited:-0.35,
+    myFrontier:0.28,
     mySafeMem:0.3,
     rivalSafeMem:-0.28,
     mySafeField:0.5,
@@ -188,31 +247,43 @@ function scoredNeighbor(agent, nx, ny, weights){
   const visited = world.visited ? world.visited[k] ?? 0 : 0;
   const factionId = agent?.factionId ?? DEFAULT_FACTION_ID;
   const mySafeMem = projectOnto(world.memX, world.memY, k, safePhaseForId(factionId));
-  let allyPresence = Math.max(0, world.presenceX ? (world.presenceX[k] * presenceCosByFaction[factionId] + world.presenceY[k] * presenceSinByFaction[factionId]) : 0);
+  const cosArr = getPresenceCos();
+  const sinArr = getPresenceSin();
+  let allyPresence = 0;
+  if(world.presenceX && world.presenceY){
+    const selfProj = world.presenceX[k] * cosArr[factionId] + world.presenceY[k] * sinArr[factionId];
+    if(selfProj > 0) allyPresence = selfProj;
+  }
   let rivalPresence = 0;
   let mySafeField = 0;
   let rivalSafeField = 0;
   let ourTurf = 0;
+  let myFrontier = 0;
   let rivalTurf = 0;
   if(world.safeFieldsByFaction){
     const myField = world.safeFieldsByFaction[factionId];
     if(myField) mySafeField = myField[k] ?? 0;
+  }
+  if(world.frontierByFaction){
+    const myFrontierField = world.frontierByFaction[factionId];
+    if(myFrontierField) myFrontier = myFrontierField[k] ?? 0;
   }
   if(world.presenceX && world.presenceY){
     const px = world.presenceX[k];
     const py = world.presenceY[k];
     for(const faction of FACTIONS){
       const otherId = faction.id;
+      if(otherId === factionId) continue;
       const affinity = factionAffinity(factionId, otherId);
       if(affinity === 0) continue;
-      const cos = presenceCosByFaction[otherId];
-      const sin = presenceSinByFaction[otherId];
+      const cos = cosArr[otherId];
+      const sin = sinArr[otherId];
       const proj = px * cos + py * sin;
       if(proj <= 0) continue;
-      if(otherId === factionId || affinity > 0){
-        allyPresence = Math.max(allyPresence, proj * Math.max(0.1, affinity));
+      if(affinity > 0){
+        allyPresence = Math.min(1, allyPresence + proj * Math.max(0.1, affinity));
       } else if(affinity < 0){
-        rivalPresence = Math.max(rivalPresence, proj * -affinity);
+        rivalPresence = Math.min(1, rivalPresence + proj * -affinity);
       }
     }
   }
@@ -238,7 +309,7 @@ function scoredNeighbor(agent, nx, ny, weights){
     if(dom >= 0 && conf > 0.05){
       const affinity = factionAffinity(factionId, dom);
       if(dom === factionId || affinity > 0){
-        ourTurf = Math.max(ourTurf, conf * (dom === factionId ? 1 : affinity));
+        ourTurf = Math.max(ourTurf, conf);
       } else if(affinity < 0){
         rivalTurf = Math.max(rivalTurf, conf * -affinity);
       }
@@ -268,7 +339,8 @@ function scoredNeighbor(agent, nx, ny, weights){
     (weights.allyPresence ?? 0) * allyPresence +
     (weights.rivalPresence ?? 0) * rivalPresence +
     (weights.ourTurf ?? 0) * ourTurf +
-    (weights.rivalTurf ?? 0) * rivalTurf
+    (weights.rivalTurf ?? 0) * rivalTurf +
+    (weights.myFrontier ?? 0) * myFrontier
   );
 }
 
@@ -1020,9 +1092,11 @@ export class Agent{
 
     if(world.presenceX && world.presenceY){
       const faction = factionById(this.factionId ?? DEFAULT_FACTION_ID);
-      const cos = presenceCosByFaction[faction.id];
-      const sin = presenceSinByFaction[faction.id];
-      const envFactor = clamp01((1 - heatLevel) * (0.6 + (o ?? 0)));
+      const cosArr = getPresenceCos();
+      const sinArr = getPresenceSin();
+      const cos = cosArr[faction.id];
+      const sin = sinArr[faction.id];
+      const envFactor = clamp01((1 - 0.7 * heatLevel) * (0.6 + 0.4 * (o ?? 0)));
       const amount = PRESENCE_DEPOSIT * envFactor;
       world.presenceX[tileIdx] += cos * amount;
       world.presenceY[tileIdx] += sin * amount;
@@ -1322,6 +1396,7 @@ let acidBasePairs = new Set();
         }
       }
       updatePresenceControl();
+      updateFrontierFields();
       const shouldAssert = debugConfig?.assertions && (typeof process === 'undefined' || process.env.NODE_ENV !== 'production');
       if(shouldAssert){
         assertField01('help', world.helpField);

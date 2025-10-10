@@ -21,6 +21,17 @@ export const MTAG = Object.freeze({
   factionSafePhases,
 });
 
+let presenceCosByFaction = factionSafePhases.map(Math.cos);
+let presenceSinByFaction = factionSafePhases.map(Math.sin);
+
+export function rebuildPresencePhaseCache(){
+  presenceCosByFaction = factionSafePhases.map(Math.cos);
+  presenceSinByFaction = factionSafePhases.map(Math.sin);
+}
+
+export function getPresenceCos(){ return presenceCosByFaction; }
+export function getPresenceSin(){ return presenceSinByFaction; }
+
 export function depositTagged(memX, memY, idx, weight, phase){
   if(!memX || !memY || weight === 0) return;
   memX[idx] += weight * Math.cos(phase);

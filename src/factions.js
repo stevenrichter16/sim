@@ -38,5 +38,5 @@ export function factionAffinity(aId, bId){
   const b = factionById(bId);
   const key = b.key;
   if(a.affinity && typeof a.affinity[key] === 'number') return a.affinity[key];
-  return -1;
+  return 0;
 }
