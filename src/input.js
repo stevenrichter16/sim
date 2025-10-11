@@ -94,6 +94,7 @@ export function initInput({ canvas, draw }){
     Digit5: 'route',
     KeyM: 'memory',
     Digit6: 'door',
+    KeyR: 'reinforce',
   };
 
   FACTIONS.forEach((faction, index) => {
@@ -105,9 +106,18 @@ export function initInput({ canvas, draw }){
   if(FACTIONS[1]) overlayToggleKeys.KeyB = `safeFaction${FACTIONS[1].id}`;
   overlayToggleKeys.KeyC = 'control';
 
+  function updateOverlayButtonState(name){
+    if(!brushGrid) return;
+    const button = brushGrid.querySelector(`[data-brush="toggle-${name}"]`);
+    if(button){
+      button.classList.toggle('active', !!debugConfig.overlay?.[name]);
+    }
+  }
+
   function toggleOverlaySlice(name){
     const current = !!debugConfig.overlay?.[name];
     setDebugFlag(`overlay.${name}`, !current);
+    updateOverlayButtonState(name);
     draw();
   }
   const legendPanel = document.getElementById('legendPanel');
@@ -583,9 +593,17 @@ export function initInput({ canvas, draw }){
       }
       if(val==='toggleDraw') return;
       if(val==='toggle-control'){
-        const current = !!debugConfig.overlay.control;
-        setDebugFlag('overlay.control', !current);
-        draw();
+        toggleOverlaySlice('control');
+        return;
+      }
+      if(val==='toggle-reinforce'){
+        toggleOverlaySlice('reinforce');
+        return;
+      }
+      if(val==='toggle-reinforce-log'){
+        const current = !!debugConfig.enableLogs?.reinforceSeed;
+        setDebugFlag(['enableLogs','reinforceSeed'], !current);
+        b.classList.toggle('active', !current);
         return;
       }
       selectBrush(val);
@@ -631,6 +649,9 @@ export function initInput({ canvas, draw }){
     'safeField',
     'escapeField',
   ]);
+
+  updateOverlayButtonState('control');
+  updateOverlayButtonState('reinforce');
 
   function depositPheromone(fieldName, tileIdx, amount = 1){
     const field = world[fieldName];

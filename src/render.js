@@ -248,6 +248,25 @@ function drawPheromoneSlices(ctx){
   if(overlay.escape !== false) fields.push({ key:'escape', data: world.escapeField, color: '#6ec6ff', threshold: 0.01 });
   if(overlay.route !== false)  fields.push({ key:'route',  data: world.routeField,  color: '#64dd88', threshold: 0.01 });
   if(overlay.door !== false)   fields.push({ key:'door',   data: world.doorField,   color: '#ffd166', threshold: 0.01 });
+  if(overlay.reinforce && world.reinforceByFaction){
+    fields.push({
+      key: 'reinforce',
+      get: (index)=>{
+        if(!world.reinforceByFaction) return 0;
+        let max = 0;
+        for(const field of world.reinforceByFaction){
+          if(!field) continue;
+          const val = field[index] ?? 0;
+          if(val > max) max = val;
+        }
+        return max;
+      },
+      color: '#000000',
+      threshold: 0.0005,
+      minAlpha: 0.35,
+      scale: 1.8,
+    });
+  }
   if(overlay.memory){
     fields.push({
       key: 'memory',
@@ -271,7 +290,7 @@ function drawPheromoneSlices(ctx){
       for(const f of fields){
         const value = f.get ? f.get(index) : f.data ? f.data[index] : 0;
         if(value <= f.threshold) continue;
-        slices.push({ value, color: f.color });
+        slices.push({ value, color: f.color, minAlpha: f.minAlpha ?? 0, scale: f.scale ?? 1 });
       }
       if(!slices.length) continue;
       slices.sort((a,b)=> b.value - a.value);
@@ -281,13 +300,6 @@ function drawPheromoneSlices(ctx){
       const baseX = x * cell;
       const baseY = y * cell;
       let offset = 0;
-      if(slices.length === 1){
-        const strength = Math.max(0, Math.min(1, slices[0].value));
-        const scalar = 0.65 + 0.35 * strength;
-        ctx.globalAlpha = baseAlpha * scalar;
-      } else {
-        ctx.globalAlpha = baseAlpha;
-      }
       for(let i=0;i<slices.length;i++){
         const slice = slices[i];
         let width;
@@ -299,6 +311,9 @@ function drawPheromoneSlices(ctx){
           if(offset + width > cell) width = cell - offset;
         }
         if(width <= 0) continue;
+        const strength = Math.max(0, Math.min(1, slice.value * slice.scale));
+        const scalar = slice.minAlpha + (1 - slice.minAlpha) * strength;
+        ctx.globalAlpha = baseAlpha * scalar;
         ctx.fillStyle = slice.color;
         ctx.fillRect(baseX + offset, baseY, width, cell);
         offset += width;
@@ -306,6 +321,7 @@ function drawPheromoneSlices(ctx){
       }
     }
   }
+  ctx.globalAlpha = 1;
   ctx.restore();
 }
 

@@ -62,6 +62,12 @@ const DEBT_HALFLIFE = 8;
 const DEBT_DEPOSIT = 0.02;
 const DEBT_LOSS_HIGH = 0.6;
 const DEBT_LOSS_LOW = 0.4;
+const REINFORCE_THRESHOLD = 0.49;
+const REINFORCE_DEPOSIT = 0.02;
+const REINFORCE_DIFFUSION = 0.05;
+const REINFORCE_HALFLIFE = 14;
+const REINFORCE_FRONTIER_MIN = 0.1;
+const REINFORCE_FRONTIER_BOOST = 0.005;
 
 let prevDominant = null;
 let prevControl = null;
@@ -194,6 +200,59 @@ function seedControlDebt(){
   if(ctrl.length) prevControl.set(ctrl);
 }
 
+function seedReinforcement(){
+  //console.log("in seedReinforcemnt");
+  if(!world.reinforceByFaction || !world.dominantFaction || !world.controlLevel) return;
+  //console.log("passed the first seedRein...");
+  const dom = world.dominantFaction;
+  const ctrl = world.controlLevel;
+  //console.log("dom length:", dom.length);
+  for(let i=0;i<dom.length;i++){
+    if(world.wall && world.wall[i]) continue;
+    //console.log("after wall check in SeedRien..");
+    //console.log("dom:", dom[i]);
+    const fid = dom[i];
+    //console.log("after setting fid in SeedRien..");
+    if(fid < 0) continue;
+    //console.log("after fid check in seedRein..");
+    const strength = ctrl[i] ?? 0;
+    if(strength <= REINFORCE_THRESHOLD) continue;
+    //console.log("after strength check in seedRein..");
+    const field = world.reinforceByFaction[fid];
+    if(!field) continue;
+    //console.log("after !field check in seedRein..");
+    const deposit = REINFORCE_DEPOSIT * (strength - REINFORCE_THRESHOLD);
+    if(deposit <= 0) continue;
+    //console.log("after deposit check in seedRein..");
+    field[i] = Math.min(1, field[i] + deposit);
+    //console.log("Seeding reinforcement");
+    if(debugConfig.enableLogs?.reinforceSeed){
+      const x = i % world.W;
+      const y = (i / world.W) | 0;
+      console.log(`[reinforce] deposit`, { tile: `${x},${y}`, faction: fid, ctrl: strength.toFixed(3), deposit: deposit.toFixed(5), value: field[i].toFixed(4) });
+    }
+  }
+}
+
+function maybeBoostFrontierFromReinforce(fromIdx, toIdx, factionId){
+  if(!world.reinforceByFaction || !world.frontierByFaction) return;
+  const reinforceField = world.reinforceByFaction[factionId];
+  const frontierField = world.frontierByFaction[factionId];
+  if(!reinforceField || !frontierField) return;
+  const fromVal = reinforceField[fromIdx] ?? 0;
+  if(fromVal <= REINFORCE_FRONTIER_MIN) return;
+  const dom = world.dominantFaction;
+  const ctrl = world.controlLevel;
+  if(!dom || !ctrl) return;
+  const domNext = dom[toIdx];
+  const ctrlNext = ctrl[toIdx] ?? 0;
+  const contested = (domNext < 0) || (domNext !== factionId && ctrlNext <= REINFORCE_THRESHOLD);
+  if(!contested) return;
+  const boost = REINFORCE_FRONTIER_BOOST * fromVal;
+  if(boost <= 0) return;
+  frontierField[toIdx] = Math.min(1, frontierField[toIdx] + boost);
+}
+
 function updateField(field, cfg, { skipWalls = true } = {}){
   if(!field || !cfg) return;
   diffuse(field, cfg?.D ?? 0);
@@ -244,6 +303,7 @@ function movementWeightsFor(agent){
       myFrontier:0.15,
       debt:0.10,
       controlGradReward:0.05,
+      reinforce:0.06,
       mySafeMem:0.0,
       rivalSafeMem:0.0,
       mySafeField:0.12,
@@ -273,6 +333,7 @@ function movementWeightsFor(agent){
     rivalTurf:-0.5,
     debt:0.12,
     controlGradReward:0.12,
+    reinforce:0.1,
   };
 }
 
@@ -305,6 +366,7 @@ function scoredNeighbor(agent, nx, ny, weights){
   let rivalTurf = 0;
   let myDebt = 0;
   let controlGrad = 0;
+  let myReinforce = 0;
   if(world.safeFieldsByFaction){
     const myField = world.safeFieldsByFaction[factionId];
     if(myField) mySafeField = myField[k] ?? 0;
@@ -316,6 +378,10 @@ function scoredNeighbor(agent, nx, ny, weights){
   if(world.debtByFaction){
     const debtField = world.debtByFaction[factionId];
     if(debtField) myDebt = debtField[k] ?? 0;
+  }
+  if(world.reinforceByFaction){
+    const reinforceField = world.reinforceByFaction[factionId];
+    if(reinforceField) myReinforce = reinforceField[k] ?? 0;
   }
   if(world.presenceX && world.presenceY){
     const px = world.presenceX[k];
@@ -412,7 +478,8 @@ function scoredNeighbor(agent, nx, ny, weights){
     (weights.rivalTurf ?? 0) * rivalTurf +
     (weights.myFrontier ?? 0) * myFrontier +
     (weights.debt ?? 0) * myDebt +
-    (weights.controlGradReward ?? 0) * controlGrad
+    (weights.controlGradReward ?? 0) * controlGrad +
+    (weights.reinforce ?? 0) * myReinforce
   );
 }
 
@@ -1019,6 +1086,7 @@ export class Agent{
         if(curiosity && Math.random() < (0.12 + 0.5 * curiosity)){
           if(tryCuriosityStep(this)){
             moved = true;
+            maybeBoostFrontierFromReinforce(hereIdx, idx(this.x, this.y), this.factionId);
           }
         }
       }
@@ -1040,6 +1108,8 @@ export class Agent{
           }
         }
         if(bestX !== this.x || bestY !== this.y){
+          const toIdx = idx(bestX, bestY);
+          maybeBoostFrontierFromReinforce(hereIdx, toIdx, this.factionId);
           this.x = bestX;
           this.y = bestY;
           moved = true;
@@ -1049,6 +1119,9 @@ export class Agent{
         const randomBias = 0.25 + panicWeight * 0.55;
         if(Math.random() < randomBias){
           moved = tryRandomStep(this);
+          if(moved){
+            maybeBoostFrontierFromReinforce(hereIdx, idx(this.x, this.y), this.factionId);
+          }
         }
       }
       if(!escapeDeposited && overwhelmed && world.escapeField){
@@ -1477,6 +1550,15 @@ let acidBasePairs = new Set();
       updatePresenceControl();
       seedControlDebt();
       updateFrontierFields();
+      seedReinforcement();
+      //console.log("After calling seedReinforment");
+      if(world.reinforceByFaction){
+        const reinforceCfg = { D: REINFORCE_DIFFUSION, tHalf: REINFORCE_HALFLIFE };
+        for(const field of world.reinforceByFaction){
+          updateField(field, reinforceCfg);
+          clampField01(field);
+        }
+      }
       if(world.debtByFaction){
         const debtCfg = { D: DEBT_DIFFUSION, tHalf: DEBT_HALFLIFE };
         for(const field of world.debtByFaction){
@@ -1496,6 +1578,9 @@ let acidBasePairs = new Set();
         }
         if(world.debtByFaction){
           world.debtByFaction.forEach((field, idx)=> assertField01(`debtFaction${idx}`, field));
+        }
+        if(world.reinforceByFaction){
+          world.reinforceByFaction.forEach((field, idx)=> assertField01(`reinforceFaction${idx}`, field));
         }
         assertField01('door', world.doorField);
         assertField01('visited', world.visited);
@@ -1684,6 +1769,11 @@ let acidBasePairs = new Set();
     if(world.debtByFaction){
       world.debtByFaction.forEach((field, idx)=>{
         totals[`debtFaction${idx}`] = sumField(field);
+      });
+    }
+    if(world.reinforceByFaction){
+      world.reinforceByFaction.forEach((field, idx)=>{
+        totals[`reinforceFaction${idx}`] = sumField(field);
       });
     }
     diagnosticsFrame.fieldTotals = totals;

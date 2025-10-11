@@ -12,6 +12,7 @@ const overlayDefaults = {
   memory: false,
   door: false,
   control: false,
+  reinforce: false,
 };
 
 for(const faction of FACTIONS){
@@ -24,6 +25,9 @@ export const debugConfig = {
   logReactions: false,
   assertions: false,
   overlay: overlayDefaults,
+  enableLogs: {
+    reinforceSeed: false,
+  },
 };
 
 export function setDebugFlag(path, value){

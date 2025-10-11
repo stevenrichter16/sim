@@ -25,6 +25,7 @@ export const world = {
   controlLevel: null,
   frontierByFaction: null,
   debtByFaction: null,
+  reinforceByFaction: null,
   visited: null,
   wall: null,
   vent: null,
@@ -105,6 +106,7 @@ export function resetWorld(o2BaseValue){
   world.controlLevel = new Float32Array(size);
   world.frontierByFaction = FACTIONS.map(() => new Float32Array(size));
   world.debtByFaction = FACTIONS.map(() => new Float32Array(size));
+  world.reinforceByFaction = FACTIONS.map(() => new Float32Array(size));
   world.visited = new Float32Array(size);
   world.wall = new Uint8Array(size);
   world.vent = new Uint8Array(size);
@@ -139,6 +141,11 @@ export function resetWorld(o2BaseValue){
   }
   if(world.debtByFaction){
     for(const field of world.debtByFaction){
+      field.fill(0);
+    }
+  }
+  if(world.reinforceByFaction){
+    for(const field of world.reinforceByFaction){
       field.fill(0);
     }
   }
