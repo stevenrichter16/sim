@@ -69,6 +69,16 @@ if (proj > 0) {
 - Bias toward confident tiles: the more aligned the presence, the closer `controlLevel` gets to 1.
 - Later systems (frontier, reinforcement) rely on these arrays.
 
+### Implementation Guide
+1. **Markup**: In `guide.html`, keep the existing `<section id="dominance">` block and add a short explanatory paragraph plus a container for the demo: e.g. `<div class="demo-placeholder" data-demo="dominance"></div>` (already scaffolded).
+2. **Controller logic** (`src/guide.js`):
+   - Register a `dominance` demo inside `registerDemo(...)`. Use sliders for X/Y presence plus a dropdown for the number of active factions (read from `FACTIONS`).
+   - On change, recompute projections with `getPresenceCos()`/`getPresenceSin()` and mirror the exact loop from `updatePresenceControl()` so the guide stays truthful.
+   - Display per-faction projection values, the selected `bestId`, and the normalized `control` scalar. Highlight neutral tiles when `sumPos === 0`.
+3. **Styling**: Extend `styles/guide.css` with a `.dominance-demo` panel matching the presence widget (reusing typography and table styles).
+4. **Validation hook**: Optionally expose a small helper in `src/guide.js` that calls the real `updatePresenceControl()` on a 1×1 mock world and compares results. This keeps the tutorial output aligned if the core logic changes.
+5. **Documentation link**: Reference the specific lines (`src/simulation.js:75-120`) in the guide text so readers can jump straight to the implementation.
+
 **Interactive module**
 - A dial representing `bestPos`, `sumPos`, and `control` scales; watch them respond to presence tweaks.
 - Scenario: combine two low-confidence faction influences and show the tile remain neutral.

@@ -33,12 +33,415 @@ export function registerDemo(id, factory){
 }
 
 // Example stub usage (to be replaced with real demos)
+registerDemo('dominance', createDominanceDemo);
 registerDemo('presence', createPresenceDemo);
 registerDemo('presence-accumulation', createPresenceAccumulationDemo);
 registerDemo('safe-phases', createSafePhaseTable);
 registerDemo('frontier', (mount)=>{
   mount.textContent = 'Frontier visualization placeholder.';
 });
+
+function createDominanceDemo(mount){
+  mount.classList.add('dominance-demo');
+  const cos = getPresenceCos();
+  const sin = getPresenceSin();
+  const defaultSupports = FACTIONS.map((_, idx)=>{
+    if(idx === 0) return 0.6;
+    if(idx === 1) return -0.35;
+    return 0;
+  });
+
+  const escapeTooltip = (text)=> text.replace(/"/g, '&quot;');
+  const makeTooltip = (text)=> `<span class="dominance-demo__tooltip" tabindex="0" role="note" aria-label="${escapeTooltip(text)}" data-tooltip="${escapeTooltip(text)}">?</span>`;
+
+  const factionCards = FACTIONS.map((faction, idx)=>{
+    const support = defaultSupports[idx] ?? 0;
+    const phaseRad = factionSafePhases[idx] ?? 0;
+    const phaseDeg = phaseRad * (180 / Math.PI);
+    return `
+      <div class="dominance-demo__faction" data-faction-index="${idx}">
+        <div class="dominance-demo__faction-header">
+          <span class="dominance-demo__swatch" style="background:${faction.color}"></span>
+          <span class="dominance-demo__name">${faction.key}</span>
+          <span class="dominance-demo__status" data-role="status">Neutral</span>
+          ${makeTooltip('Shows whether this faction is reinforcing the tile (boosts) or pushing against it (opposes).')}
+        </div>
+        <div class="dominance-demo__phase">
+          Phase: <code>${phaseRad.toFixed(3)} rad</code> (${phaseDeg.toFixed(1)}°)
+          ${makeTooltip('Safe-phase angle for this faction. Sliders add support along this direction on the unit circle.')}
+        </div>
+        <label class="dominance-demo__slider">
+          <input type="range" min="-1" max="1" step="0.05" value="${support}" data-role="supportSlider" />
+          <span class="dominance-demo__slider-value" data-role="supportValue">${support.toFixed(2)}</span>
+          ${makeTooltip('Adjust this faction’s local presence contribution. Positive values align with the faction’s safe phase; negative values oppose it.')}
+        </label>
+        <div class="dominance-demo__metric">Projection: <code data-role="projection">0.000</code> ${makeTooltip('Dot product between the combined presence vector and this faction’s safe-phase basis.')}</div>
+        <div class="dominance-demo__share-wrap">
+          <div class="dominance-demo__share-track">
+            <div class="dominance-demo__share-bar" data-role="shareBar"></div>
+          </div>
+          <span class="dominance-demo__share-label" data-role="shareLabel">—</span>
+          ${makeTooltip('Share of the positive projection sum contributed by this faction. Only positive projections count toward control.')}
+        </div>
+        <div class="dominance-demo__details" data-role="details">
+          <button type="button" class="dominance-demo__details-toggle" data-role="detailsToggle" aria-expanded="false">
+            Show math breakdown
+          </button>
+          <div class="dominance-demo__details-body" data-role="detailsBody" hidden>
+            <div class="dominance-demo__wall-note" data-role="wallNote" hidden>Wall tiles clamp presence to zero after all contributions apply.</div>
+            <ol class="dominance-demo__steps">
+              <li class="dominance-demo__step" data-role="step1"></li>
+              <li class="dominance-demo__step" data-role="step2"></li>
+              <li class="dominance-demo__step" data-role="step3"></li>
+            </ol>
+            <div class="dominance-demo__vector-card">
+              <svg viewBox="0 0 120 120" class="dominance-demo__vector" data-role="vectorSvg" aria-label="Vector diagram">
+                <defs>
+                  <marker id="dominanceArrowHead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L6,3 L0,6 Z" fill="#f0f6ff"></path>
+                  </marker>
+                </defs>
+                <circle cx="60" cy="60" r="44" class="dominance-demo__vector-circle"></circle>
+                <line x1="16" y1="60" x2="104" y2="60" class="dominance-demo__axis"></line>
+                <line x1="60" y1="16" x2="60" y2="104" class="dominance-demo__axis"></line>
+                <line class="dominance-demo__vector-line dominance-demo__vector-line--unit" data-role="vectorUnitLine" x1="60" y1="60" x2="60" y2="60"></line>
+                <circle class="dominance-demo__vector-head dominance-demo__vector-head--unit" data-role="vectorUnitHead" cx="60" cy="60" r="0"></circle>
+                <line class="dominance-demo__vector-line dominance-demo__vector-line--support" data-role="vectorSupportLine" x1="60" y1="60" x2="60" y2="60"></line>
+                <circle class="dominance-demo__vector-head dominance-demo__vector-head--support" data-role="vectorSupportHead" cx="60" cy="60" r="0"></circle>
+                <line class="dominance-demo__vector-line dominance-demo__vector-line--total" data-role="vectorTotalLine" x1="60" y1="60" x2="60" y2="60"></line>
+                <circle class="dominance-demo__vector-head dominance-demo__vector-head--total" data-role="vectorTotalHead" cx="60" cy="60" r="0"></circle>
+              </svg>
+              <div class="dominance-demo__vector-legend">
+                <span class="dominance-demo__legend-item dominance-demo__legend-item--unit">Unit phase</span>
+                <span class="dominance-demo__legend-item dominance-demo__legend-item--support">Slider contribution</span>
+                <span class="dominance-demo__legend-item dominance-demo__legend-item--total">Effective total</span>
+              </div>
+            </div>
+            <table class="dominance-demo__math-table">
+              <tbody>
+                <tr>
+                  <th>Support slider</th>
+                  <td data-role="supportDisplay"></td>
+                  <td class="dominance-demo__math-note">Demo-only scalar standing in for deposits like <code>PRESENCE_DEPOSIT</code> in <code>Agent._doStep</code>.</td>
+                </tr>
+                <tr>
+                  <th>Safe-phase basis</th>
+                  <td data-role="basisDisplay"></td>
+                  <td class="dominance-demo__math-note">Per-faction cosine/sine from <code>factionSafePhases</code> (<code>memory.js</code>).</td>
+                </tr>
+                <tr>
+                  <th>Δ presence contribution</th>
+                  <td data-role="deltaDisplay"></td>
+                  <td class="dominance-demo__math-note">Support × basis ⇒ the <code>px += support*cos</code>, <code>py += support*sin</code> lines in the demo and <code>Agent._doStep</code>.</td>
+                </tr>
+                <tr>
+                  <th>Other sources + external offsets</th>
+                  <td data-role="baseDisplay"></td>
+                  <td class="dominance-demo__math-note">Sums of other faction sliders plus the “External X/Y” offsets (think memory diffusion, reinforcement bleed).</td>
+                </tr>
+                <tr>
+                  <th>Total (raw)</th>
+                  <td data-role="totalRawDisplay"></td>
+                  <td class="dominance-demo__math-note">Raw <code>presenceX/Y</code> before wall checks, matching the value in <code>updatePresenceControl()</code> prior to wall clamp.</td>
+                </tr>
+                <tr>
+                  <th>Total (after wall)</th>
+                  <td data-role="totalEffectiveDisplay"></td>
+                  <td class="dominance-demo__math-note"><code>updatePresenceControl()</code> sets presence to zero when the tile is a wall.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  mount.innerHTML = `
+    <div class="dominance-demo__summary">
+      <div class="dominance-demo__summary-item">Best Faction: <strong data-role="bestName">None</strong> ${makeTooltip('Faction with the largest positive projection on this tile.')}</div>
+      <div class="dominance-demo__summary-item">Control: <strong data-role="control">0.00</strong> ${makeTooltip('Confidence value stored in world.controlLevel. Computed as best projection divided by the sum of all positive projections.')}</div>
+      <div class="dominance-demo__summary-item">Best Projection: <code data-role="bestProjection">0.000</code> ${makeTooltip('Magnitude of the dominant faction’s positive projection (before normalization).')}</div>
+      <div class="dominance-demo__summary-item">Positive Sum: <code data-role="sumPositive">0.000</code> ${makeTooltip('Sum of all positive projections. This is the denominator for the control calculation.')}</div>
+      <div class="dominance-demo__summary-item">Opposition Sum: <code data-role="sumNegative">0.000</code> ${makeTooltip('Total of negative projections. Larger magnitude means strong opposition pushing the presence vector away from rival phases.')}</div>
+    </div>
+    <div class="dominance-demo__vectors">
+      <div>presenceX: <code data-role="presenceX">0.00</code> ${makeTooltip('Combined X component after adding individual faction support and external offset.')}</div>
+      <div>presenceY: <code data-role="presenceY">0.00</code> ${makeTooltip('Combined Y component after adding individual faction support and external offset.')}</div>
+      <div>|v|: <code data-role="magnitude">0.00</code> ${makeTooltip('Length of the presence vector. Larger magnitude means stronger overall influence on the tile.')}</div>
+    </div>
+    <div class="dominance-demo__offsets">
+      <label>External X ${makeTooltip('Represents influence not captured by the faction sliders: diffusion, memory deposits, or lingering presence.')}
+        <input type="range" min="-1.5" max="1.5" step="0.05" value="0" data-role="offsetX" />
+        <span class="dominance-demo__offset-value" data-role="offsetXValue">0.00</span>
+      </label>
+      <label>External Y ${makeTooltip('Second axis for outside influence. Adjust both to tilt the net presence vector in any direction.')}
+        <input type="range" min="-1.5" max="1.5" step="0.05" value="0" data-role="offsetY" />
+        <span class="dominance-demo__offset-value" data-role="offsetYValue">0.00</span>
+      </label>
+      <label class="dominance-demo__checkbox">Wall tile ${makeTooltip('When checked, the tile acts like a wall: presence is zeroed and no faction can dominate.')}
+        <input type="checkbox" data-role="wall" />
+      </label>
+      <button class="btn" type="button" data-role="reset">Reset ${makeTooltip('Restore default slider values and clear external offsets.')}</button>
+      <label class="dominance-demo__checkbox dominance-demo__checkbox--details">
+        <input type="checkbox" data-role="detailsGlobal" /> Show detailed math for all
+      </label>
+    </div>
+    <div class="dominance-demo__faction-list" data-role="factionList">
+      ${factionCards}
+    </div>
+  `;
+
+  const bestNameEl = mount.querySelector('[data-role="bestName"]');
+  const controlEl = mount.querySelector('[data-role="control"]');
+  const bestProjectionEl = mount.querySelector('[data-role="bestProjection"]');
+  const sumPositiveEl = mount.querySelector('[data-role="sumPositive"]');
+  const sumNegativeEl = mount.querySelector('[data-role="sumNegative"]');
+  const presenceXEl = mount.querySelector('[data-role="presenceX"]');
+  const presenceYEl = mount.querySelector('[data-role="presenceY"]');
+  const magnitudeEl = mount.querySelector('[data-role="magnitude"]');
+  const offsetXInput = mount.querySelector('[data-role="offsetX"]');
+  const offsetYInput = mount.querySelector('[data-role="offsetY"]');
+  const offsetXValueEl = mount.querySelector('[data-role="offsetXValue"]');
+  const offsetYValueEl = mount.querySelector('[data-role="offsetYValue"]');
+  const wallToggle = mount.querySelector('[data-role="wall"]');
+  const resetBtn = mount.querySelector('[data-role="reset"]');
+  const detailsGlobalToggle = mount.querySelector('[data-role="detailsGlobal"]');
+
+  const factionRows = Array.from(mount.querySelectorAll('.dominance-demo__faction')).map((el)=>{
+    const idx = Number(el.getAttribute('data-faction-index'));
+    return {
+      index: idx,
+      faction: FACTIONS[idx],
+      root: el,
+      slider: el.querySelector('[data-role="supportSlider"]'),
+      supportValue: el.querySelector('[data-role="supportValue"]'),
+      projection: el.querySelector('[data-role="projection"]'),
+      shareBar: el.querySelector('[data-role="shareBar"]'),
+      shareLabel: el.querySelector('[data-role="shareLabel"]'),
+      status: el.querySelector('[data-role="status"]'),
+      details: el.querySelector('[data-role="details"]'),
+      detailsToggle: el.querySelector('[data-role="detailsToggle"]'),
+      detailsBody: el.querySelector('[data-role="detailsBody"]'),
+      wallNote: el.querySelector('[data-role="wallNote"]'),
+      step1: el.querySelector('[data-role="step1"]'),
+      step2: el.querySelector('[data-role="step2"]'),
+      step3: el.querySelector('[data-role="step3"]'),
+      supportDisplay: el.querySelector('[data-role="supportDisplay"]'),
+      basisDisplay: el.querySelector('[data-role="basisDisplay"]'),
+      deltaDisplay: el.querySelector('[data-role="deltaDisplay"]'),
+      baseDisplay: el.querySelector('[data-role="baseDisplay"]'),
+      totalRawDisplay: el.querySelector('[data-role="totalRawDisplay"]'),
+      totalEffectiveDisplay: el.querySelector('[data-role="totalEffectiveDisplay"]'),
+      vectorSvg: el.querySelector('[data-role="vectorSvg"]'),
+      vectorUnitLine: el.querySelector('[data-role="vectorUnitLine"]'),
+      vectorUnitHead: el.querySelector('[data-role="vectorUnitHead"]'),
+      vectorSupportLine: el.querySelector('[data-role="vectorSupportLine"]'),
+      vectorSupportHead: el.querySelector('[data-role="vectorSupportHead"]'),
+      vectorTotalLine: el.querySelector('[data-role="vectorTotalLine"]'),
+      vectorTotalHead: el.querySelector('[data-role="vectorTotalHead"]'),
+      expanded: false,
+    };
+  });
+
+  factionRows.forEach(row => {
+    row.shareBar.style.background = row.faction.color;
+  });
+
+  let globalDetails = false;
+
+  function syncRowDetails(row){
+    const isOpen = globalDetails || row.expanded;
+    if(row.detailsBody){
+      row.detailsBody.hidden = !isOpen;
+    }
+    if(row.detailsToggle){
+      row.detailsToggle.setAttribute('aria-expanded', String(isOpen));
+      row.detailsToggle.classList.toggle('is-active', isOpen);
+      if(globalDetails){
+        row.detailsToggle.setAttribute('disabled', 'true');
+      } else {
+        row.detailsToggle.removeAttribute('disabled');
+      }
+    }
+  }
+
+  function applyGlobalDetails(state){
+    globalDetails = !!state;
+    mount.classList.toggle('details-enabled', globalDetails);
+    factionRows.forEach(row => syncRowDetails(row));
+  }
+
+  function reset(){
+    offsetXInput.value = '0';
+    offsetYInput.value = '0';
+    if(wallToggle) wallToggle.checked = false;
+    if(detailsGlobalToggle) detailsGlobalToggle.checked = false;
+    applyGlobalDetails(false);
+    factionRows.forEach(row => { row.expanded = false; syncRowDetails(row); });
+    factionRows.forEach(row => {
+      const defaultValue = defaultSupports[row.index] ?? 0;
+      row.slider.value = String(defaultValue);
+    });
+    update();
+  }
+
+  function drawVector(lineEl, headEl, x, y, { maxMagnitude = 1.5 } = {}){
+    if(!lineEl || !headEl) return;
+    const center = 60;
+    const radius = 44;
+    const length = Math.hypot(x, y);
+    const clamped = Math.min(maxMagnitude, length || 0);
+    const scale = length === 0 ? 0 : (clamped / length) * (radius / maxMagnitude);
+    const dx = x * scale;
+    const dy = y * scale;
+    const x2 = center + dx;
+    const y2 = center - dy;
+    lineEl.setAttribute('x1', center);
+    lineEl.setAttribute('y1', center);
+    lineEl.setAttribute('x2', x2);
+    lineEl.setAttribute('y2', y2);
+    headEl.setAttribute('cx', x2);
+    headEl.setAttribute('cy', y2);
+    headEl.setAttribute('r', clamped > 0 ? 3.5 : 0);
+  }
+
+  function update(){
+    const wall = wallToggle?.checked ?? false;
+    const offsetX = parseFloat(offsetXInput.value);
+    const offsetY = parseFloat(offsetYInput.value);
+    offsetXValueEl.textContent = offsetX.toFixed(2);
+    offsetYValueEl.textContent = offsetY.toFixed(2);
+
+    const contributions = factionRows.map(row => {
+      const support = parseFloat(row.slider.value);
+      row.supportValue.textContent = support.toFixed(2);
+      const deltaX = support * cos[row.index];
+      const deltaY = support * sin[row.index];
+      return { row, support, deltaX, deltaY };
+    });
+
+    let pxRaw = offsetX;
+    let pyRaw = offsetY;
+    contributions.forEach(c => {
+      pxRaw += c.deltaX;
+      pyRaw += c.deltaY;
+    });
+
+    const pxEffective = wall ? 0 : pxRaw;
+    const pyEffective = wall ? 0 : pyRaw;
+
+    presenceXEl.textContent = pxEffective.toFixed(2);
+    presenceYEl.textContent = pyEffective.toFixed(2);
+    magnitudeEl.textContent = Math.hypot(pxEffective, pyEffective).toFixed(2);
+
+    const projections = factionRows.map((row, idx) => pxEffective * cos[idx] + pyEffective * sin[idx]);
+    let bestIdx = -1;
+    let bestProj = 0;
+    let sumPos = 0;
+    let sumNeg = 0;
+    projections.forEach((proj, idx)=>{
+      if(proj > 0){
+        sumPos += proj;
+        if(proj > bestProj){
+          bestProj = proj;
+          bestIdx = idx;
+        }
+      } else if(proj < 0){
+        sumNeg += proj;
+      }
+    });
+
+    const control = (bestIdx >= 0 && sumPos > 0) ? clamp01(bestProj / sumPos) : 0;
+    const hasDominant = bestIdx >= 0 && sumPos > 0;
+
+    bestNameEl.textContent = hasDominant ? (FACTIONS[bestIdx]?.key ?? `Faction ${bestIdx}`) : 'None';
+    controlEl.textContent = control.toFixed(2);
+    bestProjectionEl.textContent = hasDominant ? bestProj.toFixed(3) : '0.000';
+    sumPositiveEl.textContent = sumPos.toFixed(3);
+    sumNegativeEl.textContent = sumNeg.toFixed(3);
+
+    projections.forEach((proj, idx)=>{
+      const row = factionRows[idx];
+      const contribution = contributions[idx];
+      const deltaX = contribution?.deltaX ?? 0;
+      const deltaY = contribution?.deltaY ?? 0;
+      const support = contribution?.support ?? 0;
+      const cosVal = cos[row.index];
+      const sinVal = sin[row.index];
+      const othersX = pxRaw - deltaX;
+      const othersY = pyRaw - deltaY;
+      if(row.supportDisplay){
+        row.supportDisplay.textContent = support.toFixed(2);
+      }
+      if(row.basisDisplay){
+        row.basisDisplay.textContent = `(${cosVal.toFixed(3)}, ${sinVal.toFixed(3)})`;
+      }
+      if(row.deltaDisplay){
+        row.deltaDisplay.textContent = `(${deltaX.toFixed(3)}, ${deltaY.toFixed(3)})`;
+      }
+      if(row.baseDisplay){
+        row.baseDisplay.textContent = `(${othersX.toFixed(3)}, ${othersY.toFixed(3)})`;
+      }
+      if(row.totalRawDisplay){
+        row.totalRawDisplay.textContent = `(${pxRaw.toFixed(3)}, ${pyRaw.toFixed(3)})`;
+      }
+      if(row.totalEffectiveDisplay){
+        row.totalEffectiveDisplay.textContent = `(${pxEffective.toFixed(3)}, ${pyEffective.toFixed(3)})`;
+      }
+      if(row.wallNote){
+        row.wallNote.hidden = !wall;
+      }
+      if(row.step1){
+        row.step1.textContent = `1. Slider value: support = ${support.toFixed(2)}`;
+      }
+      if(row.step2){
+        row.step2.textContent = `2. Scale by phase (${cosVal.toFixed(3)}, ${sinVal.toFixed(3)}) ⇒ Δ = (${deltaX.toFixed(3)}, ${deltaY.toFixed(3)})`;
+      }
+      if(row.step3){
+        if(wall){
+          row.step3.textContent = `3. Combine with base (${othersX.toFixed(3)}, ${othersY.toFixed(3)}) ⇒ raw totals (${pxRaw.toFixed(3)}, ${pyRaw.toFixed(3)}) → wall clamps to (0.000, 0.000)`;
+        } else {
+          row.step3.textContent = `3. Combine with base (${othersX.toFixed(3)}, ${othersY.toFixed(3)}) ⇒ totals (${pxRaw.toFixed(3)}, ${pyRaw.toFixed(3)})`;
+        }
+      }
+      drawVector(row.vectorUnitLine, row.vectorUnitHead, cosVal, sinVal, { maxMagnitude: 1.5 });
+      drawVector(row.vectorSupportLine, row.vectorSupportHead, deltaX, deltaY, { maxMagnitude: 1.5 });
+      drawVector(row.vectorTotalLine, row.vectorTotalHead, pxEffective, pyEffective, { maxMagnitude: 1.5 });
+      row.projection.textContent = proj.toFixed(3);
+      const share = (proj > 0 && sumPos > 0) ? proj / sumPos : 0;
+      row.shareBar.style.width = `${Math.max(0, Math.min(100, share * 100))}%`;
+      row.shareBar.style.opacity = proj > 0 && sumPos > 0 ? 1 : 0;
+      row.shareLabel.textContent = proj > 0 && sumPos > 0 ? `${Math.round(share * 100)}%` : '—';
+      row.root.classList.toggle('is-dominant', hasDominant && idx === bestIdx);
+      row.root.classList.toggle('is-opposing', proj < 0);
+      if(row.status){
+        row.status.textContent = proj > 0 ? 'Boosts' : proj < 0 ? 'Opposes' : 'Neutral';
+      }
+    });
+  }
+
+  factionRows.forEach(row => {
+    row.slider.addEventListener('input', update);
+    if(row.detailsToggle){
+      row.detailsToggle.addEventListener('click', ()=>{
+        if(globalDetails) return;
+        row.expanded = !row.expanded;
+        syncRowDetails(row);
+      });
+    }
+  });
+  offsetXInput.addEventListener('input', update);
+  offsetYInput.addEventListener('input', update);
+  wallToggle?.addEventListener('change', update);
+  resetBtn?.addEventListener('click', reset);
+  detailsGlobalToggle?.addEventListener('change', ()=>{
+    applyGlobalDetails(detailsGlobalToggle.checked);
+  });
+
+  applyGlobalDetails(false);
+  update();
+}
 
 function createPresenceDemo(mount){
   mount.classList.add('presence-demo');

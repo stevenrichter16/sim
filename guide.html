@@ -159,6 +159,12 @@ function updatePresenceControl(){
 
       <section id="dominance" class="guide-section">
         <h2>Dominant Faction &amp; Control</h2>
+        <p>Once the presence field is diffused and decayed for the current tick, we evaluate a dot product between the tile’s <code>(presenceX, presenceY)</code> vector and every faction’s cached safe-phase basis. The faction with the strongest positive projection becomes the dominant owner; the ratio of that projection against the sum of all positive projections yields a confidence value in <code>world.controlLevel</code>. Tiles with no positive support (or walls) remain neutral.</p>
+        <ul>
+          <li>Walls zero presence, forcing <code>dominantFaction</code> to <code>-1</code> so borders stay crisp.</li>
+          <li>Allies can contribute to a tile’s confidence when their projection is positive; rivals lower control by pushing the presence vector away.</li>
+          <li>The confidence scalar feeds frontier, debt, and reinforcement calculations later in the tick.</li>
+        </ul>
         <div class="code-placeholder" data-file="src/simulation.js" data-lines="100-120"></div>
         <div class="demo-placeholder" data-demo="dominance"></div>
       </section>
