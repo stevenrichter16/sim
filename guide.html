@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Faction Territory Guide</title>
+  <link rel="stylesheet" href="styles/main.css" />
+  <link rel="stylesheet" href="styles/guide.css" />
+</head>
+<body class="guide-page">
+  <header class="guide-header">
+    <h1>Faction Territory Guide</h1>
+    <p class="tagline">Explore how presence, control, frontier, debt, and reinforcement shape the simulation.</p>
+    <button class="btn" id="startTour">Start Tour</button>
+  </header>
+
+  <div class="guide-layout">
+    <nav class="guide-nav" aria-label="Guide sections">
+      <ol id="guideToc" class="guide-toc">
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#presence">Presence &amp; Phase Projection</a></li>
+        <li><a href="#dominance">Dominant Faction &amp; Control</a></li>
+        <li><a href="#phase-vectors">Phase → Cosine/Sine</a></li>
+        <li><a href="#safe-phases">Faction Safe Phases</a></li>
+        <li><a href="#frontier">Frontier Detection</a></li>
+        <li><a href="#debt">Control Debt</a></li>
+        <li><a href="#reinforcement">Reinforcement Trails</a></li>
+        <li><a href="#movement">Movement Scoring</a></li>
+        <li><a href="#diagnostics">Diagnostics &amp; Overlays</a></li>
+        <li><a href="#exercises">Try-It Exercises</a></li>
+        <li><a href="#reference">Reference</a></li>
+      </ol>
+    </nav>
+
+    <main class="guide-content" id="guideContent">
+      <section id="overview" class="guide-section">
+        <h2>Overview</h2>
+        <p>The faction territory system combines presence vectors, control confidence, frontier detection, debt pheromones, and reinforcement trails to produce emergent behavior. Agents reason about local fields, yet together they protect strongholds, reclaim losses, and probe hostile borders.</p>
+        <ul class="guide-intro-list">
+          <li><strong>Presence vectors</strong> (<code>world.presenceX</code>/<code>world.presenceY</code>) aggregate faction influence.</li>
+          <li><strong>Dominant faction &amp; control strength</strong> are recalculated each tick via phase projection.</li>
+          <li><strong>Pheromone layers</strong> (frontier, control debt, reinforcement) are derived from those control maps.</li>
+          <li><strong>Movement scoring</strong> reads the fields to bias agents toward defending, expanding, or escaping.</li>
+        </ul>
+        <div class="guide-callout">
+          <p><strong>Tip:</strong> Keep <code>faction_guide.md</code> nearby for expanded commentary and line references while you explore this page.</p>
+        </div>
+      </section>
+
+      <section id="presence" class="guide-section">
+        <h2>Presence Field Accumulation</h2>
+        <p>Before <code>updatePresenceControl()</code> runs, agents deposit presence aligned with their faction’s safe phase. Whenever an agent occupies or revisits a tile, we add scaled cosine/sine components into <code>world.presenceX</code>/<code>world.presenceY</code>.</p>
+        <pre class="code-block"><code>// Presence deposit (Agent._doStep excerpt)
+const phase = safePhaseForId(this.factionId);
+const cos = Math.cos(phase);
+const sin = Math.sin(phase);
+const here = idx(this.x, this.y);
+world.presenceX[here] = Math.min(1, world.presenceX[here] + cos * PRESENCE_DEPOSIT);
+world.presenceY[here] = Math.min(1, world.presenceY[here] + sin * PRESENCE_DEPOSIT);
+
+// Example A
+// world.presenceX = 0.2
+// PRESENCE_DEPOSIT = 0.05
+// FactionA phase is 0 radians
+// cos(0) = 1
+// world.presenceX = 0.2 + 1 * 0.05
+//                 = 0.2 + 0.05
+//                 = 0.25
+
+// world.presenceY = 0.01
+// PRESENCE_DEPOSIT = 0.05
+// FactionA phase is 0 radians
+// sin(0) = 0
+// world.presenceY = 0.01 + 0 * 0.05
+//                 = 0.01 + 0
+//                 = 0.01
+
+// New Tile Presence = (0.25, 0.01)
+
+// Projection
+
+---------------------------
+
+// Example B
+// If faction A’s phase is 0 radians:
+// cos(0) = 1
+// sin(0) = 0
+// The tile gains (PRESENCE_DEPOSIT, 0).
+
+// If faction B’s phase is π radians:
+// cos(π) = -1
+// sin(π) = 0
+// The same tile gains (-PRESENCE_DEPOSIT, 0).
+// Which pushes the presence vector in the opposite direction.
+</code></pre>
+        <div class="guide-explainer">
+          <p><strong>Where it happens:</strong> agent movement, safe-field deposits, and reinforcement actions all contribute to presence before projection. Walls clamp presence to zero so influence does not bleed through barriers.</p>
+        </div>
+
+        <h2>Presence &amp; Phase Projection</h2>
+        <p>Each tile maintains X/Y presence components influenced by nearby agents and pheromone deposits. We project that vector onto every faction's safe phase to decide who currently dominates the tile and how confident that dominance is.</p>
+        <pre class="code-block"><code>// src/simulation.js:69-120
+function updatePresenceControl(){
+  if(!world.presenceX || !world.presenceY || !world.dominantFaction || !world.controlLevel) return;
+  const px = world.presenceX;            // [0.25, ...]
+  const py = world.presenceY;            // [0.01, ...]
+  const dom = world.dominantFaction;     // [0, ...]     // The dominant faction for each tile. Faction 0 == A
+  const ctrl = world.controlLevel;       // [0.75, ...]  // The controlLevel for each dominating faction for each tile (Faction A has a strong hold)
+  const factionCount = FACTIONS.length;  // 2
+  const cos = getPresenceCos();          // [1, ...]     // cos(phase) for each faction (Faction A cos(phase) == 1)
+  const sin = getPresenceSin();          // [0, ...]     // sin(phase) for each faction (Faction A sin(phase) == 0)
+  for(let i=0; i &lt; px.length; i++){
+    if(world.wall &amp;&amp; world.wall[i]){
+      px[i] = 0;
+      py[i] = 0;
+      dom[i] = -1;
+      ctrl[i] = 0;
+      continue;
+    }
+    let bestId = -1;
+    let bestPositiveProjection = 0;
+    let sumPositiveProjections = 0;     // accumulates the positive projection values for every faction on a tile. After the loop, the dominant faction’s projection (bestPositiveProjection) is divided by this sum
+    const x = px[i];
+    const y = py[i];
+    if(x === 0 &amp;&amp; y === 0){
+      dom[i] = -1;
+      ctrl[i] = 0;
+      continue;
+    }
+    for(let f=0; f &lt; factionCount; f++){
+      const proj = x * cos[f] + y * sin[f];
+      if(proj &gt; 0){
+        sumPositiveProjections += proj;
+        if(proj &gt; bestPositiveProjection){
+          bestPositiveProjection = proj;
+          bestId = f;
+        }
+      }
+    }
+    if(bestId &gt;= 0 &amp;&amp; sumPositiveProjections &gt; 0){
+      dom[i] = bestId;
+      ctrl[i] = clamp01(bestPositiveProjection / sumPositiveProjections);
+    } else {
+      dom[i] = -1;
+      ctrl[i] = 0;
+    }
+  }
+}
+</code></pre>
+        <div class="demo-placeholder" data-demo="presence"></div>
+        <div class="guide-explainer">
+          <p><strong>Interactive idea:</strong> expose sliders for the X/Y presence components and render projections for each faction. Include a toggle to mark the tile as a wall and observe how presence is zeroed out.</p>
+        </div>
+
+        <h3>Interactive: Agent Movement &amp; Presence</h3>
+        <p>The visualization below simulates two agents—one from faction A and one from faction B—moving along looping patrols. Each step deposits presence along their path so you can see how <code>world.presenceX</code>/<code>world.presenceY</code> evolve over time. Click any tile to flip it and inspect the full deposit math for that tick.</p>
+        <div class="demo-placeholder" data-demo="presence-accumulation"></div>
+      </section>
+
+      <section id="dominance" class="guide-section">
+        <h2>Dominant Faction &amp; Control</h2>
+        <div class="code-placeholder" data-file="src/simulation.js" data-lines="100-120"></div>
+        <div class="demo-placeholder" data-demo="dominance"></div>
+      </section>
+
+      <section id="phase-vectors" class="guide-section">
+        <h2>From Phase to Cosine &amp; Sine</h2>
+        <p>A faction’s safe phase is an angle on the unit circle. Taking cosine and sine of that angle yields the unit vector used for both presence deposits and projections. Agents add <code>cos(θ)</code> to <code>presenceX</code> and <code>sin(θ)</code> to <code>presenceY</code> when they move because each visit should nudge the tile’s presence vector toward the faction’s preferred direction—mirroring how pheromone trails reinforce alignment.</p>
+        <pre class="code-block"><code>// Safe phase unit vector
+const theta = factionSafePhases[fid];
+const basisCos = Math.cos(theta);
+const basisSin = Math.sin(theta);
+
+// Deposit step
+world.presenceX[idx] += basisCos * PRESENCE_DEPOSIT;
+world.presenceY[idx] += basisSin * PRESENCE_DEPOSIT;
+
+// Projection step
+const proj = presenceX[idx] * basisCos + presenceY[idx] * basisSin;
+</code></pre>
+        <div class="guide-explainer">
+          <p>Cosine extracts the X-axis contribution; sine extracts the Y-axis contribution. Because these basis vectors are normalized, their dot product with the presence vector measures how strongly a tile aligns with a faction (positive) or opposes it (negative). Repeated deposits pull the presence vector toward the faction’s phase, while rival deposits push it away.</p>
+        </div>
+      </section>
+
+      <section id="safe-phases" class="guide-section">
+        <h2>Faction Safe Phases</h2>
+        <p>Factions choose a safe-phase bucket on the unit circle. The angle determines their preferred presence orientation, and those values feed directly into the cosine/sine caches used during projection.</p>
+        <pre class="code-block"><code>// src/memory.js:1-40
+const angleForBucket = index => index * (TWO_PI / MEMORY_BUCKETS);
+export const factionSafePhases = FACTIONS.map(f => angleForBucket(f.safePhaseBucket));
+
+let presenceCosByFaction = factionSafePhases.map(Math.cos);
+let presenceSinByFaction = factionSafePhases.map(Math.sin);
+export function getPresenceCos(){ return presenceCosByFaction; }
+export function getPresenceSin(){ return presenceSinByFaction; }</code></pre>
+        <div class="demo-placeholder" data-demo="safe-phases"></div>
+        <div class="guide-explainer">
+          <p>Angles near each other signal friendly alignment; opposing angles produce negative projections. The table below translates each faction’s bucket into radians and degrees so you can reason about their relationships.</p>
+        </div>
+      </section>
+
+      <section id="frontier" class="guide-section">
+        <h2>Frontier Detection</h2>
+        <div class="code-placeholder" data-file="src/simulation.js" data-lines="122-170"></div>
+        <div class="demo-placeholder" data-demo="frontier"></div>
+      </section>
+
+      <section id="debt" class="guide-section">
+        <h2>Control Debt</h2>
+        <div class="code-placeholder" data-file="src/simulation.js" data-lines="173-200"></div>
+        <div class="demo-placeholder" data-demo="debt"></div>
+      </section>
+
+      <section id="reinforcement" class="guide-section">
+        <h2>Reinforcement Trails</h2>
+        <div class="code-placeholder" data-file="src/simulation.js" data-lines="203-243"></div>
+        <div class="demo-placeholder" data-demo="reinforcement"></div>
+      </section>
+
+      <section id="movement" class="guide-section">
+        <h2>Movement Scoring</h2>
+        <div class="code-placeholder" data-file="src/simulation.js" data-lines="234-447"></div>
+        <div class="demo-placeholder" data-demo="movement"></div>
+      </section>
+
+      <section id="diagnostics" class="guide-section">
+        <h2>Diagnostics &amp; Overlays</h2>
+        <div class="code-placeholder" data-file="src/render.js" data-lines="220-300"></div>
+        <div class="demo-placeholder" data-demo="diagnostics"></div>
+      </section>
+
+      <section id="exercises" class="guide-section">
+        <h2>Try-It Exercises</h2>
+        <div class="exercise-grid" id="exerciseGrid"></div>
+      </section>
+
+      <section id="reference" class="guide-section">
+        <h2>Reference &amp; Further Reading</h2>
+        <ul class="reference-list">
+          <li><a href="docs/tag-system.md">Tag System Overview</a></li>
+          <li><a href="docs/stigmergic-tags.md">Stigmergic Tags</a></li>
+          <li><a href="src/simulation.js">Simulation Core</a></li>
+          <li><a href="src/render.js">Rendering &amp; Overlays</a></li>
+          <li><a href="src/input.js">Controls &amp; Toggles</a></li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="src/guide.js"></script>
+</body>
+</html>
