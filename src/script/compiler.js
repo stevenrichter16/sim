@@ -235,6 +235,7 @@ class Compiler {
       this.emitPushConst(null, context.chunk, node.span);
     }
     this.emit(context.chunk, OPCODES.STORE_GLOBAL, [slot], node.span);
+    this.emit(context.chunk, OPCODES.POP, [], node.span);
   }
 
   compileLocalLet(node, context) {
@@ -255,6 +256,7 @@ class Compiler {
       this.emitPushConst(null, context.chunk, node.span);
     }
     this.emit(context.chunk, OPCODES.STORE_LOCAL, [slot], node.span);
+    this.emit(context.chunk, OPCODES.POP, [], node.span);
   }
 
   compileReturn(node, context) {

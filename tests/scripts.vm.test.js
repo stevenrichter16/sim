@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { lex } from '../src/script/lexer.js';
 import { parseSource } from '../src/script/parser.js';
 import { compileProgram, OPCODES } from '../src/script/compiler.js';
+import { createScenarioVM } from '../src/script/vm.js';
 
 describe('script lexer', () => {
   it('captures spans for schedule and native calls', () => {
@@ -102,5 +103,164 @@ fn onTick(frame, dt) {
     expect(compiled.entryPoints.onInit).toBe('onInit');
     expect(compiled.entryPoints.onTick).toBe('onTick');
     expect(compiled.constants).toEqual(expect.arrayContaining([1, 5, 'main']));
+  });
+});
+
+describe('scenario script vm', () => {
+  const compile = (source, nativeIds = {}) => {
+    const { ast, diagnostics } = parseSource(source);
+    expect(diagnostics).toEqual([]);
+    return compileProgram(ast, { nativeIds });
+  };
+
+  it('runs entry points, updates globals, and dispatches deterministic natives', () => {
+    const script = `let accumulator = 0;
+fn onInit(seed) {
+  accumulator = call rand();
+}
+
+fn onTick(frame, dt) {
+  accumulator = accumulator + call rand();
+  call ignite(frame, accumulator);
+}
+`;
+    const compiled = compile(script, { rand: 0, ignite: 1 });
+    const randValues = [0.25, 0.5];
+    const igniteCalls = [];
+    const vm = createScenarioVM(compiled, {
+      natives: {
+        rand: () => ({ ok: true, value: randValues.shift() ?? 0 }),
+        ignite: ({ args }) => {
+          igniteCalls.push([...args]);
+          return { ok: true, value: null };
+        },
+      },
+      capabilities: ['ignite'],
+    });
+    expect(vm.bootstrapError).toBeUndefined();
+    const initResult = vm.runInit(123);
+    expect(initResult.status).toBe('ok');
+    const slot = compiled.globals.get('accumulator');
+    expect(vm.globals[slot]).toBeCloseTo(0.25, 6);
+    const tickResult = vm.tick(0, 0.016);
+    expect(tickResult.status).toBe('ok');
+    expect(vm.globals[slot]).toBeCloseTo(0.75, 6);
+    expect(igniteCalls).toEqual([[0, 0.75]]);
+  });
+
+  it('executes scheduled chunks before tick processing', () => {
+    const script = `let hits = 0;
+fn event() {
+  hits = hits + 1;
+}
+
+fn onInit(seed) {
+  schedule(1, "event");
+}
+
+fn onTick(frame, dt) {
+  if (frame == 2) {
+    schedule(1, "event");
+  }
+}
+`;
+    const compiled = compile(script, { schedule: 0 });
+    const vm = createScenarioVM(compiled);
+    const slot = compiled.globals.get('hits');
+    expect(vm.runInit(0).status).toBe('ok');
+    expect(vm.globals[slot]).toBe(0);
+    expect(vm.tick(0, 0.016).status).toBe('ok');
+    expect(vm.globals[slot]).toBe(0);
+    expect(vm.tick(1, 0.016).status).toBe('ok');
+    expect(vm.globals[slot]).toBe(1);
+    expect(vm.tick(2, 0.016).status).toBe('ok');
+    expect(vm.globals[slot]).toBe(1);
+    expect(vm.tick(3, 0.016).status).toBe('ok');
+    expect(vm.globals[slot]).toBe(2);
+  });
+
+  it('runs same-tick tasks scheduled during execution before returning', () => {
+    const script = `let hits = 0;
+fn event() {
+  hits = hits + 1;
+  if (hits == 1) {
+    schedule(0, "event");
+  }
+}
+
+fn later() {
+}
+
+fn onInit(seed) {
+  schedule(1, "event");
+  schedule(2, "later");
+}
+
+fn onTick(frame, dt) {
+}
+`;
+    const compiled = compile(script, { schedule: 0 });
+    const vm = createScenarioVM(compiled);
+    expect(vm.runInit(0).status).toBe('ok');
+    const slot = compiled.globals.get('hits');
+    expect(vm.tick(1, 0.016).status).toBe('ok');
+    expect(vm.globals[slot]).toBe(2);
+  });
+
+  it('halts execution when exceeding the instruction watchdog limit', () => {
+    const script = `fn onTick(frame, dt) {
+  while (true) {
+  }
+}
+`;
+    const compiled = compile(script);
+    const vm = createScenarioVM(compiled, { instructionLimit: 32 });
+    const result = vm.tick(0, 0.016);
+    expect(result.status).toBe('error');
+    expect(result.error.type).toBe('WatchdogViolation');
+    expect(result.error.message).toContain('Instruction limit');
+  });
+
+  it('propagates native capability errors with spans', () => {
+    const script = `fn onTick(frame, dt) {
+  call ignite(frame);
+}
+`;
+    const compiled = compile(script, { ignite: 0 });
+    const vm = createScenarioVM(compiled, {
+      natives: {
+        ignite: { capability: 'ignite', fn: () => ({ ok: true, value: null }) },
+      },
+    });
+    const result = vm.tick(0, 0.016);
+    expect(result.status).toBe('error');
+    expect(result.error.message).toContain("Missing capability 'ignite'");
+    expect(result.error.span).toBeDefined();
+  });
+
+  it('does not leak stack slots when initialising many globals', () => {
+    const declarationCount = 300;
+    const declarations = Array.from({ length: declarationCount }, (_, index) => `let g${index} = ${index};`).join('\n');
+    const script = `${declarations}
+fn onInit() {
+}
+`;
+    const compiled = compile(script);
+    const vm = createScenarioVM(compiled, { stackSize: 256, instructionLimit: 4096 });
+    expect(vm.bootstrapError).toBeUndefined();
+    const lastSlot = compiled.globals.get(`g${declarationCount - 1}`);
+    expect(vm.globals[lastSlot]).toBe(declarationCount - 1);
+  });
+
+  it('keeps the operand stack balanced for many local declarations', () => {
+    const locals = Array.from({ length: 260 }, (_, index) => `  let l${index} = frame + ${index};`).join('\n');
+    const script = `fn onTick(frame, dt) {
+${locals}
+}
+`;
+    const compiled = compile(script);
+    const vm = createScenarioVM(compiled, { stackSize: 256, instructionLimit: 4096 });
+    const result = vm.tick(0, 0.016);
+    expect(result.status).toBe('ok');
   });
 });
