@@ -22,7 +22,7 @@ const simulation = createSimulation({
 input.bindSimulation(simulation);
 
 const initialSettings = input.getSettings();
-simulation.resetWorld(initialSettings.o2Base);
+simulation.resetWorld(initialSettings.o2Base, initialSettings);
 simulation.seedDemoScenario();
 draw();
 

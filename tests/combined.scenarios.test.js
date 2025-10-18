@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { world, idx } from '../src/state.js';
 import { Mode } from '../src/constants.js';
 import {
@@ -10,11 +10,35 @@ import {
 } from '../src/materials.js';
 import { createSimulation, Agent, handlePhaseTransitions } from '../src/simulation.js';
 import { initWorld, placeMode } from './helpers/worldHarness.js';
+import { setGenerator, setSeed } from '../src/rng.js';
 
 describe('combined scenarios', () => {
+  let restoreRng = null;
+
   beforeEach(() => {
     initWorld({ o2: 0.21 });
+    setSeed(world.rngSeed);
+    restoreRng = null;
   });
+
+  afterEach(() => {
+    if(restoreRng){
+      restoreRng();
+      restoreRng = null;
+    }
+    setSeed(world.rngSeed);
+  });
+
+  function setRandomSequence(values){
+    if(restoreRng){
+      restoreRng();
+    }
+    restoreRng = setGenerator(() => {
+      if(!values.length) return 0;
+      if(values.length === 1) return values[0];
+      return values.shift();
+    });
+  }
 
   it('acid-base heat accumulates on base while neighbouring water freezes', () => {
     const acidIdx = placeMode(10, 10, Mode.ACID);
@@ -33,11 +57,14 @@ describe('combined scenarios', () => {
   });
 
   it('chain reaction: fire spreads to empty tile with sufficient oxygen after quenching attempts', () => {
+    setRandomSequence([0.9]);
+
     const fireIdx = placeMode(20, 20, Mode.FIRE);
     world.fire.add(fireIdx);
     const emptyIdx = idx(21, 20);
     world.heat[emptyIdx] = 0;
     world.o2[emptyIdx] = 0.25;
+    world.o2[fireIdx] = 0.4;
 
     // Water tries to quench but fails to extinguish completely
     const waterIdx = placeMode(20, 21, Mode.WATER);

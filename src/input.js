@@ -22,6 +22,8 @@ import {
   isPaused,
   setSimSpeed,
   getSimSpeed,
+  getWorldSeed,
+  unmarkScenarioFire,
 } from './state.js';
 import { baseStringFor, ensureCryofoam } from './materials.js';
 import { FACTIONS, DEFAULT_FACTION_ID, factionByKey } from './factions.js';
@@ -49,6 +51,7 @@ export function initInput({ canvas, draw }){
   const dO2 = document.getElementById('dO2');
   const o2Base = document.getElementById('o2Base');
   const o2Cut = document.getElementById('o2Cut');
+  const scenarioSeedInput = document.getElementById('scenarioSeed');
   const mO2 = document.getElementById('mO2');
   const mO2d = document.getElementById('mO2d');
   const mFire = document.getElementById('mFire');
@@ -108,6 +111,100 @@ export function initInput({ canvas, draw }){
   if(FACTIONS[0]) overlayToggleKeys.KeyA = `safeFaction${FACTIONS[0].id}`;
   if(FACTIONS[1]) overlayToggleKeys.KeyB = `safeFaction${FACTIONS[1].id}`;
   overlayToggleKeys.KeyC = 'control';
+
+  const spawnErrorMessages = {
+    'tile-occupied': 'Spawn failed: tile is occupied or blocked.',
+    'no-open-tile': 'Spawn failed: no open tile was available.',
+    'invalid-faction': 'Spawn failed: faction not recognized.',
+    unknown: 'Spawn failed.',
+  };
+  let spawnStatusNode = null;
+  let spawnStatusTimer = null;
+
+  function ensureSpawnStatusNode(){
+    if(typeof document === 'undefined') return null;
+    if(spawnStatusNode && spawnStatusNode.isConnected) return spawnStatusNode;
+    if(!spawnStatusNode){
+      spawnStatusNode = document.getElementById('spawnStatus') || document.createElement('div');
+      spawnStatusNode.id = 'spawnStatus';
+      spawnStatusNode.setAttribute('role', 'status');
+      spawnStatusNode.setAttribute('aria-live', 'polite');
+      spawnStatusNode.style.cssText = 'position:fixed;left:50%;bottom:64px;transform:translateX(-50%);background:#1a1233;color:#ffe3f8;padding:8px 14px;border-radius:10px;border:1px solid #694a9a;box-shadow:0 6px 18px rgba(0,0,0,0.45);font:13px/1.35 ui-monospace;display:none;z-index:99990;';
+    }
+    if(!spawnStatusNode.isConnected && document.body){
+      document.body.appendChild(spawnStatusNode);
+    }
+    return spawnStatusNode;
+  }
+
+  function clearSpawnStatus(){
+    if(spawnStatusTimer != null){
+      const clearFn = (typeof clearTimeout === 'function')
+        ? clearTimeout
+        : (typeof globalThis !== 'undefined' && typeof globalThis.clearTimeout === 'function'
+            ? globalThis.clearTimeout.bind(globalThis)
+            : null);
+      if(clearFn){
+        clearFn(spawnStatusTimer);
+      }
+      spawnStatusTimer = null;
+    }
+    if(spawnStatusNode){
+      spawnStatusNode.style.display = 'none';
+    }
+  }
+
+  function showSpawnStatus(message){
+    const node = ensureSpawnStatusNode();
+    if(!node) return;
+    node.textContent = message;
+    node.style.display = 'block';
+    if(spawnStatusTimer != null){
+      const clearFn = (typeof clearTimeout === 'function')
+        ? clearTimeout
+        : (typeof globalThis !== 'undefined' && typeof globalThis.clearTimeout === 'function'
+            ? globalThis.clearTimeout.bind(globalThis)
+            : null);
+      if(clearFn){
+        clearFn(spawnStatusTimer);
+      }
+    }
+    const timeoutFn = (typeof setTimeout === 'function')
+      ? setTimeout
+      : (typeof globalThis !== 'undefined' && typeof globalThis.setTimeout === 'function'
+          ? globalThis.setTimeout.bind(globalThis)
+          : null);
+    if(timeoutFn){
+      spawnStatusTimer = timeoutFn(() => {
+        if(spawnStatusNode){
+          spawnStatusNode.style.display = 'none';
+        }
+        spawnStatusTimer = null;
+      }, 2800);
+    }
+  }
+
+  function formatSpawnContext(mode, faction){
+    if(mode == null && !faction) return '';
+    const modeLabel = mode != null ? (MODE_LABEL[mode] ?? String(mode)) : '';
+    const factionLabel = faction?.key ? `Faction ${faction.key}` : '';
+    return [modeLabel, factionLabel].filter(Boolean).join(' ');
+  }
+
+  function handleSpawnResult(result, context = {}){
+    if(!result) return null;
+    if(result.ok){
+      clearSpawnStatus();
+      return result;
+    }
+    const code = result.error ?? 'unknown';
+    const base = spawnErrorMessages[code] ?? `Spawn failed (${code}).`;
+    const contextLabel = formatSpawnContext(context.mode, context.faction);
+    const message = contextLabel ? `${contextLabel}: ${base}` : base;
+    console.warn('[spawn]', message, { result, context });
+    showSpawnStatus(message);
+    return result;
+  }
 
   function updateOverlayButtonState(name){
     if(!brushGrid) return;
@@ -702,7 +799,9 @@ export function initInput({ canvas, draw }){
     }
     if(brush==='eraser'){
       world.strings[i]=undefined;
-      world.fire.delete(i);
+      if(world.fire.delete(i)){
+        unmarkScenarioFire(i);
+      }
       world.vent[i]=0;
       world.wall[i]=0;
       if(world.doorTiles){
@@ -748,7 +847,9 @@ export function initInput({ canvas, draw }){
     }
     if(brush==='door'){
       world.wall[i] = 0;
-      world.fire.delete(i);
+      if(world.fire.delete(i)){
+        unmarkScenarioFire(i);
+      }
       world.vent[i] = 0;
       world.strings[i] = undefined;
       world.doorTiles?.add(i);
@@ -760,7 +861,9 @@ export function initInput({ canvas, draw }){
       world.wall[i]=1;
       world.vent[i]=0;
       world.strings[i]=undefined;
-      world.fire.delete(i);
+      if(world.fire.delete(i)){
+        unmarkScenarioFire(i);
+      }
       world.doorTiles?.delete(i);
       if(world.doorField) world.doorField[i] = 0;
       draw();
@@ -819,7 +922,9 @@ export function initInput({ canvas, draw }){
     if(brush==='clf3'){
       world.wall[i]=0;
       world.vent[i]=0;
-      world.fire.delete(i);
+      if(world.fire.delete(i)){
+        unmarkScenarioFire(i);
+      }
       world.strings[i]=baseStringFor(Mode.CLF3);
       if(!world.clfCanisters) world.clfCanisters = new Map();
       world.clfCanisters.set(i,{ integrity:1, yield:5 });
@@ -831,7 +936,9 @@ export function initInput({ canvas, draw }){
     if(brush==='mycelium'){
       world.wall[i]=0;
       world.vent[i]=0;
-      world.fire.delete(i);
+      if(world.fire.delete(i)){
+        unmarkScenarioFire(i);
+      }
       world.strings[i]=baseStringFor(Mode.MYCELIUM);
       world.doorTiles?.delete(i);
       if(world.doorField) world.doorField[i] = 0;
@@ -911,12 +1018,41 @@ export function initInput({ canvas, draw }){
   canvas.addEventListener('pointerup', endPointer);
   canvas.addEventListener('pointercancel', endPointer);
 
-  const getSettings = ()=>({
-    dHeat: parseFloat(dHeat?.value ?? '0.18'),
-    dO2: parseFloat(dO2?.value ?? '0.10'),
-    o2Base: parseFloat(o2Base?.value ?? '0.21'),
-    o2Cut: parseFloat(o2Cut?.value ?? '0.16'),
-  });
+  const getSettings = ()=>{
+    let rngSeed = Number.NaN;
+    if(scenarioSeedInput){
+      const raw = (scenarioSeedInput.value ?? '').trim();
+      if(raw !== ''){
+        rngSeed = Number.parseInt(raw, 10);
+      }
+      if(Number.isNaN(rngSeed)){
+        const dataSeed = scenarioSeedInput.dataset?.seed;
+        if(dataSeed){
+          rngSeed = Number.parseInt(dataSeed, 10);
+        }
+      }
+    }
+    if(Number.isNaN(rngSeed) && typeof document !== 'undefined' && document.body?.dataset?.scenarioSeed){
+      rngSeed = Number.parseInt(document.body.dataset.scenarioSeed, 10);
+    }
+    if(Number.isNaN(rngSeed) && typeof window !== 'undefined' && window.simScenarioSeed != null){
+      const value = typeof window.simScenarioSeed === 'number' ? window.simScenarioSeed : parseInt(window.simScenarioSeed, 10);
+      rngSeed = Number.isNaN(Number(value)) ? rngSeed : Number(value);
+    }
+    if(Number.isNaN(rngSeed)){
+      rngSeed = getWorldSeed();
+    }
+    rngSeed = Number.isFinite(rngSeed) ? (rngSeed >>> 0) : (getWorldSeed() >>> 0);
+
+    return {
+      dHeat: parseFloat(dHeat?.value ?? '0.18'),
+      dO2: parseFloat(dO2?.value ?? '0.10'),
+      o2Base: parseFloat(o2Base?.value ?? '0.21'),
+      o2Cut: parseFloat(o2Cut?.value ?? '0.16'),
+      rngSeed,
+      scenarioSeed: rngSeed,
+    };
+  };
 
   function updateMetrics({ reset=false, diagnostics }={}){
     if(reset){
@@ -1108,6 +1244,7 @@ export function initInput({ canvas, draw }){
 
   function bindSimulation(api){
     simulation = api;
+    clearSpawnStatus();
     applyPauseState(false);
     setRecorderButtonState(debugConfig.enableRecorder);
     if(simulation && typeof simulation.setRecorderEnabled === 'function'){
@@ -1116,33 +1253,33 @@ export function initInput({ canvas, draw }){
     updateHistoryUI();
     if(spawnCalmABtn && FACTIONS[0]){
       spawnCalmABtn.textContent = `🙂 NPC Calm ${FACTIONS[0].key}`;
-      spawnCalmABtn.onclick = () => simulation.spawnNPC(Mode.CALM, FACTIONS[0].key);
+      spawnCalmABtn.onclick = () => handleSpawnResult(simulation.spawnNPC(Mode.CALM, FACTIONS[0].key), { mode: Mode.CALM, faction: FACTIONS[0] });
     }
     if(spawnCalmBBtn && FACTIONS[1]){
       spawnCalmBBtn.textContent = `🙂 NPC Calm ${FACTIONS[1].key}`;
-      spawnCalmBBtn.onclick = () => simulation.spawnNPC(Mode.CALM, FACTIONS[1].key);
+      spawnCalmBBtn.onclick = () => handleSpawnResult(simulation.spawnNPC(Mode.CALM, FACTIONS[1].key), { mode: Mode.CALM, faction: FACTIONS[1] });
     } else if(spawnCalmBBtn){
       spawnCalmBBtn.style.display = 'none';
     }
     if(spawnCalmCBtn && FACTIONS[2]){
       spawnCalmCBtn.textContent = `🙂 NPC Calm ${FACTIONS[2].key}`;
-      spawnCalmCBtn.onclick = () => simulation.spawnNPC(Mode.CALM, FACTIONS[2].key);
+      spawnCalmCBtn.onclick = () => handleSpawnResult(simulation.spawnNPC(Mode.CALM, FACTIONS[2].key), { mode: Mode.CALM, faction: FACTIONS[2] });
     } else if(spawnCalmCBtn){
       spawnCalmCBtn.style.display = 'none';
     }
     if(spawnPanicABtn && FACTIONS[0]){
       spawnPanicABtn.textContent = `😱 NPC Panic ${FACTIONS[0].key}`;
-      spawnPanicABtn.onclick = () => simulation.spawnNPC(Mode.PANIC, FACTIONS[0].key);
+      spawnPanicABtn.onclick = () => handleSpawnResult(simulation.spawnNPC(Mode.PANIC, FACTIONS[0].key), { mode: Mode.PANIC, faction: FACTIONS[0] });
     }
     if(spawnPanicBBtn && FACTIONS[1]){
       spawnPanicBBtn.textContent = `😱 NPC Panic ${FACTIONS[1].key}`;
-      spawnPanicBBtn.onclick = () => simulation.spawnNPC(Mode.PANIC, FACTIONS[1].key);
+      spawnPanicBBtn.onclick = () => handleSpawnResult(simulation.spawnNPC(Mode.PANIC, FACTIONS[1].key), { mode: Mode.PANIC, faction: FACTIONS[1] });
     } else if(spawnPanicBBtn){
       spawnPanicBBtn.style.display = 'none';
     }
     if(spawnMedicBtn){
       spawnMedicBtn.onclick = ()=>{
-        simulation.spawnNPC(Mode.MEDIC);
+        handleSpawnResult(simulation.spawnNPC(Mode.MEDIC), { mode: Mode.MEDIC });
       };
     }
     if(sparkBtn){
@@ -1151,7 +1288,7 @@ export function initInput({ canvas, draw }){
     if(clearBtn){
       clearBtn.onclick = ()=>{
         const settings = getSettings();
-        simulation.resetWorld(settings.o2Base);
+        simulation.resetWorld(settings.o2Base, settings);
         updateMetrics({ reset:true });
       };
     }

@@ -3,6 +3,7 @@ import { Agent } from '../src/simulation.js';
 import { Mode } from '../src/constants.js';
 import { world, idx } from '../src/state.js';
 import { initWorld } from './helpers/worldHarness.js';
+import { setGenerator, setSeed } from '../src/rng.js';
 
 function mockRandomSequence(values){
   let i = 0;
@@ -14,28 +15,26 @@ function mockRandomSequence(values){
 }
 
 describe('agent curiosity exploration', () => {
-  let restoreRandom;
+  let restoreRng = null;
 
   beforeEach(() => {
     initWorld({ o2: 0.24 });
-    restoreRandom = null;
+    setSeed(world.rngSeed);
   });
 
   afterEach(() => {
-    if(restoreRandom){
-      Math.random = restoreRandom;
-      restoreRandom = null;
+    if(restoreRng){
+      restoreRng();
+      restoreRng = null;
     }
+    setSeed(world.rngSeed);
   });
 
   function setRandom(values){
-    if(!restoreRandom){
-      restoreRandom = Math.random;
-    } else {
-      Math.random = restoreRandom;
-      restoreRandom = Math.random;
+    if(restoreRng){
+      restoreRng();
     }
-    Math.random = mockRandomSequence(values);
+    restoreRng = setGenerator(mockRandomSequence(values));
   }
 
   it('nudges a calm agent outward along a safe gradient when surroundings are low hazard', () => {

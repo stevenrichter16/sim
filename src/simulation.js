@@ -1,11 +1,30 @@
 import { Mode, DIRS4, clamp01, wrapTau, lerp, TAU } from './constants.js';
-import { world, idx, inBounds, resetWorld, metricsState, getSimSpeed } from './state.js';
+import {
+  world,
+  idx,
+  inBounds,
+  resetWorld,
+  metricsState,
+  getSimSpeed,
+  allocateAgentId,
+  registerAgentHandle,
+  unregisterAgentHandle,
+  getAgentById,
+  getAgentIndex,
+  rebuildAgentIndices,
+  markScenarioAgent,
+  unmarkScenarioAgent,
+  markScenarioFire,
+  unmarkScenarioFire,
+  clearScenarioOwnership,
+} from './state.js';
 import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
 import { thresholds, roles, fieldConfig, decayMultiplierFromHalfLife } from './config.js';
 import { FACTIONS, DEFAULT_FACTION_ID, factionById, factionByKey, factionAffinity } from './factions.js';
 import { MTAG, depositTagged, projectOnto, factionSafePhases, getPresenceCos, getPresenceSin, rebuildPresencePhaseCache } from './memory.js';
+import { random, randomCentered, randomInt } from './rng.js';
 import {
   baseStringFor,
   Sget,
@@ -519,7 +538,7 @@ function tryCuriosityStep(agent){
     const hz = hazardHere(nk);
     if(hz > 0.35) continue;
     const novelty = world.visited ? 1 - (world.visited[nk] ?? 0) : 1;
-    const score = 0.5 * edgeBias + 0.8 * novelty - 0.4 * hz + (Math.random() - 0.5) * 0.0005;
+    const score = 0.5 * edgeBias + 0.8 * novelty - 0.4 * hz + randomCentered() * 0.0005;
     if(score > best.score) best = { score, x: nx, y: ny };
   }
   if(best.score > -Infinity && (best.x !== agent.x || best.y !== agent.y)){
@@ -618,7 +637,8 @@ function stepAlongPhase(agent){
 function tryRandomStep(agent){
   const dirs = DIRS4;
   for(let attempt=0; attempt<4; attempt++){
-    const [dx,dy]=dirs[(Math.random()*dirs.length)|0];
+    const choice = dirs[randomInt(dirs.length)];
+    const [dx,dy]=choice;
     const nx=agent.x+dx, ny=agent.y+dy;
     if(inBounds(nx,ny) && !world.wall[idx(nx,ny)]){
       agent.x=nx; agent.y=ny; return true;
@@ -647,6 +667,7 @@ export class Agent{
   constructor(x,y,mode,factionRef=DEFAULT_FACTION_ID){
     this.x = x;
     this.y = y;
+    this.id = allocateAgentId();
     this.S = baseStringFor(mode);
     this.panicLevel = 0;
     this.role = mode;
@@ -754,7 +775,7 @@ export class Agent{
 
   _medicPickNewScoutDir(){
     const dirs = DIRS4;
-    const choice = dirs[(Math.random()*dirs.length)|0];
+    const choice = dirs[randomInt(dirs.length)];
     this.medicScoutDir = { dx: choice[0], dy: choice[1] };
   }
 
@@ -854,7 +875,7 @@ export class Agent{
           this.x = nx;
           this.y = ny;
           this.lastRouteIdx = hereIndex;
-          if(Math.random() < 0.2) this._medicPickNewScoutDir();
+        if(random() < 0.2) this._medicPickNewScoutDir();
           return;
         }
       }
@@ -1083,7 +1104,7 @@ export class Agent{
       let moved = false;
       {
         const curiosity = mayExplore(this);
-        if(curiosity && Math.random() < (0.12 + 0.5 * curiosity)){
+        if(curiosity && random() < (0.12 + 0.5 * curiosity)){
           if(tryCuriosityStep(this)){
             moved = true;
             maybeBoostFrontierFromReinforce(hereIdx, idx(this.x, this.y), this.factionId);
@@ -1100,7 +1121,7 @@ export class Agent{
           const ny = this.y + dy;
           const score = scoredNeighbor(this, nx, ny, weights);
           if(score === -Infinity) continue;
-          const jitter = (Math.random() - 0.5) * 0.001;
+          const jitter = randomCentered() * 0.001;
           if(score + jitter > bestScore + 0.0005){
             bestScore = score + jitter;
             bestX = nx;
@@ -1117,7 +1138,7 @@ export class Agent{
       }
       if(!moved){
         const randomBias = 0.25 + panicWeight * 0.55;
-        if(Math.random() < randomBias){
+        if(random() < randomBias){
           moved = tryRandomStep(this);
           if(moved){
             maybeBoostFrontierFromReinforce(hereIdx, idx(this.x, this.y), this.factionId);
@@ -1188,7 +1209,7 @@ export class Agent{
       }
     }
     if(this.phaseShock > 0){
-      const wobble = (Math.random() - 0.5) * this.phaseShock * 2;
+      const wobble = randomCentered() * this.phaseShock * 2;
       this.S.phase = wrapTau(this.S.phase + wobble);
     }
     if(n>0){
@@ -1347,8 +1368,8 @@ function lerpPhase(a,b,t){
   return wrapTau(a + (b - a) * t);
 }
 
-export function worldInit(o2BaseValue){
-  resetWorld(o2BaseValue);
+export function worldInit(o2BaseValue, options = {}){
+  resetWorld(o2BaseValue, options);
   const dom = world.dominantFaction;
   const ctrl = world.controlLevel;
   prevDominant = dom ? new Int16Array(dom.length) : null;
@@ -1382,8 +1403,7 @@ export function populateDemoScenario(){
   for(const [fx,fy] of fireSeeds){
     if(inBounds(fx,fy)){
       const i=idx(fx,fy);
-      world.fire.add(i);
-      world.strings[i]=baseStringFor(Mode.FIRE);
+      igniteTile(i, 1.2);
     }
   }
   for(let dx=-2; dx<=2; dx++) for(let dy=-1; dy<=1; dy++){
@@ -1398,38 +1418,207 @@ export function populateDemoScenario(){
     const x=cx-6+dx, y=cy+4+dy;
     if(inBounds(x,y) && !world.wall[idx(x,y)]) world.strings[idx(x,y)] = baseStringFor(Mode.BASE);
   }
-  spawnNPC(Mode.CALM);
-  world.agents[world.agents.length-1].x = 3;
-  world.agents[world.agents.length-1].y = ly;
-  spawnNPC(Mode.PANIC);
-  world.agents[world.agents.length-1].x = cx;
-  world.agents[world.agents.length-1].y = cy+1;
+  const calmResult = spawnNPC(Mode.CALM);
+  if(calmResult.ok){
+    const calmAgent = getAgentById(calmResult.agentId);
+    if(calmAgent){
+      calmAgent.x = 3;
+      calmAgent.y = ly;
+    }
+  } else {
+    console.warn('[demo] unable to spawn calm agent', calmResult);
+  }
+  const panicResult = spawnNPC(Mode.PANIC);
+  if(panicResult.ok){
+    const panicAgent = getAgentById(panicResult.agentId);
+    if(panicAgent){
+      panicAgent.x = cx;
+      panicAgent.y = cy+1;
+    }
+  } else {
+    console.warn('[demo] unable to spawn panic agent', panicResult);
+  }
 }
 
-export function spawnNPC(mode, factionRef=DEFAULT_FACTION_ID){
-  let tries=200;
-  const faction = normalizeFaction(factionRef);
-  while(tries--){
-    const x=1+((Math.random()*(world.W-2))|0);
-    const y=1+((Math.random()*(world.H-2))|0);
-    if(!world.wall[idx(x,y)]){
-      world.agents.push(new Agent(x,y,mode,faction.id));
-      break;
+function tileIndexFromInput(x, y){
+  if(typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y)){
+    const ix = Math.round(x);
+    const iy = Math.round(y);
+    if(inBounds(ix, iy)){
+      return idx(ix, iy);
     }
   }
+  return -1;
+}
+
+function findRandomSpawnTile({ retries = 200 } = {}){
+  let tries = Math.max(1, retries | 0);
+  while(tries--){
+    const x = 1 + randomInt(world.W - 2);
+    const y = 1 + randomInt(world.H - 2);
+    const tile = idx(x, y);
+    if(isSpawnTileOpen(tile)){
+      return tile;
+    }
+  }
+  return -1;
+}
+
+function isSpawnTileOpen(tileIdx){
+  if(tileIdx < 0) return false;
+  if(world.wall[tileIdx]) return false;
+  if(world.fire.has(tileIdx)) return false;
+  if(world.strings[tileIdx]){
+    const S = world.strings[tileIdx];
+    if(S && S.mode === Mode.FIRE) return false;
+  }
+  for(const agent of world.agents){
+    if(idx(agent.x, agent.y) === tileIdx) return false;
+  }
+  return true;
+}
+
+export function igniteTile(tileIdx, intensity = 1){
+  if(typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= world.heat.length){
+    return { ok:false, error:'out-of-bounds', tileIdx };
+  }
+  if(world.wall[tileIdx]){
+    return { ok:false, error:'blocked', tileIdx };
+  }
+  const value = Number.isFinite(intensity) ? intensity : 1;
+  const clampedIntensity = Math.max(0.1, Math.min(2, value));
+  const normalized = Math.min(1, Math.max(0, clampedIntensity / 2));
+  const heatTarget = Math.max(world.heat[tileIdx] ?? 0, 0.35 + 0.5 * normalized);
+  const o2Drop = 0.03 + 0.05 * normalized;
+
+  world.fire.add(tileIdx);
+  const S = Sget(tileIdx);
+  const base = baseStringFor(Mode.FIRE);
+  S.mode = Mode.FIRE;
+  S.phase = base.phase;
+  S.tension = Math.min(S.tension ?? base.tension, base.tension);
+  S.amplitude = Math.max(S.amplitude ?? 0, clampedIntensity);
+  world.heat[tileIdx] = heatTarget;
+  const currentO2 = world.o2[tileIdx] ?? 0;
+  world.o2[tileIdx] = Math.max(0, currentO2 - o2Drop);
+
+  return { ok:true, tileIdx, intensity: clampedIntensity };
+}
+
+export function spawnNPC(mode, factionRef=DEFAULT_FACTION_ID, options = {}){
+  const faction = normalizeFaction(factionRef);
+  const requested = {
+    tileIdx: typeof options?.tileIdx === 'number' ? options.tileIdx | 0 : null,
+    x: typeof options?.x === 'number' ? options.x : null,
+    y: typeof options?.y === 'number' ? options.y : null,
+    retries: typeof options?.retries === 'number' ? options.retries : undefined,
+    scenarioOwned: !!options?.scenarioOwned,
+  };
+  const recordAttempt = (data)=>{
+    const payload = {
+      mode,
+      factionId: faction?.id ?? null,
+      requested,
+      timestamp: Date.now(),
+      ...data,
+    };
+    world.spawnDiagnostics.lastAttempt = payload;
+    return payload;
+  };
+
+  if(typeof faction !== 'object' || faction == null){
+    return recordAttempt({ ok: false, error: 'invalid-faction', tileIdx: requested.tileIdx ?? -1 });
+  }
+
+  let tile = -1;
+  if(requested.tileIdx != null && requested.tileIdx >= 0 && requested.tileIdx < world.heat.length){
+    tile = requested.tileIdx;
+  }
+  if(tile < 0 && requested.x != null && requested.y != null){
+    tile = tileIndexFromInput(requested.x, requested.y);
+  }
+  if(tile >= 0 && !isSpawnTileOpen(tile)){
+    return recordAttempt({ ok: false, error: 'tile-occupied', tileIdx: tile });
+  }
+  if(tile < 0){
+    tile = findRandomSpawnTile({ retries: requested.retries ?? 200 });
+    if(tile < 0){
+      return recordAttempt({ ok: false, error: 'no-open-tile', tileIdx: -1 });
+    }
+  }
+
+  const x = tile % world.W;
+  const y = (tile / world.W) | 0;
+  const agent = new Agent(x, y, mode, faction.id);
+  world.agents.push(agent);
+  registerAgentHandle(agent, world.agents.length - 1);
+  if(requested.scenarioOwned){
+    markScenarioAgent(agent.id);
+  }
+  return recordAttempt({ ok: true, agentId: agent.id, tileIdx: tile, scenarioOwned: requested.scenarioOwned });
+}
+
+export function canSpawnAt(tileIdx){
+  return isSpawnTileOpen(tileIdx);
 }
 
 export function randomFires(n){
   for(let k=0;k<n;k++){
-    const x=1+((Math.random()*(world.W-2))|0);
-    const y=1+((Math.random()*(world.H-2))|0);
+    const x = 1 + randomInt(world.W - 2);
+    const y = 1 + randomInt(world.H - 2);
     const i=idx(x,y);
     if(!world.wall[i]){
-      world.fire.add(i);
-      world.strings[i]=baseStringFor(Mode.FIRE);
+      igniteTile(i, 1);
     }
   }
 }
+
+export function scenarioIgnite(tileIdx, intensity = 1){
+  const result = igniteTile(tileIdx, intensity);
+  if(result.ok){
+    markScenarioFire(result.tileIdx);
+  }
+  return result;
+}
+
+export function despawnAgent(agentId){
+  const index = getAgentIndex(agentId);
+  if(index == null || index < 0) return false;
+  const agent = world.agents[index];
+  if(!agent) return false;
+  unregisterAgentHandle(agentId);
+  world.agents.splice(index, 1);
+  rebuildAgentIndices();
+  unmarkScenarioAgent(agentId);
+  return true;
+}
+
+export function cleanupScenarioArtifacts(){
+  const agentIds = Array.from(world.scenarioAgents ?? []);
+  for(const agentId of agentIds){
+    despawnAgent(agentId);
+  }
+  const fireTiles = Array.from(world.scenarioFires ?? []);
+  for(const tile of fireTiles){
+    if(world.fire.delete(tile)){
+      unmarkScenarioFire(tile);
+    } else {
+      unmarkScenarioFire(tile);
+    }
+    const S = world.strings[tile];
+    if(S && S.mode === Mode.FIRE){
+      world.strings[tile] = undefined;
+    }
+  }
+  world.scenarioAgents?.clear();
+  world.scenarioFires?.clear();
+  if(world.spawnDiagnostics){
+    world.spawnDiagnostics.lastAttempt = null;
+  }
+}
+
+world.despawnAgent = despawnAgent;
+world.cleanupScenarioArtifacts = cleanupScenarioArtifacts;
 
 function diffuse(field, diff){
   const MAX_ALPHA = 0.22;
@@ -1608,13 +1797,12 @@ let acidBasePairs = new Set();
         }
         if(!world.strings[j]){
           const prob = Math.min(0.6, (world.o2[j]/baseO2) * 0.3);
-          if(Math.random() < prob) toIgnite.push(j);
+          if(random() < prob) toIgnite.push(j);
         }
       }
     }
     for(const j of toIgnite){
-      world.fire.add(j);
-      world.strings[j]=baseStringFor(Mode.FIRE);
+      igniteTile(j, 0.9);
     }
 
     if(world.clfCanisters.size){
@@ -1715,7 +1903,7 @@ let acidBasePairs = new Set();
     for(const i of world.fire){
       const S=world.strings[i];
       if(S){
-        S.phase = wrapTau(S.phase + 0.01*(Math.random()-0.5));
+        S.phase = wrapTau(S.phase + 0.01 * randomCentered());
         S.amplitude = Math.min(2.0, S.amplitude*0.999);
       }
     }
@@ -1837,8 +2025,13 @@ let acidBasePairs = new Set();
     setPaused(value){ paused = value; if(!paused){ last=performance.now(); } },
     worldInit,
     seedDemoScenario(){ populateDemoScenario(); if(updateMetrics){ updateMetrics({ reset:true }); } },
-    resetWorld(o2BaseValue){
-      worldInit(o2BaseValue);
+    resetWorld(o2BaseValue, options = {}){
+      const seed =
+        (typeof options.rngSeed === 'number' && Number.isFinite(options.rngSeed)) ? options.rngSeed :
+        (typeof options.scenarioSeed === 'number' && Number.isFinite(options.scenarioSeed)) ? options.scenarioSeed :
+        undefined;
+      const worldOptions = seed != null ? { seed } : {};
+      worldInit(o2BaseValue, worldOptions);
       simTime = 0;
       stepCount = 0;
       acidBasePairs = new Set();

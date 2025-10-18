@@ -1,8 +1,9 @@
 import { Mode, TAU, DIRS4, clamp01, lerp, wrapTau } from './constants.js';
-import { world, idx, inBounds } from './state.js';
+import { world, idx, inBounds, unmarkScenarioFire } from './state.js';
 import { emitParticleBurst, emitFlash } from './effects.js';
 import { thresholds, roles } from './config.js';
 import { MTAG, depositTagged } from './memory.js';
+import { random, randomCentered } from './rng.js';
 
 const FOAM_BASE_TTL = 10;
 const FOAM_HEAT_CAP = thresholds.cryofoam.heatCap;
@@ -22,7 +23,7 @@ export function baseStringFor(mode){
     case Mode.BASE:   return { mode, tension:0.50, amplitude:0.6, phase:0.6 };
     case Mode.CLF3:   return { mode, tension:0.05, amplitude:0.0, phase:0.0 };
     case Mode.MYCELIUM:
-      return { mode, tension:0.80, amplitude:0.15, phase:Math.random()*TAU };
+      return { mode, tension:0.80, amplitude:0.15, phase:random()*TAU };
     case Mode.CALM:   return { mode, tension:0.90, amplitude:0.1, phase:0.0 };
     case Mode.PANIC:  return { mode, tension:0.20, amplitude:0.9, phase:0.8 };
     case Mode.MEDIC: {
@@ -35,7 +36,7 @@ export function baseStringFor(mode){
         composure: cfg.burstCooldown ?? 12,
       };
     }
-    default: return { mode, tension:0.5, amplitude:0.2, phase:Math.random()*TAU };
+    default: return { mode, tension:0.5, amplitude:0.2, phase:random()*TAU };
   }
 }
 
@@ -121,7 +122,9 @@ export function ensureCryofoam(tileIdx, { ttl = FOAM_BASE_TTL, permanent = false
   world.wall[tileIdx] = 1;
   world.vent[tileIdx] = 0;
   world.heat[tileIdx] = Math.min(world.heat[tileIdx], FOAM_HEAT_CAP);
-  world.fire.delete(tileIdx);
+  if(world.fire.delete(tileIdx)){
+    unmarkScenarioFire(tileIdx);
+  }
   return entry;
 }
 
@@ -268,12 +271,12 @@ export function stepMycelium(){
   for(const { index, seedPhase, seedTension } of growth){
     if(world.wall[index]) continue;
     if(world.strings[index]) continue;
-    if(Math.random() < 0.15){
+    if(random() < 0.15){
       world.strings[index] = {
         mode: Mode.MYCELIUM,
         tension: clamp01(seedTension - 0.05),
         amplitude: 0.08,
-        phase: wrapTau(seedPhase + (Math.random() - 0.5) * 0.4),
+        phase: wrapTau(seedPhase + randomCentered() * 0.4),
       };
     }
   }
@@ -341,7 +344,9 @@ export function reactFireO2(i, settings){
   world.o2[i] = Math.max(0, world.o2[i] - drop);
   const cut = settings.o2Cut;
   if(!isClfInferno && world.o2[i] < cut){
-    world.fire.delete(i);
+    if(world.fire.delete(i)){
+      unmarkScenarioFire(i);
+    }
     F.amplitude *= 0.5;
   }
   if(isClfInferno){
@@ -359,7 +364,11 @@ export function reactFireWater(i,j){
   F.amplitude = Math.max(0, F.amplitude - 1.2*s);
   addHeatXY(j % world.W, (j / world.W) | 0, 0.2*s);
   emitParticleBurst(j % world.W, (j / world.W) | 0, { type:'steam', intensity: Math.min(1, s*14) });
-  if(F.amplitude < 0.2) world.fire.delete(i);
+  if(F.amplitude < 0.2){
+    if(world.fire.delete(i)){
+      unmarkScenarioFire(i);
+    }
+  }
 }
 
 export function reactAcidBase(i,j,{ triggerFlash = true } = {}){

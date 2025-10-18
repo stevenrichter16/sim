@@ -1,4 +1,5 @@
 import { FACTIONS } from './factions.js';
+import { setSeed, getSeed } from './rng.js';
 
 const GRID_WIDTH = 80;
 const GRID_HEIGHT = 45;
@@ -32,9 +33,18 @@ export const world = {
   fire: null,
   strings: null,
   agents: [],
+  nextAgentId: 1,
+  agentHandles: new Map(),
+  agentIndexById: new Map(),
   clfCanisters: new Map(),
   clfBurners: new Map(),
   foamTimers: new Map(),
+  scenarioAgents: new Set(),
+  scenarioFires: new Set(),
+  spawnDiagnostics: {
+    lastAttempt: null,
+  },
+  rngSeed: 0x1f123bb5,
 };
 
 export const simControl = {
@@ -86,7 +96,15 @@ export function inBounds(x,y){
   return x > 0 && y > 0 && x < world.W - 1 && y < world.H - 1;
 }
 
-export function resetWorld(o2BaseValue){
+export function resetWorld(o2BaseValue, options = {}){
+  clearScenarioOwnership();
+  if(options && typeof options.seed === 'number'){
+    world.rngSeed = options.seed >>> 0;
+  } else if(typeof world.rngSeed !== 'number'){
+    world.rngSeed = getSeed();
+  }
+  setSeed(world.rngSeed);
+
   const size = world.W * world.H;
   world.heat = new Float32Array(size);
   world.o2   = new Float32Array(size);
@@ -113,9 +131,16 @@ export function resetWorld(o2BaseValue){
   world.fire = new Set();
   world.strings = new Array(size);
   world.agents = [];
+  world.nextAgentId = 1;
+  world.agentHandles = new Map();
+  world.agentIndexById = new Map();
   world.clfCanisters = new Map();
   world.clfBurners = new Map();
   world.foamTimers = new Map();
+  world.scenarioAgents = new Set();
+  world.scenarioFires = new Set();
+  world.spawnDiagnostics = { lastAttempt: null };
+  world.spawnDiagnostics = { lastAttempt: null };
   world.o2.fill(o2BaseValue);
   world.helpField.fill(0);
   world.routeField.fill(0);
@@ -173,6 +198,87 @@ export function resetWorld(o2BaseValue){
 
   uiState.inspectActive = false;
   uiState.inspectedTile = null;
+}
+
+export function allocateAgentId(){
+  const id = world.nextAgentId++;
+  return id;
+}
+
+export function registerAgentHandle(agent, index){
+  if(!agent || typeof agent.id !== 'number') return;
+  world.agentHandles.set(agent.id, agent);
+  if(typeof index === 'number'){
+    world.agentIndexById.set(agent.id, index);
+  }
+}
+
+export function updateAgentIndex(agentId, index){
+  if(world.agentHandles.has(agentId) && typeof index === 'number'){
+    world.agentIndexById.set(agentId, index);
+  }
+}
+
+export function unregisterAgentHandle(agentId){
+  world.agentHandles.delete(agentId);
+  world.agentIndexById.delete(agentId);
+}
+
+export function markScenarioAgent(agentId){
+  if(agentId == null) return;
+  world.scenarioAgents?.add(agentId);
+}
+
+export function unmarkScenarioAgent(agentId){
+  if(agentId == null) return;
+  world.scenarioAgents?.delete(agentId);
+}
+
+export function markScenarioFire(tileIdx){
+  if(tileIdx == null) return;
+  world.scenarioFires?.add(tileIdx);
+}
+
+export function unmarkScenarioFire(tileIdx){
+  if(tileIdx == null) return;
+  world.scenarioFires?.delete(tileIdx);
+}
+
+export function clearScenarioOwnership(){
+  world.scenarioAgents?.clear();
+  world.scenarioFires?.clear();
+  if(world.spawnDiagnostics){
+    world.spawnDiagnostics.lastAttempt = null;
+  }
+}
+
+export function getAgentById(agentId){
+  return world.agentHandles.get(agentId) ?? null;
+}
+
+export function getAgentIndex(agentId){
+  const index = world.agentIndexById.get(agentId);
+  return typeof index === 'number' ? index : -1;
+}
+
+export function rebuildAgentIndices(){
+  world.agentIndexById.clear();
+  for(let i=0; i<world.agents.length; i++){
+    const agent = world.agents[i];
+    if(agent && typeof agent.id === 'number'){
+      world.agentIndexById.set(agent.id, i);
+      world.agentHandles.set(agent.id, agent);
+    }
+  }
+}
+
+export function setWorldSeed(seed){
+  world.rngSeed = seed >>> 0;
+  setSeed(world.rngSeed);
+}
+
+export function getWorldSeed(){
+  return world.rngSeed >>> 0;
 }
 
 export function setBrush(value){
