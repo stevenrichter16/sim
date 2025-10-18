@@ -13,6 +13,7 @@ const overlayDefaults = {
   door: false,
   control: false,
   reinforce: false,
+  frontier: false,
 };
 
 for(const faction of FACTIONS){

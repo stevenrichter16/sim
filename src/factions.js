@@ -19,6 +19,16 @@ export const FACTIONS = [
     safePhaseBucket: 2,
     affinity: { A: -1 },
   },
+  {
+    id: 2,
+    key: 'C',
+    color: '#ff9cf0',
+    outline: '#ffc6ff',
+    safeFieldColor: '#ff9cf0',
+    safeDeposit: 0.03,
+    safePhaseBucket: 4,
+    affinity: { A: 0.3, B: -0.5 },
+  },
 ];
 
 export const DEFAULT_FACTION_ID = 0;

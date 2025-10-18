@@ -39,6 +39,7 @@ export function initInput({ canvas, draw }){
   const toggleDrawBtn = document.getElementById('toggleDraw');
   const spawnCalmABtn = document.getElementById('spawnCalmA');
   const spawnCalmBBtn = document.getElementById('spawnCalmB');
+  const spawnCalmCBtn = document.getElementById('spawnCalmC');
   const spawnPanicABtn = document.getElementById('spawnPanicA');
   const spawnPanicBBtn = document.getElementById('spawnPanicB');
   const spawnMedicBtn = document.getElementById('spawnMedic');
@@ -73,6 +74,7 @@ export function initInput({ canvas, draw }){
   const simSpeedVal = document.getElementById('simSpeedVal');
   const toggleRecorderBtn = document.getElementById('toggleRecorder');
   const seedWarmBtn = document.getElementById('seedWarm');
+  const toggleFrontierBtn = document.getElementById('toggleFrontier');
   const telemetryPanel = document.getElementById('telemetryPanel');
   const tMode = document.getElementById('tMode');
   const tTension = document.getElementById('tTension');
@@ -95,6 +97,7 @@ export function initInput({ canvas, draw }){
     KeyM: 'memory',
     Digit6: 'door',
     KeyR: 'reinforce',
+    KeyF: 'frontier',
   };
 
   FACTIONS.forEach((faction, index) => {
@@ -118,6 +121,11 @@ export function initInput({ canvas, draw }){
     const current = !!debugConfig.overlay?.[name];
     setDebugFlag(`overlay.${name}`, !current);
     updateOverlayButtonState(name);
+    if(name === 'frontier' && toggleFrontierBtn){
+      const active = !!debugConfig.overlay?.frontier;
+      toggleFrontierBtn.classList.toggle('active', active);
+      toggleFrontierBtn.textContent = active ? '🌐 Hide Frontier Field' : '🌐 Show Frontier Field';
+    }
     draw();
   }
   const legendPanel = document.getElementById('legendPanel');
@@ -617,6 +625,18 @@ export function initInput({ canvas, draw }){
       toggleDrawBtn.textContent = drawing? '🛑 Stop':'✏️ Draw';
     });
   }
+  if(toggleFrontierBtn){
+    const syncFrontierButton = ()=>{
+      const active = !!debugConfig.overlay?.frontier;
+      toggleFrontierBtn.classList.toggle('active', active);
+      toggleFrontierBtn.textContent = active ? '🌐 Hide Frontier Field' : '🌐 Show Frontier Field';
+    };
+    toggleFrontierBtn.addEventListener('click', ()=>{
+      toggleOverlaySlice('frontier');
+      syncFrontierButton();
+    });
+    syncFrontierButton();
+  }
 
   function xyFromPointer(ev){
     const rect=canvas.getBoundingClientRect();
@@ -1103,6 +1123,12 @@ export function initInput({ canvas, draw }){
       spawnCalmBBtn.onclick = () => simulation.spawnNPC(Mode.CALM, FACTIONS[1].key);
     } else if(spawnCalmBBtn){
       spawnCalmBBtn.style.display = 'none';
+    }
+    if(spawnCalmCBtn && FACTIONS[2]){
+      spawnCalmCBtn.textContent = `🙂 NPC Calm ${FACTIONS[2].key}`;
+      spawnCalmCBtn.onclick = () => simulation.spawnNPC(Mode.CALM, FACTIONS[2].key);
+    } else if(spawnCalmCBtn){
+      spawnCalmCBtn.style.display = 'none';
     }
     if(spawnPanicABtn && FACTIONS[0]){
       spawnPanicABtn.textContent = `😱 NPC Panic ${FACTIONS[0].key}`;

@@ -248,6 +248,25 @@ function drawPheromoneSlices(ctx){
   if(overlay.escape !== false) fields.push({ key:'escape', data: world.escapeField, color: '#6ec6ff', threshold: 0.01 });
   if(overlay.route !== false)  fields.push({ key:'route',  data: world.routeField,  color: '#64dd88', threshold: 0.01 });
   if(overlay.door !== false)   fields.push({ key:'door',   data: world.doorField,   color: '#ffd166', threshold: 0.01 });
+  if(overlay.frontier && world.frontierByFaction){
+    fields.push({
+      key: 'frontier',
+      get: (index)=>{
+        if(!world.frontierByFaction) return 0;
+        let max = 0;
+        for(const field of world.frontierByFaction){
+          if(!field) continue;
+          const val = field[index] ?? 0;
+          if(val > max) max = val;
+        }
+        return max;
+      },
+      color: '#ffff6b',
+      threshold: 0.0005,
+      minAlpha: 0.99,
+      scale: 2.0,
+    });
+  }
   if(overlay.reinforce && world.reinforceByFaction){
     fields.push({
       key: 'reinforce',

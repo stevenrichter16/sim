@@ -1,4 +1,4 @@
-import { FACTIONS } from './factions.js';
+import { FACTIONS, factionAffinity } from './factions.js';
 import { getPresenceCos, getPresenceSin, factionSafePhases, MEMORY_BUCKETS } from './memory.js';
 import { clamp01 } from './constants.js';
 
@@ -40,6 +40,7 @@ registerDemo('safe-phases', createSafePhaseTable);
 registerDemo('frontier', (mount)=>{
   mount.textContent = 'Frontier visualization placeholder.';
 });
+registerDemo('frontier-debugger', createFrontierDebuggerDemo);
 
 function createDominanceDemo(mount){
   mount.classList.add('dominance-demo');
@@ -443,6 +444,647 @@ function createDominanceDemo(mount){
   update();
 }
 
+function createFrontierDebuggerDemo(mount){
+  mount.classList.add('frontier-debugger');
+  const FRONTIER_MIN_CONTEST = 0.25;
+  const FRONTIER_DEPOSIT = 0.02;
+  const codeLines = [
+    'const FRONTIER_MIN_CONTEST = 0.25;',
+    'const FRONTIER_DEPOSIT = 0.02;',
+    'for (let i = 0; i < tiles; i++) {',
+    '  const dom = dominantFaction[i];',
+    '  const ctrl = controlLevel[i];',
+    '  const contest = 1 - Math.abs(2 * ctrl - 1);',
+    '  if (contest > FRONTIER_MIN_CONTEST) {',
+    '    let hasFriendly = false;',
+    '    let hasHostile = false;',
+    '    for (const neighbor of neighbors(i)) {',
+    '      if (isEnemy(dom, dominantFaction[neighbor])) hasHostile = true;',
+    '      if (isAlly(dom, dominantFaction[neighbor])) hasFriendly = true;',
+    '    }',
+    '    if (hasFriendly && hasHostile) {',
+    '      frontier[dom][i] += contest * FRONTIER_DEPOSIT;',
+    '    }',
+    '  }',
+    '}',
+  ];
+
+  const layout = document.createElement('div');
+  layout.className = 'frontier-debugger__layout';
+
+  let world = buildSampleWorld();
+  const grid = createDebuggerGrid(world);
+  const hoverNames = ['FRONTIER_MIN_CONTEST','FRONTIER_DEPOSIT','tiles','i','dom','ctrl','contest','passesContest','neighbor','friendly','hostile','hasFriendly','hasHostile','frontierDeposit','frontierValue','frontier'];
+  const { codeView, syncCodeVar } = createCodeView(codeLines, hoverNames);
+  const vars = createVarsView({
+    FRONTIER_MIN_CONTEST: FRONTIER_MIN_CONTEST.toFixed(2),
+    FRONTIER_DEPOSIT: FRONTIER_DEPOSIT.toFixed(2),
+    i: '0',
+    dom: '—',
+    ctrl: '0.00',
+    contest: '0.00',
+    passesContest: '—',
+    neighbor: '—',
+    friendly: 'false',
+    hostile: 'false',
+    hasFriendly: 'false',
+    hasHostile: 'false',
+    frontierDeposit: '0.000',
+    frontierValue: '0.000',
+    frontier: '0.000',
+  }, syncCodeVar);
+
+  const controls = document.createElement('div');
+  controls.className = 'frontier-debugger__controls';
+  const nextBtn = makeButton('Next Line ▶');
+  const playBtn = makeButton('Auto Play ⏩');
+  const resetBtn = makeButton('Reset ⟳');
+  const toggleFrontierBtn = makeButton('Show Frontier Field');
+  toggleFrontierBtn.dataset.active = 'false';
+  controls.append(nextBtn, playBtn, resetBtn, toggleFrontierBtn);
+
+  const gridPanel = document.createElement('div');
+  gridPanel.className = 'frontier-debugger__grid-panel';
+  const gridTitle = document.createElement('h3');
+  gridTitle.textContent = 'Tile Grid';
+  gridPanel.append(gridTitle, grid.element);
+
+  const codePanel = document.createElement('div');
+  codePanel.className = 'frontier-debugger__code-panel';
+  const codeTitle = document.createElement('h3');
+  codeTitle.textContent = 'updateFrontierFields excerpt';
+  codePanel.append(codeTitle, codeView);
+
+  const varsPanel = document.createElement('div');
+  varsPanel.className = 'frontier-debugger__vars-panel';
+  const varsTitle = document.createElement('h3');
+  varsTitle.textContent = 'Variables';
+  varsPanel.append(varsTitle, vars.element);
+
+  const rightColumn = document.createElement('div');
+  rightColumn.className = 'frontier-debugger__sidebar';
+  rightColumn.append(codePanel, varsPanel, controls);
+
+  layout.append(gridPanel, rightColumn);
+  mount.append(layout);
+  syncCodeVar('tiles', world.size.toString());
+
+  const state = {
+    currentLine: 0,
+    tileIndex: 0,
+    neighborList: [],
+    neighborPointer: 0,
+    neighborInitialized: false,
+    friendlySet: new Set(),
+    hostileSet: new Set(),
+    currentNeighbor: null,
+    friendly: false,
+    hostile: false,
+    contest: 0,
+    playing: false,
+    timer: null,
+    skipConstants: false,
+  };
+
+  const lineHandlers = {
+    0(){
+      highlightLine(0);
+      return;
+    },
+    1(){
+      highlightLine(1);
+      return;
+    },
+    2(){
+      if(state.tileIndex >= world.size){
+        stopAutoplay();
+        state.tileIndex = 0;
+      }
+      beginTile(state.tileIndex);
+      return;
+    },
+    3(){
+      const dom = world.dominantFaction[state.tileIndex];
+      vars.update('dom', describeFaction(dom));
+      return;
+    },
+    4(){
+      const ctrl = world.controlLevel[state.tileIndex] ?? 0;
+      vars.update('ctrl', ctrl.toFixed(2));
+      return;
+    },
+    5(){
+      const ctrl = world.controlLevel[state.tileIndex] ?? 0;
+      const contest = 1 - Math.abs(2 * ctrl - 1);
+      state.contest = contest;
+      vars.update('contest', contest.toFixed(2));
+      return;
+    },
+    6(){
+      const passes = state.contest > FRONTIER_MIN_CONTEST;
+      vars.update('passesContest', passes ? 'true' : 'false');
+      if(!passes){
+        vars.update('frontierDeposit', '0.000');
+        const frontierVal = currentFrontierValue(state.tileIndex).toFixed(3);
+        vars.update('frontierValue', frontierVal);
+        vars.update('frontier', frontierVal);
+        state.currentNeighbor = null;
+        renderGrid();
+        return 17;
+      }
+      return;
+    },
+    7(){
+      state.friendly = false;
+      state.hostile = false;
+      vars.update('friendly', 'false');
+      vars.update('hostile', 'false');
+      vars.update('hasFriendly', 'false');
+      vars.update('hasHostile', 'false');
+      return;
+    },
+    8(){
+      state.hostile = false;
+      vars.update('hostile', 'false');
+      vars.update('hasHostile', 'false');
+      return;
+    },
+    9(){
+    if(!state.neighborInitialized){
+      state.neighborList = listNeighbors(state.tileIndex);
+      state.neighborPointer = 0;
+      state.neighborInitialized = true;
+    }
+    if(state.neighborPointer >= state.neighborList.length){
+      vars.update('neighbor', '—');
+      state.currentNeighbor = null;
+      renderGrid();
+      return 13;
+    }
+    state.currentNeighbor = state.neighborList[state.neighborPointer];
+    vars.update('neighbor', describeTile(state.currentNeighbor));
+    renderGrid();
+    return;
+    },
+    10(){
+      evaluateNeighborHostility();
+      return;
+    },
+    11(){
+      evaluateNeighborFriendliness();
+      state.neighborPointer += 1;
+      if(state.neighborPointer < state.neighborList.length){
+        return 9;
+      }
+      state.currentNeighbor = null;
+      vars.update('neighbor', '—');
+      renderGrid();
+      return;
+    },
+    13(){
+      const shouldDeposit = state.friendly && state.hostile;
+      vars.update('friendly', state.friendly ? 'true' : 'false');
+      vars.update('hostile', state.hostile ? 'true' : 'false');
+      vars.update('hasFriendly', state.friendly ? 'true' : 'false');
+      vars.update('hasHostile', state.hostile ? 'true' : 'false');
+      if(!shouldDeposit){
+        vars.update('frontierDeposit', '0.000');
+        return 15;
+      }
+      return;
+    },
+    14(){
+      const domId = world.dominantFaction[state.tileIndex];
+      const shouldDeposit = state.friendly && state.hostile && domId >= 0;
+      if(shouldDeposit){
+        const deposit = clamp01(state.contest * FRONTIER_DEPOSIT);
+        const field = world.frontierByFaction[domId];
+        field[state.tileIndex] = clamp01((field[state.tileIndex] ?? 0) + deposit);
+        vars.update('frontierDeposit', deposit.toFixed(3));
+      }
+      const frontierVal = currentFrontierValue(state.tileIndex).toFixed(3);
+      vars.update('frontierValue', frontierVal);
+      vars.update('frontier', frontierVal);
+      renderGrid(true);
+      return;
+    },
+    17(){
+      state.tileIndex += 1;
+      state.skipConstants = true;
+      state.neighborInitialized = false;
+      if(state.tileIndex >= world.size){
+        stopAutoplay();
+        state.tileIndex = 0;
+        state.currentLine = 2;
+        highlightLine(state.currentLine);
+        return 2;
+      }
+      return 2;
+    },
+  };
+
+  function highlightLine(index){
+    const rows = codeView.querySelectorAll('div');
+    rows.forEach((row, idx)=>{
+      row.classList.toggle('is-active', idx === index);
+    });
+  }
+
+  function beginTile(tileIndex){
+    state.friendlySet.clear();
+    state.hostileSet.clear();
+    state.friendly = false;
+    state.hostile = false;
+    state.currentNeighbor = null;
+    vars.update('i', tileIndex.toString());
+    vars.update('dom', '—');
+    vars.update('ctrl', '0.00');
+    vars.update('contest', '0.00');
+    vars.update('passesContest', '—');
+    vars.update('neighbor', '—');
+    vars.update('friendly', 'false');
+    vars.update('hostile', 'false');
+    vars.update('hasFriendly', 'false');
+    vars.update('hasHostile', 'false');
+    vars.update('frontierDeposit', '0.000');
+    const frontierBase = currentFrontierValue(tileIndex).toFixed(3);
+    vars.update('frontierValue', frontierBase);
+    vars.update('frontier', frontierBase);
+    state.neighborInitialized = false;
+    renderGrid();
+  }
+
+  function listNeighbors(index){
+    const coords = toCoords(index);
+    const neighbors = [];
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    for(const [dx,dy] of dirs){
+      const nx = coords.x + dx;
+      const ny = coords.y + dy;
+      if(nx < 0 || ny < 0 || nx >= world.W || ny >= world.H) continue;
+      const nIndex = ny * world.W + nx;
+      neighbors.push(nIndex);
+    }
+    return neighbors;
+  }
+
+  function evaluateNeighborHostility(){
+    const dom = world.dominantFaction[state.tileIndex];
+    if(dom < 0 || state.currentNeighbor == null) return;
+    const neighborDom = world.dominantFaction[state.currentNeighbor];
+    let hostile = false;
+    if(neighborDom >= 0){
+      const affinity = factionAffinity(dom, neighborDom);
+      if(affinity < 0) hostile = true;
+    }
+    if(hostile){
+      state.hostile = true;
+      state.hostileSet.add(state.currentNeighbor);
+    }
+    vars.update('hostile', state.hostile ? 'true' : 'false');
+    vars.update('hasHostile', state.hostile ? 'true' : 'false');
+    renderGrid();
+  }
+
+  function evaluateNeighborFriendliness(){
+    const dom = world.dominantFaction[state.tileIndex];
+    if(dom < 0 || state.currentNeighbor == null) return;
+    const neighborDom = world.dominantFaction[state.currentNeighbor];
+    let friendly = false;
+    if(neighborDom >= 0){
+      const affinity = factionAffinity(dom, neighborDom);
+      friendly = neighborDom === dom || affinity > 0;
+    }
+    if(friendly){
+      state.friendly = true;
+      state.friendlySet.add(state.currentNeighbor);
+    }
+    vars.update('friendly', state.friendly ? 'true' : 'false');
+    vars.update('hasFriendly', state.friendly ? 'true' : 'false');
+    renderGrid();
+  }
+
+  function currentFrontierValue(index){
+    const domId = world.dominantFaction[index];
+    if(domId < 0) return 0;
+    return world.frontierByFaction[domId][index] ?? 0;
+  }
+
+  function step(){
+    if(world.size === 0) return;
+    if(state.tileIndex >= world.size){
+      stopAutoplay();
+      state.tileIndex = 0;
+      state.currentLine = state.skipConstants ? 2 : 0;
+    }
+    highlightLine(state.currentLine);
+    const handler = lineHandlers[state.currentLine];
+    const jump = handler ? handler() : undefined;
+    if(typeof jump === 'number'){
+      state.currentLine = jump;
+    } else {
+      state.currentLine += 1;
+    }
+    if(state.skipConstants && state.currentLine < 2){
+      state.currentLine = 2;
+    }
+    if(state.currentLine >= codeLines.length){
+      state.currentLine = state.skipConstants ? 2 : 0;
+    }
+    highlightLine(state.currentLine);
+  }
+
+  function toggleAutoplay(){
+    if(state.playing){
+      stopAutoplay();
+    } else {
+      state.playing = true;
+      playBtn.textContent = 'Pause ⏸';
+      state.timer = setInterval(()=>{
+        step();
+      }, 900);
+    }
+  }
+
+  function stopAutoplay(){
+    if(state.timer){
+      clearInterval(state.timer);
+      state.timer = null;
+    }
+    if(state.playing){
+      state.playing = false;
+      playBtn.textContent = 'Auto Play ⏩';
+    }
+  }
+
+  function resetDebugger(){
+    stopAutoplay();
+    world = buildSampleWorld();
+    state.currentLine = 0;
+    state.tileIndex = 0;
+    state.skipConstants = false;
+    state.neighborList = [];
+    state.neighborPointer = 0;
+    state.neighborInitialized = false;
+    state.currentNeighbor = null;
+    state.friendlySet.clear();
+    state.hostileSet.clear();
+    state.friendly = false;
+    state.hostile = false;
+    vars.update('FRONTIER_MIN_CONTEST', FRONTIER_MIN_CONTEST.toFixed(2));
+    vars.update('FRONTIER_DEPOSIT', FRONTIER_DEPOSIT.toFixed(2));
+    vars.update('i', '0');
+    vars.update('dom', '—');
+    vars.update('ctrl', '0.00');
+    vars.update('contest', '0.00');
+    vars.update('passesContest', '—');
+    vars.update('neighbor', '—');
+    vars.update('friendly', 'false');
+    vars.update('hostile', 'false');
+    vars.update('hasFriendly', 'false');
+    vars.update('hasHostile', 'false');
+    vars.update('frontierDeposit', '0.000');
+    vars.update('frontierValue', '0.000');
+    vars.update('frontier', '0.000');
+    syncCodeVar('tiles', world.size.toString());
+    syncCodeVar('hasFriendly', 'false');
+    syncCodeVar('hasHostile', 'false');
+    syncCodeVar('frontier', '0.000');
+    grid.reload(world);
+    renderGrid();
+    highlightLine(state.currentLine);
+  }
+
+  function renderGrid(flashDeposit = false){
+    const current = state.tileIndex;
+    const neighborIndex = state.currentNeighbor;
+    const showFrontier = toggleFrontierBtn.dataset.active === 'true';
+    grid.cells.forEach((cellObj, idx)=>{
+      const domId = world.dominantFaction[idx];
+      const ctrl = world.controlLevel[idx] ?? 0;
+      const frontierVal = currentFrontierValue(idx);
+      cellObj.faction.textContent = describeFaction(domId);
+      cellObj.control.textContent = ctrl.toFixed(2);
+      cellObj.frontier.textContent = frontierVal.toFixed(3);
+      cellObj.frontier.parentElement.classList.toggle('is-hidden', !showFrontier);
+      cellObj.element.classList.toggle('is-current', idx === current);
+      cellObj.element.classList.toggle('is-current-neighbor', idx === neighborIndex);
+      cellObj.element.classList.toggle('is-friendly', state.friendlySet.has(idx));
+      cellObj.element.classList.toggle('is-hostile', state.hostileSet.has(idx));
+      cellObj.element.classList.toggle('has-frontier', frontierVal > 0.0001 && showFrontier);
+      applyFactionStyle(cellObj.element, domId);
+      if(flashDeposit && idx === current && frontierVal > 0){
+        cellObj.element.classList.add('frontier-deposit');
+        setTimeout(()=> cellObj.element.classList.remove('frontier-deposit'), 320);
+      }
+    });
+  }
+
+  function describeFaction(fid){
+    if(fid == null || fid < 0) return 'Neutral (-1)';
+    const faction = FACTIONS[fid];
+    return faction ? `${faction.key} (${fid})` : `Faction ${fid}`;
+  }
+
+  function describeTile(idx){
+    const { x, y } = toCoords(idx);
+    const domId = world.dominantFaction[idx];
+    const ctrl = world.controlLevel[idx] ?? 0;
+    const factionStr = describeFaction(domId);
+    return `(${x}, ${y}) – ${factionStr}, ctrl ${ctrl.toFixed(2)}`;
+  }
+
+  function toCoords(index){
+    const x = index % world.W;
+    const y = Math.floor(index / world.W);
+    return { x, y };
+  }
+
+  function applyFactionStyle(el, fid){
+    const base = fid >= 0 ? FACTIONS[fid]?.color ?? '#3a4764' : '#1f2735';
+    const rgb = hexToRgb(base);
+    const gradient = `linear-gradient(135deg, rgba(${rgb.r},${rgb.g},${rgb.b},0.35), rgba(${rgb.r},${rgb.g},${rgb.b},0.08))`;
+    el.style.background = gradient;
+    el.style.borderColor = `rgba(${rgb.r},${rgb.g},${rgb.b},0.4)`;
+  }
+
+  function createCodeView(lines, hoverList){
+    const pre = document.createElement('pre');
+    pre.className = 'frontier-debugger__code';
+    const spansMap = new Map();
+    const identifiers = hoverList && hoverList.length ? new RegExp(`\\b(${hoverList.join('|')})\\b`, 'g') : null;
+    lines.forEach(line => {
+      const row = document.createElement('div');
+      if(identifiers){
+        row.innerHTML = line.replace(identifiers, '<span class="frontier-debugger__code-var" data-var="$1">$1</span>');
+      } else {
+        row.textContent = line;
+      }
+      pre.append(row);
+    });
+    pre.querySelectorAll('[data-var]').forEach(span => {
+      const name = span.getAttribute('data-var');
+      if(!spansMap.has(name)) spansMap.set(name, []);
+      spansMap.get(name).push(span);
+    });
+    function sync(name, value){
+      const spans = spansMap.get(name);
+      if(spans){
+        spans.forEach(span => {
+          span.setAttribute('title', `${name} = ${value}`);
+        });
+      }
+    }
+    return { codeView: pre, codeVarSpans: spansMap, syncCodeVar: sync };
+  }
+
+  function createVarsView(initial, onUpdate){
+    const wrapper = document.createElement('div');
+    wrapper.className = 'frontier-debugger__vars';
+    const entries = new Map();
+    Object.entries(initial).forEach(([key, value]) => {
+      const row = document.createElement('div');
+      row.className = 'frontier-debugger__var';
+      row.innerHTML = `<strong>${key}</strong><span>${value}</span>`;
+      wrapper.append(row);
+      entries.set(key, row.querySelector('span'));
+      if(onUpdate) onUpdate(key, value);
+    });
+    return {
+      element: wrapper,
+      update(key, value){
+        if(!entries.has(key)){
+          const row = document.createElement('div');
+          row.className = 'frontier-debugger__var';
+          row.innerHTML = `<strong>${key}</strong><span>${value}</span>`;
+          wrapper.append(row);
+          entries.set(key, row.querySelector('span'));
+        } else {
+          entries.get(key).textContent = value;
+        }
+        if(onUpdate) onUpdate(key, value);
+      },
+      get(key){
+        const span = entries.get(key);
+        return span ? parseFloat(span.textContent) : NaN;
+      }
+    };
+  }
+
+  function createDebuggerGrid(worldRef){
+    const wrapper = document.createElement('div');
+    wrapper.className = 'frontier-debugger__grid';
+    wrapper.style.gridTemplateColumns = `repeat(${worldRef.W}, minmax(120px, 1fr))`;
+    const cells = [];
+    for(let y = 0; y < worldRef.H; y++){
+      for(let x = 0; x < worldRef.W; x++){
+        const idx = y * worldRef.W + x;
+        const cell = document.createElement('div');
+        cell.className = 'frontier-debugger__cell';
+        const coord = document.createElement('div');
+        coord.className = 'frontier-debugger__cell-coord';
+        coord.textContent = `(${x}, ${y})`;
+        const faction = document.createElement('div');
+        faction.className = 'frontier-debugger__cell-faction';
+        const control = document.createElement('div');
+        control.className = 'frontier-debugger__cell-control';
+        const frontier = document.createElement('div');
+        frontier.className = 'frontier-debugger__cell-frontier';
+        frontier.innerHTML = 'Frontier: <span>0.000</span>';
+        cell.append(coord, faction, control, frontier);
+        wrapper.append(cell);
+        cells.push({ element: cell, faction, control, frontier: frontier.querySelector('span') });
+      }
+    }
+    return {
+      element: wrapper,
+      cells,
+      reload(newWorld){
+        world = newWorld;
+        wrapper.style.gridTemplateColumns = `repeat(${world.W}, minmax(120px, 1fr))`;
+      }
+    };
+  }
+
+  function makeButton(label){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'frontier-debugger__btn';
+    btn.textContent = label;
+    return btn;
+  }
+
+  function buildSampleWorld(){
+    const W = 4;
+    const H = 3;
+    const size = W * H;
+    const dominantFaction = new Int16Array(size).fill(-1);
+    const controlLevel = new Float32Array(size);
+    const frontierByFaction = FACTIONS.map(()=> new Float32Array(size));
+
+    function setTile(x, y, faction, control){
+      const index = y * W + x;
+      dominantFaction[index] = faction;
+      controlLevel[index] = control;
+    }
+
+    const layout = [
+      [ { f:0, c:0.82 }, { f:0, c:0.68 }, { f:1, c:0.63 }, { f:1, c:0.86 } ],
+      [ { f:0, c:0.55 }, { f:0, c:0.51 }, { f:1, c:0.49 }, { f:1, c:0.66 } ],
+      [ { f:0, c:0.81 }, { f:0, c:0.74 }, { f:1, c:0.72 }, { f:1, c:0.88 } ],
+    ];
+
+    layout.forEach((row, y)=>{
+      row.forEach((tile, x)=>{
+        setTile(x, y, tile.f, tile.c);
+      });
+    });
+
+    return {
+      W,
+      H,
+      size,
+      dominantFaction,
+      controlLevel,
+      frontierByFaction,
+    };
+  }
+
+  function hexToRgb(hex){
+    const norm = hex?.replace('#', '') ?? '202b3d';
+    if(norm.length !== 6){
+      return { r:32, g:43, b:60 };
+    }
+    return {
+      r: parseInt(norm.slice(0,2), 16),
+      g: parseInt(norm.slice(2,4), 16),
+      b: parseInt(norm.slice(4,6), 16)
+    };
+  }
+
+  nextBtn.addEventListener('click', ()=>{
+    stopAutoplay();
+    step();
+  });
+
+  playBtn.addEventListener('click', ()=>{
+    toggleAutoplay();
+  });
+
+  resetBtn.addEventListener('click', ()=>{
+    resetDebugger();
+  });
+
+  toggleFrontierBtn.addEventListener('click', ()=>{
+    const active = toggleFrontierBtn.dataset.active === 'true';
+    toggleFrontierBtn.dataset.active = active ? 'false' : 'true';
+    toggleFrontierBtn.textContent = active ? 'Show Frontier Field' : 'Hide Frontier Field';
+    renderGrid();
+  });
+
+  renderGrid();
+  highlightLine(state.currentLine);
+}
 function createPresenceDemo(mount){
   mount.classList.add('presence-demo');
   mount.innerHTML = `

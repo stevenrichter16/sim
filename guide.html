@@ -208,8 +208,21 @@ export function getPresenceSin(){ return presenceSinByFaction; }</code></pre>
 
       <section id="frontier" class="guide-section">
         <h2>Frontier Detection</h2>
+        <p>After dominant factions and control strengths are known, we compute a “contest” score for each tile. Contest is highest when control hovers around 0.5—meaning rivals are evenly matched. Frontier cells are those contested tiles that border both a friendly-aligned neighbor and a hostile-aligned neighbor.</p>
+        <ul>
+          <li><strong>Contest metric:</strong> <code>contest = 1 - |2 × control - 1|</code>; values close to 1 indicate a tug-of-war.</li>
+          <li><strong>Affinity aware:</strong> During the neighbor scan we treat allies (positive affinity) as friendly and enemies (negative affinity) as hostile; neutral affinity contributes neither.</li>
+          <li><strong>Deposits &amp; diffusion:</strong> Frontier deposits accumulate via <code>FRONTIER_DEPOSIT</code> then diffuse with the same parameters as the safe field. Persistent conflict builds a lane agents can follow.</li>
+          <li><strong>Agent inputs:</strong> Movement scoring uses the per-faction frontier fields to reward pushing into contested ground or holding defensive lines.</li>
+        </ul>
         <div class="code-placeholder" data-file="src/simulation.js" data-lines="122-170"></div>
         <div class="demo-placeholder" data-demo="frontier"></div>
+      </section>
+
+      <section id="frontier-debugger" class="guide-section">
+        <h2>Frontier Debugger</h2>
+        <p>Step through <code>updateFrontierFields()</code> line-by-line and watch how contest, neighbor scans, and deposits evolve on a sample grid. Use the controls to advance or auto-play the routine exactly as the simulation executes between presence control and reinforcement seeding.</p>
+        <div class="demo-placeholder" data-demo="frontier-debugger"></div>
       </section>
 
       <section id="debt" class="guide-section">
