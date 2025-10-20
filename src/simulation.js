@@ -24,7 +24,7 @@ import { createRecorder } from './recorder.js';
 import { thresholds, roles, fieldConfig, decayMultiplierFromHalfLife } from './config.js';
 import { FACTIONS, DEFAULT_FACTION_ID, factionById, factionByKey, factionAffinity } from './factions.js';
 import { MTAG, depositTagged, projectOnto, factionSafePhases, getPresenceCos, getPresenceSin, rebuildPresencePhaseCache } from './memory.js';
-import { random, randomCentered, randomInt } from './rng.js';
+import { random, randomCentered, randomInt, randomRange } from './rng.js';
 import {
   baseStringFor,
   Sget,
@@ -40,6 +40,7 @@ import {
   stepCryofoam,
   stepMycelium,
 } from './materials.js';
+import { createScenarioRuntime } from './script/runtime.js';
 
 const medicAssignments = new Map();
 
@@ -1581,6 +1582,100 @@ export function scenarioIgnite(tileIdx, intensity = 1){
   return result;
 }
 
+function resolveScenarioField(name){
+  switch(name){
+    case 'help': return world.helpField;
+    case 'route': return world.routeField;
+    case 'panic': return world.panicField;
+    case 'safe': return world.safeField;
+    case 'escape': return world.escapeField;
+    case 'door': return world.doorField;
+    case 'heat': return world.heat;
+    case 'o2': return world.o2;
+    default:
+      return null;
+  }
+}
+
+function scenarioFieldBoundsOk(tileIdx, field){
+  if(!field) return false;
+  return typeof tileIdx === 'number' && tileIdx >= 0 && tileIdx < field.length;
+}
+
+export function scenarioReadField(tileIdx, fieldName){
+  const field = resolveScenarioField(fieldName);
+  if(!field){
+    return { ok: false, error: 'unknown-field', field: fieldName };
+  }
+  if(!scenarioFieldBoundsOk(tileIdx, field)){
+    return { ok: false, error: 'out-of-bounds', tileIdx };
+  }
+  return { ok: true, value: field[tileIdx] ?? 0 };
+}
+
+export function scenarioWriteField(tileIdx, fieldName, value){
+  const field = resolveScenarioField(fieldName);
+  if(!field){
+    return { ok: false, error: 'unknown-field', field: fieldName };
+  }
+  if(!scenarioFieldBoundsOk(tileIdx, field)){
+    return { ok: false, error: 'out-of-bounds', tileIdx };
+  }
+  const numeric = Number(value);
+  const clamped = Number.isFinite(numeric) ? clamp01(numeric) : 0;
+  field[tileIdx] = clamped;
+  return { ok: true, value: clamped };
+}
+
+export function scenarioSwitchFaction(agentId, factionRef){
+  const agent = getAgentById(agentId);
+  if(!agent){
+    return { ok: false, error: 'agent-not-found', agentId };
+  }
+  const faction = normalizeFaction(factionRef);
+  if(!faction){
+    return { ok: false, error: 'invalid-faction', agentId };
+  }
+  agent.factionId = faction.id;
+  agent.factionKey = faction.key;
+  agent.faction = faction.key;
+  return { ok: true, agentId, factionId: faction.id };
+}
+
+function scenarioTileMatchesFilter(tileIdx, filterKey){
+  if(tileIdx == null || tileIdx < 0 || tileIdx >= world.heat.length){
+    return false;
+  }
+  switch(filterKey){
+    case 'open':
+      return isSpawnTileOpen(tileIdx);
+    case 'fireFree':
+      return !world.fire.has(tileIdx);
+    case 'door':
+      return !!world.doorField?.[tileIdx];
+    case 'any':
+    default:
+      return true;
+  }
+}
+
+export function scenarioRandTile(filterKey = 'open'){
+  const total = world.W * world.H;
+  const attempts = Math.max(1, Math.min(total * 2, 2000));
+  for(let i = 0; i < attempts; i++){
+    const tile = randomInt(total);
+    if(scenarioTileMatchesFilter(tile, filterKey)){
+      return { ok: true, value: tile };
+    }
+  }
+  for(let tile = 0; tile < total; tile++){
+    if(scenarioTileMatchesFilter(tile, filterKey)){
+      return { ok: true, value: tile };
+    }
+  }
+  return { ok: false, error: 'no-matching-tile', filter: filterKey };
+}
+
 export function despawnAgent(agentId){
   const index = getAgentIndex(agentId);
   if(index == null || index < 0) return false;
@@ -1663,6 +1758,106 @@ export function createSimulation({ getSettings, updateMetrics, draw }){
 let recorder = debugConfig.enableRecorder ? createRecorder({ size: debugConfig.recorderSize }) : null;
 let acidBasePairs = new Set();
 
+  const scenarioContext = {
+    runtime: null,
+    diagnostics: [],
+    active: false,
+    seed: null,
+    source: null,
+  };
+
+  function makeScenarioDiagnosticsLogger(delegate){
+    return {
+      log: (event) => {
+        scenarioContext.diagnostics.push(event);
+        if(delegate && typeof delegate.log === 'function'){
+          delegate.log(event);
+        }
+      },
+    };
+  }
+
+  function scenarioSpawnAgentHost(factionRef, mode, tileIdx){
+    const options = { scenarioOwned: true };
+    if(typeof tileIdx === 'number' && Number.isFinite(tileIdx)){
+      options.tileIdx = tileIdx | 0;
+    }
+    return spawnNPC(mode, factionRef, options);
+  }
+
+  function createScenarioHost(overrides = {}){
+    const baseHost = {
+      ignite: (tileIdx, intensity, meta) => scenarioIgnite(tileIdx, intensity),
+      spawnAgent: (factionRef, mode, tileIdx, meta) => scenarioSpawnAgentHost(factionRef, mode, tileIdx),
+      switchFaction: (agentId, factionRef, meta) => scenarioSwitchFaction(agentId, factionRef),
+      field: (tileIdx, fieldName, meta) => scenarioReadField(tileIdx, fieldName),
+      fieldWrite: (tileIdx, fieldName, value, meta) => scenarioWriteField(tileIdx, fieldName, value),
+      randTile: (filterKey, meta) => scenarioRandTile(filterKey),
+    };
+    return { ...baseHost, ...overrides };
+  }
+
+  function disposeScenarioRuntime(){
+    if(scenarioContext.runtime && typeof scenarioContext.runtime.dispose === 'function'){
+      scenarioContext.runtime.dispose();
+    }
+    scenarioContext.runtime = null;
+    scenarioContext.active = false;
+    scenarioContext.seed = null;
+    scenarioContext.diagnostics = [];
+  }
+
+  function instantiateScenarioRuntime(){
+    if(!scenarioContext.source) return { status: 'error', error: { message: 'No scenario loaded.' } };
+    const { compiled, options } = scenarioContext.source;
+    const {
+      capabilities,
+      diagnostics,
+      natives,
+      rng: rngOption,
+      seed,
+      host: hostOverrides,
+    } = options ?? {};
+    scenarioContext.diagnostics = [];
+    const diagnosticsLogger = makeScenarioDiagnosticsLogger(diagnostics);
+    const runtime = createScenarioRuntime({
+      compiled,
+      capabilities,
+      diagnostics: diagnosticsLogger,
+      natives,
+      rng: rngOption ?? { random, range: randomRange },
+      host: createScenarioHost(hostOverrides),
+    });
+    scenarioContext.runtime = runtime;
+    scenarioContext.seed = seed ?? world.rngSeed ?? 0;
+    scenarioContext.active = !runtime.bootstrapError;
+    if(!scenarioContext.active){
+      return { status: 'error', error: runtime.bootstrapError };
+    }
+    const initResult = runtime.runInit(scenarioContext.seed);
+    if(initResult.status === 'error'){
+      scenarioContext.active = false;
+    }
+    return initResult;
+  }
+
+  function loadScenarioRuntimeSource(compiled, options = {}){
+    scenarioContext.source = { compiled, options };
+    cleanupScenarioArtifacts();
+    disposeScenarioRuntime();
+    return instantiateScenarioRuntime();
+  }
+
+  function tickScenario(frame, dt){
+    if(!scenarioContext.runtime || !scenarioContext.active){
+      return;
+    }
+    const result = scenarioContext.runtime.tick(frame, dt);
+    if(result.status === 'error'){
+      scenarioContext.active = false;
+    }
+  }
+
   function ensureRecorder(){
     if(!debugConfig.enableRecorder) return null;
     if(!recorder){
@@ -1678,9 +1873,14 @@ let acidBasePairs = new Set();
       diagnosticsFrame.hotAgents = 0;
       diagnosticsFrame.overwhelmedAgents = 0;
 
-    if(paused && !force) return false;
-    diffuse(world.heat, settings.dHeat);
-    diffuse(world.o2, settings.dO2);
+      if(paused && !force) return false;
+
+      const frameIndex = stepCount + speedStep;
+      const dtSeconds = typeof settings?.dt === 'number' ? settings.dt : 1;
+      tickScenario(frameIndex, dtSeconds);
+
+      diffuse(world.heat, settings.dHeat);
+      diffuse(world.o2, settings.dO2);
       updateField(world.helpField, fieldConfig.help);
       updateField(world.routeField, fieldConfig.route);
       updateField(world.panicField, fieldConfig.panic);
@@ -2037,10 +2237,44 @@ let acidBasePairs = new Set();
       acidBasePairs = new Set();
       medicAssignments.clear();
       if(recorder) recorder.clear();
+      if(scenarioContext.source){
+        const previous = scenarioContext.source;
+        disposeScenarioRuntime();
+        scenarioContext.source = {
+          compiled: previous.compiled,
+          options: {
+            ...previous.options,
+            seed: (typeof options.scenarioSeed === 'number' && Number.isFinite(options.scenarioSeed))
+              ? options.scenarioSeed
+              : (seed ?? world.rngSeed ?? 0),
+          },
+        };
+        instantiateScenarioRuntime();
+      }
       if(updateMetrics){ updateMetrics({ reset:true }); }
     },
     spawnNPC,
     randomFires,
+    loadScenarioRuntime({ compiled, ...options } = {}){
+      if(!compiled){
+        throw new Error('loadScenarioRuntime requires compiled scenario bytecode.');
+      }
+      return loadScenarioRuntimeSource(compiled, options);
+    },
+    unloadScenarioRuntime(){
+      cleanupScenarioArtifacts();
+      disposeScenarioRuntime();
+      scenarioContext.source = null;
+    },
+    getScenarioDiagnostics(){
+      return [...scenarioContext.diagnostics];
+    },
+    getScenarioStatus(){
+      if(!scenarioContext.runtime){
+        return null;
+      }
+      return scenarioContext.runtime.getStatus();
+    },
     setRecorderEnabled(value){
       if(value){
         debugConfig.enableRecorder = true;
