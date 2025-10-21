@@ -82,7 +82,14 @@ export function createScenarioVM(compiled, options = {}) {
   const instructionLimit = options.instructionLimit ?? DEFAULT_INSTRUCTION_LIMIT;
   const stackSize = options.stackSize ?? DEFAULT_STACK_SIZE;
   const frameLimit = options.frameLimit ?? DEFAULT_FRAME_LIMIT;
-  const capabilitySet = new Set(options.capabilities ?? []);
+  const capabilitySource = options.capabilities ?? ['runtime.schedule'];
+  const capabilitySet = new Set(
+    capabilitySource instanceof Set
+      ? capabilitySource
+      : Array.isArray(capabilitySource)
+        ? capabilitySource
+        : Array.from(capabilitySource ?? []),
+  );
 
   const constants = compiled.constants ?? [];
   const globals = new Array(compiled.globals?.size ?? 0).fill(null);
@@ -174,14 +181,17 @@ export function createScenarioVM(compiled, options = {}) {
     }
   };
 
-  registerNative('schedule', ({ args, span }) => {
-    const [delay, target, ...rest] = args;
-    try {
-      scheduleBinding({ delay, target, args: rest, span });
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
-    return { ok: true, value: null };
+  registerNative('schedule', {
+    capability: 'runtime.schedule',
+    fn: ({ args, span }) => {
+      const [delay, target, ...rest] = args;
+      try {
+        scheduleBinding({ delay, target, args: rest, span });
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+      return { ok: true, value: null };
+    },
   });
 
   const sortScheduledTicks = () => {
@@ -574,4 +584,3 @@ export function createScenarioVM(compiled, options = {}) {
 
   return vm;
 }
-

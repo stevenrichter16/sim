@@ -41,6 +41,7 @@ import {
   stepMycelium,
 } from './materials.js';
 import { createScenarioRuntime } from './script/runtime.js';
+import { deserialiseCompiledProgram } from './script/bytecode.js';
 
 const medicAssignments = new Map();
 
@@ -1764,6 +1765,7 @@ let acidBasePairs = new Set();
     active: false,
     seed: null,
     source: null,
+    asset: null,
   };
 
   function makeScenarioDiagnosticsLogger(delegate){
@@ -1805,6 +1807,7 @@ let acidBasePairs = new Set();
     scenarioContext.active = false;
     scenarioContext.seed = null;
     scenarioContext.diagnostics = [];
+    scenarioContext.asset = null;
   }
 
   function instantiateScenarioRuntime(){
@@ -1846,6 +1849,30 @@ let acidBasePairs = new Set();
     cleanupScenarioArtifacts();
     disposeScenarioRuntime();
     return instantiateScenarioRuntime();
+  }
+
+  function loadScenarioFromAsset(asset){
+    if(!asset || typeof asset !== 'object'){
+      return { status: 'error', error: { message: 'Invalid scenario asset.' } };
+    }
+    if(!asset.bytecode){
+      return { status: 'error', error: { message: 'Scenario asset missing bytecode.' } };
+    }
+    const compiled = deserialiseCompiledProgram(asset.bytecode);
+    const options = {
+      capabilities: asset.capabilities,
+      seed: asset.seed,
+      diagnostics: asset.diagnostics,
+      natives: asset.natives,
+      host: asset.host,
+      rng: asset.rng,
+      meta: asset.meta ?? { name: asset.name },
+    };
+    const result = loadScenarioRuntimeSource(compiled, options);
+    if(result.status === 'ok'){
+      scenarioContext.asset = asset;
+    }
+    return result;
   }
 
   function tickScenario(frame, dt){
@@ -2260,6 +2287,9 @@ let acidBasePairs = new Set();
         throw new Error('loadScenarioRuntime requires compiled scenario bytecode.');
       }
       return loadScenarioRuntimeSource(compiled, options);
+    },
+    loadScenarioAsset(asset){
+      return loadScenarioFromAsset(asset);
     },
     unloadScenarioRuntime(){
       cleanupScenarioArtifacts();

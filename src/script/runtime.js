@@ -3,13 +3,14 @@ import { createScenarioVM } from './vm.js';
 
 const noop = () => {};
 
-const DEFAULT_CAPABILITIES = [
+export const DEFAULT_CAPABILITIES = [
   'fire.write',
   'agent.spawn',
   'agent.switch',
   'field.read',
   'field.write',
   'rng.use',
+  'runtime.schedule',
   'diag.write',
 ];
 

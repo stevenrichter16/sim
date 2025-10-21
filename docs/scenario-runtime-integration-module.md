@@ -92,7 +92,8 @@ Default capability set for scenarios: `{ 'fire.write', 'agent.spawn', 'field.wri
   - Simulated `stepSimulation` loop with SRIM stub ensures scenario-owned entities tracked.
   - Hot reload triggers `cleanupScenarioArtifacts`.
 - **Tooling Tests**
-  - CLI compile command loads `.sscript`, produces JSON, fails with syntax errors.
+  - `tests/compile.cli.test.js` drives the `compile-scripts` CLI end-to-end, producing JSON assets with capabilities metadata.
+  - `tests/scenario.asset.load.test.js` loads the compiled asset through the simulation, enforcing capability gating (e.g., `runtime.schedule`) and verifying error propagation.
 
 Each test begins red (failing), then drive implementation to green, with refactors after green.
 
@@ -109,3 +110,16 @@ Each test begins red (failing), then drive implementation to green, with refacto
 4. Extend host bindings & diagnostics incrementally.
 
 The following sections will be updated as milestones complete, including test coverage tables and dependency notes.
+
+## 9. Tooling Pipeline Snapshot
+- Run `npm run compile-scripts` to compile every `.sscript`/`.scenario` under `scenarios/` into JSON bytecode assets in `data/scenarios/`.
+- Each asset includes the serialised bytecode payload plus a `capabilities` array (defaults to the SRIM bundle including `runtime.schedule`) and metadata about the source file and generation time.
+- `createSimulation` exposes `loadScenarioAsset(asset)` which materialises the JSON back into bytecode, seeds the runtime, and honours the declared capabilities. Missing capabilities (e.g., omitting `runtime.schedule`) raise runtime errors surfaced via `getScenarioStatus()`.
+- CLI sidecar configs (`*.config.json`) can override the asset name and capability manifest while reusing the same source script, enabling content authors to gate natives explicitly.
+- **Quick usage**:
+  ```bash
+  # compile scripts from the default ./scenarios folder
+  npm run compile-scripts
+  # compile from a custom source/output directory
+  npm run compile-scripts -- --src ./designer-scenarios --out ./data/scenarios
+  ```
