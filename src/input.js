@@ -30,6 +30,16 @@ import { FACTIONS, DEFAULT_FACTION_ID, factionByKey } from './factions.js';
 import { Agent } from './simulation.js';
 import { fetchScenarioManifest, fetchScenarioAsset } from './scenarioRegistry.js';
 import { createScenarioDiagnosticsStore } from './scenarioDiagnosticsStore.js';
+import {
+  isFactoryBrush,
+  placeFactoryStructure,
+  removeFactoryStructure,
+  getActiveOrientation,
+  rotateActiveOrientation,
+  getFactoryStatus,
+  getOrientationLabelText,
+  isFactoryMode,
+} from './factory.js';
 
 const MODE_LABEL = Object.fromEntries(
   Object.entries(Mode).map(([name, value])=>{
@@ -40,6 +50,11 @@ const MODE_LABEL = Object.fromEntries(
 
 export function initInput({ canvas, draw }){
   const brushGrid = document.getElementById('brushGrid');
+  const factoryBrushGrid = document.getElementById('factoryBrushGrid');
+  const factoryRotateLeftBtn = document.getElementById('factoryRotateLeft');
+  const factoryRotateRightBtn = document.getElementById('factoryRotateRight');
+  const factoryOrientationLabel = document.getElementById('factoryOrientation');
+  const factoryStatusNode = document.getElementById('factoryStatus');
   const toggleDrawBtn = document.getElementById('toggleDraw');
   const spawnCalmABtn = document.getElementById('spawnCalmA');
   const spawnCalmBBtn = document.getElementById('spawnCalmB');
@@ -620,12 +635,50 @@ function toggleScenarioDiagPanel(force){
     updateSettingDisplay(el,key,fmt);
   });
 
+  const syncFactoryOrientation = () => {
+    if(factoryOrientationLabel){
+      factoryOrientationLabel.textContent = getOrientationLabelText();
+    }
+  };
+
+  const updateFactoryStatusUI = () => {
+    if(!factoryStatusNode) return;
+    const status = getFactoryStatus();
+    if(!status) return;
+    const produced = status.produced || {};
+    const stored = status.stored || {};
+    factoryStatusNode.textContent = `Ore ${produced.ore ?? 0} • Ingots ${produced.ingot ?? 0} • Plates ${produced.plate ?? 0} • Stored Plates ${stored.plate ?? 0}`;
+    syncFactoryOrientation();
+  };
+
+  syncFactoryOrientation();
+  updateFactoryStatusUI();
+
+  if(factoryRotateLeftBtn){
+    factoryRotateLeftBtn.addEventListener('click', ()=>{
+      rotateActiveOrientation(-1);
+      syncFactoryOrientation();
+    });
+  }
+  if(factoryRotateRightBtn){
+    factoryRotateRightBtn.addEventListener('click', ()=>{
+      rotateActiveOrientation(1);
+      syncFactoryOrientation();
+    });
+  }
+
   function selectBrush(val){
     setBrush(val);
-    if(!brushGrid) return;
-    [...brushGrid.querySelectorAll('button[data-brush]')].forEach(btn=>{
-      btn.classList.toggle('active', btn.getAttribute('data-brush')===val);
-    });
+    if(brushGrid){
+      [...brushGrid.querySelectorAll('button[data-brush]')].forEach(btn=>{
+        btn.classList.toggle('active', btn.getAttribute('data-brush')===val);
+      });
+    }
+    if(factoryBrushGrid){
+      [...factoryBrushGrid.querySelectorAll('button[data-brush]')].forEach(btn=>{
+        btn.classList.toggle('active', btn.getAttribute('data-brush')===val);
+      });
+    }
     if(toggleDrawBtn){
       toggleDrawBtn.classList.remove('active');
       toggleDrawBtn.textContent = '✏️ Draw';
@@ -887,6 +940,14 @@ function toggleScenarioDiagPanel(force){
       setDebugFlag('overlay.tension', !debugConfig.overlay.tension);
       draw();
       ev.preventDefault();
+    } else if(ev.code === 'BracketLeft' && !ev.repeat){
+      rotateActiveOrientation(-1);
+      syncFactoryOrientation();
+      ev.preventDefault();
+    } else if(ev.code === 'BracketRight' && !ev.repeat){
+      rotateActiveOrientation(1);
+      syncFactoryOrientation();
+      ev.preventDefault();
     } else if(overlayToggleKeys[ev.code] && !ev.repeat){
       toggleOverlaySlice(overlayToggleKeys[ev.code]);
       ev.preventDefault();
@@ -928,6 +989,15 @@ function toggleScenarioDiagPanel(force){
         b.classList.toggle('active', !current);
         return;
       }
+      selectBrush(val);
+    });
+  }
+
+  if(factoryBrushGrid){
+    factoryBrushGrid.addEventListener('click',(e)=>{
+      const b = e.target.closest('button'); if(!b) return;
+      const val = b.getAttribute('data-brush');
+      if(!val) return;
       selectBrush(val);
     });
   }
@@ -1014,8 +1084,23 @@ function toggleScenarioDiagPanel(force){
       dragBrush = null;
       dragFactionKey = DEFAULT_FACTION_KEY;
     }
+    if(isFactoryBrush(brush)){
+      const orientation = getActiveOrientation();
+      const result = placeFactoryStructure(i, brush, { orientation });
+      if(!result.ok){
+        if(result.message) showSpawnStatus(result.message);
+      } else {
+        updateFactoryStatusUI();
+      }
+      draw();
+      return;
+    }
     if(brush==='eraser'){
-      world.strings[i]=undefined;
+      const removeNode = !!ev?.altKey;
+      const factoryResult = removeFactoryStructure(i, { removeNode });
+      if(!factoryResult.handled){
+        world.strings[i]=undefined;
+      }
       if(world.fire.delete(i)){
         unmarkScenarioFire(i);
       }
@@ -1026,6 +1111,7 @@ function toggleScenarioDiagPanel(force){
         if(world.doorField) world.doorField[i] = 0;
       }
       clearPheromones(i);
+      updateFactoryStatusUI();
       draw();
       return;
     }
@@ -1335,6 +1421,7 @@ function toggleScenarioDiagPanel(force){
     for(let i=0;i<world.strings.length;i++){
       const S = world.strings[i];
       if(!S) continue;
+      if(isFactoryMode(S.mode)) continue;
       sampleCount++;
       ampSum += S.amplitude;
       tensionSum += S.tension;
@@ -1390,6 +1477,7 @@ function toggleScenarioDiagPanel(force){
       }
     }
     updateHistoryUI();
+    updateFactoryStatusUI();
   }
 
   const heatThresholdHints = {

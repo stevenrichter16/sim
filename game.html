@@ -75,6 +75,27 @@
             <button class="btn" id="toggleDraw">✏️ Draw</button>
           </div>
 
+          <div class="factory-panel" id="factoryPanel">
+            <div class="factory-header">
+              <h4>Factory Builder</h4>
+              <div class="factory-orientation" aria-live="polite">
+                <button class="btn factory-rotate" id="factoryRotateLeft" type="button">⟲</button>
+                <span class="factory-orientation-label" id="factoryOrientation">East</span>
+                <button class="btn factory-rotate" id="factoryRotateRight" type="button">⟳</button>
+              </div>
+            </div>
+            <div class="grid factory-grid" id="factoryBrushGrid" aria-label="Factory builder brushes">
+              <button class="btn" data-brush="factory-node">🪨 Ore Node</button>
+              <button class="btn" data-brush="factory-miner">⛏️ Miner</button>
+              <button class="btn" data-brush="factory-belt">➡️ Conveyor</button>
+              <button class="btn" data-brush="factory-smelter">🔥 Smelter</button>
+              <button class="btn" data-brush="factory-constructor">🏭 Constructor</button>
+              <button class="btn" data-brush="factory-storage">📦 Storage</button>
+            </div>
+            <div class="small factory-status" id="factoryStatus">Ore 0 • Ingots 0 • Plates 0 • Stored Plates 0</div>
+            <div class="small factory-hint">Use ⟲/⟳ or [ / ] keys to rotate placement direction. Hold Alt while erasing to remove ore nodes.</div>
+          </div>
+
           <!-- Actions -->
           <div class="grid actions-grid">
             <button class="btn" id="spawnCalmA">🙂 NPC Calm A</button>

@@ -36,6 +36,18 @@ export function baseStringFor(mode){
         composure: cfg.burstCooldown ?? 12,
       };
     }
+    case Mode.FACTORY_NODE:
+      return { mode, tension: 0.95, amplitude: 0.0, phase: 0.0 };
+    case Mode.FACTORY_MINER:
+      return { mode, tension: 0.9, amplitude: 0.0, phase: 0.0 };
+    case Mode.FACTORY_BELT:
+      return { mode, tension: 0.9, amplitude: 0.0, phase: 0.0 };
+    case Mode.FACTORY_SMELTER:
+      return { mode, tension: 0.9, amplitude: 0.0, phase: 0.0 };
+    case Mode.FACTORY_CONSTRUCTOR:
+      return { mode, tension: 0.9, amplitude: 0.0, phase: 0.0 };
+    case Mode.FACTORY_STORAGE:
+      return { mode, tension: 0.95, amplitude: 0.0, phase: 0.0 };
     default: return { mode, tension:0.5, amplitude:0.2, phase:random()*TAU };
   }
 }

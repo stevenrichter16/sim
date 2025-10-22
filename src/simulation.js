@@ -42,6 +42,7 @@ import {
 } from './materials.js';
 import { createScenarioRuntime } from './script/runtime.js';
 import { deserialiseCompiledProgram } from './script/bytecode.js';
+import { stepFactory } from './factory.js';
 
 const medicAssignments = new Map();
 
@@ -2097,6 +2098,7 @@ let acidBasePairs = new Set();
     stepMycelium();
     handlePhaseTransitions();
     stepCryofoam();
+    stepFactory();
 
     const toIgnite=[];
     const baseO2 = settings.o2Base || 0.21;
