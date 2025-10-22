@@ -74,13 +74,17 @@ type ScenarioDiagnostic = {
 | `ignite` | `fire.write` | Uses `scenarioIgnite`. |
 | `spawnAgent` | `agent.spawn` | Returns agent ID. |
 | `switchFaction` | `agent.switch` | Validates handle. |
+| `agentTile` | `agent.read` | Returns tile index for an agent handle. |
+| `agentCount` | `agent.read` | Counts agents, optionally by faction. |
+| `agentIds` | `agent.read` | Returns filtered agent IDs (capped). |
 | `fieldWrite` | `field.write` | Clamps values. |
 | `field`/`tileField` | `field.read` | Read-only. |
 | `rand`/`randRange`/`randTile` | `rng.use` | Delegates to deterministic RNG. |
 | `schedule` | `runtime.schedule` | Already provided by VM. |
+| `emitEffect` | `effects.emit` | Bridges to `emitParticleBurst` / `emitFlash`. |
 | `logDebug` | `diag.write` | Diagnostics channel. |
 
-Default capability set for scenarios: `{ 'fire.write', 'agent.spawn', 'field.write', 'field.read', 'rng.use', 'runtime.schedule', 'diag.write' }`.
+Default capability set for scenarios: `{ 'fire.write', 'agent.spawn', 'agent.switch', 'agent.read', 'field.write', 'field.read', 'rng.use', 'runtime.schedule', 'effects.emit', 'diag.write' }`.
 
 ## 6. Testing Strategy
 - **Unit Tests (`tests/scenario.runtime.test.js`)**

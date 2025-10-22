@@ -1,0 +1,17 @@
+let lastPulse = 0;
+
+fn onInit(seed) {
+  lastPulse = 0;
+  call logDebug("tutorial", "agent effects ready");
+}
+
+fn onTick(frame, dt) {
+  let population = call agentCount();
+  if (population == 0) {
+    return;
+  }
+  if (frame >= lastPulse + 120) {
+    lastPulse = frame;
+    call emitEffect("flash", 40, 20);
+  }
+}

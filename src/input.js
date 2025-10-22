@@ -28,6 +28,8 @@ import {
 import { baseStringFor, ensureCryofoam } from './materials.js';
 import { FACTIONS, DEFAULT_FACTION_ID, factionByKey } from './factions.js';
 import { Agent } from './simulation.js';
+import { fetchScenarioManifest, fetchScenarioAsset } from './scenarioRegistry.js';
+import { createScenarioDiagnosticsStore } from './scenarioDiagnosticsStore.js';
 
 const MODE_LABEL = Object.fromEntries(
   Object.entries(Mode).map(([name, value])=>{
@@ -51,7 +53,12 @@ export function initInput({ canvas, draw }){
   const dO2 = document.getElementById('dO2');
   const o2Base = document.getElementById('o2Base');
   const o2Cut = document.getElementById('o2Cut');
+  const scenarioSelect = document.getElementById('scenarioSelect');
+  const scenarioLoadBtn = document.getElementById('scenarioLoad');
+  const scenarioRefreshBtn = document.getElementById('scenarioRefresh');
+  const scenarioStatusText = document.getElementById('scenarioStatusText');
   const scenarioSeedInput = document.getElementById('scenarioSeed');
+  const scenarioDiagToggle = document.getElementById('scenarioDiagToggle');
   const mO2 = document.getElementById('mO2');
   const mO2d = document.getElementById('mO2d');
   const mFire = document.getElementById('mFire');
@@ -204,6 +211,216 @@ export function initInput({ canvas, draw }){
     console.warn('[spawn]', message, { result, context });
     showSpawnStatus(message);
     return result;
+  }
+
+let scenarioManifestEntries = [];
+let scenarioStatusTimer = null;
+const scenarioDiagStore = createScenarioDiagnosticsStore({ maxEntries: 60 });
+let scenarioDiagPanel = null;
+let scenarioDiagList = null;
+let scenarioDiagVisible = false;
+
+function showScenarioStatus(message, tone = 'info'){
+  if(!scenarioStatusText) return;
+  const palette = {
+    info: '#b9c2e5',
+    success: '#a9ffbe',
+    error: '#ff9fa8',
+  };
+  scenarioStatusText.textContent = message;
+  scenarioStatusText.style.color = palette[tone] ?? palette.info;
+  scenarioStatusText.style.display = message ? 'block' : 'none';
+  if(scenarioStatusTimer != null && typeof clearTimeout === 'function'){
+    clearTimeout(scenarioStatusTimer);
+    scenarioStatusTimer = null;
+  }
+  if(message && typeof setTimeout === 'function'){
+    scenarioStatusTimer = setTimeout(()=>{
+      scenarioStatusTimer = null;
+      if(scenarioStatusText){
+        scenarioStatusText.style.display = 'none';
+      }
+    }, 4000);
+  }
+}
+
+function ensureScenarioDiagPanel(){
+  if(typeof document === 'undefined') return null;
+  if(scenarioDiagPanel && scenarioDiagPanel.isConnected) return scenarioDiagPanel;
+  if(!scenarioDiagPanel){
+    scenarioDiagPanel = document.createElement('div');
+    scenarioDiagPanel.id = 'scenarioDiagPanel';
+    scenarioDiagPanel.style.cssText = 'position:fixed;right:16px;top:16px;width:340px;max-height:60vh;background:#0f1428;color:#e4eaff;border:1px solid #3a4574;border-radius:10px;box-shadow:0 16px 36px rgba(0,0,0,0.5);display:none;flex-direction:column;font:12px/1.4 ui-monospace;z-index:99991;';
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid #2c3359;background:#161d36;border-radius:10px 10px 0 0;';
+    const title = document.createElement('span');
+    title.textContent = 'Scenario Diagnostics';
+    header.appendChild(title);
+    const controlWrap = document.createElement('div');
+    controlWrap.style.display = 'flex';
+    controlWrap.style.gap = '6px';
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.textContent = 'Clear';
+    clearBtn.style.cssText = 'padding:2px 8px;border-radius:6px;background:#2a3561;border:1px solid #42508a;color:#e4eaff;cursor:pointer;font:11px ui-monospace;';
+    clearBtn.addEventListener('click', ()=>{
+      scenarioDiagStore.clear();
+      renderScenarioDiagnostics();
+    });
+    controlWrap.appendChild(clearBtn);
+    header.appendChild(controlWrap);
+    scenarioDiagPanel.appendChild(header);
+    scenarioDiagList = document.createElement('div');
+    scenarioDiagList.id = 'scenarioDiagList';
+    scenarioDiagList.style.cssText = 'overflow:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px;';
+    scenarioDiagPanel.appendChild(scenarioDiagList);
+  }
+  if(!scenarioDiagPanel.isConnected && document.body){
+    document.body.appendChild(scenarioDiagPanel);
+  }
+  return scenarioDiagPanel;
+}
+
+function renderScenarioDiagnostics(){
+  const panel = ensureScenarioDiagPanel();
+  if(!panel || !scenarioDiagList) return;
+  const entries = scenarioDiagStore.getEntries();
+  scenarioDiagList.innerHTML = '';
+  if(entries.length === 0){
+    const empty = document.createElement('div');
+    empty.textContent = 'No scenario diagnostics yet.';
+    empty.style.opacity = '0.7';
+    scenarioDiagList.appendChild(empty);
+    return;
+  }
+  entries.forEach((entry)=>{
+    const item = document.createElement('div');
+    item.style.cssText = 'padding:6px 8px;border-radius:6px;background:rgba(22,28,52,0.85);border:1px solid rgba(79,101,168,0.35);';
+    if(entry.type === 'error' || entry.type === 'watchdog'){
+      item.style.borderColor = 'rgba(255,132,132,0.55)';
+    }
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;gap:6px;margin-bottom:4px;font-size:11px;';
+    const typeLabel = document.createElement('span');
+    typeLabel.textContent = entry.type.toUpperCase();
+    const meta = document.createElement('span');
+    meta.style.opacity = '0.7';
+    const metaParts = [];
+    if(entry.tick != null) metaParts.push(`tick ${entry.tick}`);
+    if(entry.chunk) metaParts.push(entry.chunk);
+    if(entry.native) metaParts.push(`native ${entry.native}`);
+    meta.textContent = metaParts.join(' · ');
+    header.appendChild(typeLabel);
+    header.appendChild(meta);
+    const body = document.createElement('div');
+    body.textContent = entry.message;
+    item.appendChild(header);
+    item.appendChild(body);
+    scenarioDiagList.appendChild(item);
+  });
+}
+
+function toggleScenarioDiagPanel(force){
+  const panel = ensureScenarioDiagPanel();
+  if(!panel) return;
+  scenarioDiagVisible = force != null ? !!force : !scenarioDiagVisible;
+  panel.style.display = scenarioDiagVisible ? 'flex' : 'none';
+  if(scenarioDiagVisible){
+    renderScenarioDiagnostics();
+  }
+}
+
+  function populateScenarioOptions(entries){
+    if(!scenarioSelect) return;
+    scenarioManifestEntries = entries;
+    while(scenarioSelect.firstChild){
+      scenarioSelect.removeChild(scenarioSelect.firstChild);
+    }
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.dataset.placeholder = 'true';
+    placeholder.textContent = entries.length ? '(Select scenario)' : '(No scenarios found)';
+    placeholder.disabled = entries.length === 0;
+    placeholder.selected = true;
+    scenarioSelect.appendChild(placeholder);
+    entries.forEach((entry, index)=>{
+      const option = document.createElement('option');
+      option.value = String(index);
+      option.textContent = entry.capabilities && entry.capabilities.length
+        ? `${entry.name} (${entry.capabilities.join(', ')})`
+        : entry.name;
+      scenarioSelect.appendChild(option);
+    });
+    if(scenarioLoadBtn){
+      scenarioLoadBtn.disabled = entries.length === 0 || !simulation;
+    }
+  }
+
+  async function refreshScenarioManifest(showStatus = true){
+    if(!scenarioSelect) return;
+    if(scenarioRefreshBtn) scenarioRefreshBtn.disabled = true;
+    scenarioSelect.disabled = true;
+    try {
+      const entries = await fetchScenarioManifest();
+      populateScenarioOptions(entries);
+      if(showStatus){
+        showScenarioStatus(entries.length ? `Loaded ${entries.length} scenario${entries.length === 1 ? '' : 's'}.` : 'No scenarios available.', entries.length ? 'info' : 'error');
+      }
+    } catch (error) {
+      console.error('[scenario] manifest refresh failed', error);
+      populateScenarioOptions([]);
+      showScenarioStatus('Failed to load scenarios.', 'error');
+    } finally {
+      scenarioSelect.disabled = false;
+      if(scenarioRefreshBtn) scenarioRefreshBtn.disabled = false;
+    }
+  }
+
+  function getSelectedScenarioEntry(){
+    if(!scenarioSelect) return null;
+    const value = scenarioSelect.value;
+    if(value === '') return null;
+    const index = parseInt(value, 10);
+    if(Number.isNaN(index) || index < 0 || index >= scenarioManifestEntries.length){
+      return null;
+    }
+    return scenarioManifestEntries[index];
+  }
+
+  async function handleScenarioLoad(){
+    if(!simulation){
+      showScenarioStatus('Simulation not ready.', 'error');
+      return;
+    }
+    const entry = getSelectedScenarioEntry();
+    if(!entry){
+      showScenarioStatus('Select a scenario first.', 'error');
+      return;
+    }
+    try {
+      if(scenarioLoadBtn) scenarioLoadBtn.disabled = true;
+      if(scenarioRefreshBtn) scenarioRefreshBtn.disabled = true;
+      scenarioSelect.disabled = true;
+      const asset = await fetchScenarioAsset(entry);
+      if(!asset){
+        showScenarioStatus('Failed to download scenario asset.', 'error');
+        return;
+      }
+      const result = simulation.loadScenarioAsset(asset);
+      if(result?.status === 'error'){
+        const message = result.error?.message ?? 'Scenario failed to load.';
+        showScenarioStatus(message, 'error');
+        return;
+      }
+      showScenarioStatus(`Loaded scenario: ${entry.name}`, 'success');
+    } catch (error) {
+      console.error('[scenario] load failed', error);
+      showScenarioStatus('Scenario load failed.', 'error');
+    } finally {
+      scenarioSelect.disabled = false;
+      if(scenarioRefreshBtn) scenarioRefreshBtn.disabled = false;
+      if(scenarioLoadBtn) scenarioLoadBtn.disabled = simulation == null;
+    }
   }
 
   function updateOverlayButtonState(name){
@@ -1162,8 +1379,15 @@ export function initInput({ canvas, draw }){
       }
       if(mHotAgents) mHotAgents.textContent = String(diagnostics.hotAgents ?? 0);
       if(mOverwhelmed) mOverwhelmed.textContent = String(diagnostics.overwhelmedAgents ?? 0);
-      if(mStuckAgents) mStuckAgents.textContent = String(diagnostics.stuckAgents ?? 0);
-      metricsState.aggregates.stuckAgents = diagnostics.stuckAgents ?? 0;
+    if(mStuckAgents) mStuckAgents.textContent = String(diagnostics.stuckAgents ?? 0);
+    metricsState.aggregates.stuckAgents = diagnostics.stuckAgents ?? 0;
+  }
+    if(simulation && typeof simulation.drainScenarioDiagnostics === 'function'){
+      const events = simulation.drainScenarioDiagnostics();
+      if(events.length){
+        events.forEach(event => scenarioDiagStore.record(event));
+        if(scenarioDiagVisible) renderScenarioDiagnostics();
+      }
     }
     updateHistoryUI();
   }
@@ -1250,6 +1474,12 @@ export function initInput({ canvas, draw }){
     if(simulation && typeof simulation.setRecorderEnabled === 'function'){
       simulation.setRecorderEnabled(debugConfig.enableRecorder);
     }
+    if(scenarioLoadBtn){
+      scenarioLoadBtn.disabled = scenarioManifestEntries.length === 0;
+    }
+    if(scenarioManifestEntries.length){
+      showScenarioStatus('Select a scenario to load.', 'info');
+    }
     updateHistoryUI();
     if(spawnCalmABtn && FACTIONS[0]){
       spawnCalmABtn.textContent = `🙂 NPC Calm ${FACTIONS[0].key}`;
@@ -1307,6 +1537,17 @@ export function initInput({ canvas, draw }){
   if(stepOnceBtn) stepOnceBtn.addEventListener('click',()=> stepSimulation());
   if(toggleRecorderBtn) toggleRecorderBtn.addEventListener('click',()=> applyRecorderToggle(!debugConfig.enableRecorder));
   if(seedWarmBtn) seedWarmBtn.addEventListener('click',()=> seedWarmGrid());
+  if(scenarioRefreshBtn) scenarioRefreshBtn.addEventListener('click', ()=> refreshScenarioManifest(true));
+  if(scenarioLoadBtn) scenarioLoadBtn.addEventListener('click', ()=> handleScenarioLoad());
+  if(scenarioSelect) scenarioSelect.addEventListener('change', ()=>{
+    const entry = getSelectedScenarioEntry();
+    if(entry){
+      showScenarioStatus(`Ready to load ${entry.name}`, 'info');
+    } else {
+      showScenarioStatus('', 'info');
+    }
+  });
+  if(scenarioDiagToggle) scenarioDiagToggle.addEventListener('click', ()=> toggleScenarioDiagPanel());
   if(metricsToggle && metricsSummary){
     metricsToggle.addEventListener('click',()=>{
       metricsExpanded = !metricsExpanded;
@@ -1362,6 +1603,7 @@ export function initInput({ canvas, draw }){
     metricsSummary.hidden = true;
   }
   updateTelemetryInspector(null);
+  refreshScenarioManifest(false);
 
   function applyZoom(factor, anchor){
     const view = getViewState();

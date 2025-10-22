@@ -28,10 +28,23 @@
             <button class="btn" id="fastStep" type="button">⏩ Step ×10</button>
             <button class="btn" id="toggleRecorder" type="button">📼 Recorder Off</button>
             <button class="btn" id="seedWarm" type="button">🔥 Warm Grid</button>
+            <button class="btn" id="scenarioDiagToggle" type="button">🩺 Scenario Log</button>
             <label class="speed-label" for="simSpeed">Speed ×
               <input class="slider speed-slider" id="simSpeed" type="range" min="1" max="10" step="1" value="1">
               <span class="kbd" id="simSpeedVal">1</span>
             </label>
+          </div>
+
+          <div class="scenario-loader" id="scenarioLoader">
+            <label class="scenario-label" for="scenarioSelect">Scenario</label>
+            <div class="scenario-row">
+              <select class="scenario-select" id="scenarioSelect">
+                <option value="" data-placeholder="true">(Select scenario)</option>
+              </select>
+              <button class="btn" id="scenarioRefresh" type="button" title="Refresh scenario list">↻</button>
+              <button class="btn" id="scenarioLoad" type="button">Load</button>
+            </div>
+            <div class="small" id="scenarioStatusText" style="min-height:1.2em"></div>
           </div>
 
           <!-- Brush palette (tap to select) -->

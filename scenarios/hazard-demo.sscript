@@ -1,0 +1,20 @@
+let nextIgnite = 30;
+
+fn onInit(seed) {
+  call logDebug("scenario", "hazard-demo onInit");
+}
+
+fn onTick(frame, dt) {
+  if (frame >= nextIgnite) {
+    let counter = 0;
+    while (counter < 10) {
+      let spot = call randTile("open");
+      if (spot != -1) {
+        call ignite(spot, 0.6);
+      }
+      counter = counter + 1;
+    }
+    
+    nextIgnite = frame + 45;
+  }
+}

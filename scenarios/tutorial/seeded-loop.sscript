@@ -1,0 +1,13 @@
+let tickCount = 0;
+
+fn onInit(seed) {
+  tickCount = 0;
+  call logDebug("tutorial", seed);
+}
+
+fn onTick(frame, dt) {
+  tickCount = tickCount + 1;
+  if (tickCount % 120 == 0) {
+    schedule(10, "onTick");
+  }
+}

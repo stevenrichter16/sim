@@ -1,0 +1,17 @@
+let nextAgentSpawn = 100;
+
+fn onInit(seed) {
+  call logDebug("scenario", "agent-spawn onInit");
+}
+
+fn onTick(frame, dt) {
+  if (frame >= nextAgentSpawn) {
+    let counter = 0;
+    while (counter < 3) {
+      spawnAgent("A", MODE_CALM);
+      counter = counter + 1;
+    }
+    
+    nextAgentSpawn = frame + 100;
+  }
+}

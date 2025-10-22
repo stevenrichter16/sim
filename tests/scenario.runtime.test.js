@@ -157,4 +157,91 @@ describe('Scenario Runtime Integration Module', () => {
     expect(captured).toHaveLength(1);
     expect(captured[0]).toBeCloseTo(0.42);
   });
+
+  it('invokes agent and effect natives through the host', async () => {
+    const compiled = await compileScenario(`
+      fn onTick(frame, dt) {
+        call agentCount(0);
+        call agentTile(101);
+        call agentIds();
+        call emitEffect("flash", 10, 5);
+      }
+    `);
+
+    const agentCount = vi.fn(() => ({ ok: true, value: 3 }));
+    const agentTile = vi.fn(() => ({ ok: true, value: 42 }));
+    const agentIds = vi.fn(() => ({ ok: true, value: [1, 2, 3] }));
+    const emitEffect = vi.fn(() => ({ ok: true, value: null }));
+
+    const runtime = createScenarioRuntime({
+      compiled,
+      host: {
+        agentCount,
+        agentTile,
+        agentIds,
+        emitEffect,
+      },
+    });
+
+    const result = runtime.tick(5, 0.1);
+
+    expect(result.status).toBe('ok');
+    expect(agentCount).toHaveBeenCalledTimes(1);
+    expect(agentCount).toHaveBeenCalledWith(0, expect.objectContaining({ tick: 5 }));
+    expect(agentTile).toHaveBeenCalledWith(101, expect.objectContaining({ tick: 5 }));
+    expect(agentIds).toHaveBeenCalledTimes(1);
+    const [effectType, ex, ey, effectMeta] = emitEffect.mock.calls[0];
+    expect(effectType).toBe('flash');
+    expect(ex).toBe(10);
+    expect(ey).toBe(5);
+    expect(effectMeta).toEqual(expect.objectContaining({ tick: 5 }));
+  });
+
+  it('enforces agent.read capability for agentIds', async () => {
+    const compiled = await compileScenario(`
+      fn onTick(frame, dt) {
+        call agentIds();
+      }
+    `);
+
+    const diagnostics = [];
+    const runtime = createScenarioRuntime({
+      compiled,
+      diagnostics: { log: (event) => diagnostics.push(event) },
+      host: {
+        agentIds: () => ({ ok: true, value: [] }),
+      },
+      capabilities: ['effects.emit'],
+    });
+
+    const result = runtime.tick(0, 0.1);
+    expect(result.status).toBe('error');
+    const last = diagnostics[diagnostics.length - 1];
+    expect(last.type).toBe('watchdog');
+    expect(last.message).toContain('agent.read');
+  });
+
+  it('enforces effects.emit capability for emitEffect', async () => {
+    const compiled = await compileScenario(`
+      fn onTick(frame, dt) {
+        call emitEffect("flash", 1, 2);
+      }
+    `);
+
+    const diagnostics = [];
+    const runtime = createScenarioRuntime({
+      compiled,
+      diagnostics: { log: (event) => diagnostics.push(event) },
+      host: {
+        emitEffect: () => ({ ok: true, value: null }),
+      },
+      capabilities: ['agent.read'],
+    });
+
+    const result = runtime.tick(0, 0.1);
+    expect(result.status).toBe('error');
+    const last = diagnostics[diagnostics.length - 1];
+    expect(last.type).toBe('watchdog');
+    expect(last.message).toContain('effects.emit');
+  });
 });

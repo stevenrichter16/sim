@@ -1,0 +1,7 @@
+{
+  "name": "tutorial-loop",
+  "capabilities": [
+    "runtime.schedule",
+    "diag.write"
+  ]
+}

@@ -172,10 +172,12 @@ Limits:
 | `spawnAgent`         | `factionId`, `mode`, `tileIdx`      | Spawns NPC if tile open; returns agent id or -1. |
 | `switchFaction`      | `agentId`, `newFactionId`           | Retargets existing agent (with affinity validation). |
 | `agentTile`          | `agentId`                           | Returns tile index or -1 using the agent handle map. |
+| `agentCount`         | `factionId?`                        | Returns active agent count, optionally filtered by faction. |
+| `agentIds`           | `filterSpec`                        | Returns filtered agent IDs (scenario-owned filter supported). |
 | `tileField`          | `tileIdx`, `fieldName`              | Returns scalar pheromone (0..1). |
 | `fieldWrite`         | `tileIdx`, `fieldName`, `value`     | Writes pheromone with clamp + diffusion seed. |
 | `schedule`           | `delayTicks`, `codeId`              | Posts a deferred callback identified by compiled label. |
-| `emitEffect`         | `type`, `x`, `y`                    | Bridges to `emitParticleBurst` / `emitFlash`. |
+| `emitEffect`         | `type`, `x`, `y`, `options?`        | Bridges to `emitParticleBurst` / `emitFlash`. |
 | `logDebug`           | `code`, `value`                     | Sends value to diagnostics overlay.
 
 Each call validates arguments and enforces per-tick quotas to keep scenarios bounded.

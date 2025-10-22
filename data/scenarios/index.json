@@ -1,0 +1,38 @@
+{
+  "generatedAt": "2025-10-22T00:09:29.888Z",
+  "scenarios": [
+    {
+      "key": "hazard-demo",
+      "name": "hazard-demo",
+      "file": "hazard-demo.json",
+      "source": "hazard-demo.sscript",
+      "capabilities": [
+        "fire.write",
+        "rng.use",
+        "runtime.schedule",
+        "diag.write"
+      ]
+    },
+    {
+      "key": "tutorial/agent-effects",
+      "name": "tutorial-agent-effects",
+      "file": "tutorial/agent-effects.json",
+      "source": "tutorial/agent-effects.sscript",
+      "capabilities": [
+        "agent.read",
+        "effects.emit",
+        "diag.write"
+      ]
+    },
+    {
+      "key": "tutorial/seeded-loop",
+      "name": "tutorial-loop",
+      "file": "tutorial/seeded-loop.json",
+      "source": "tutorial/seeded-loop.sscript",
+      "capabilities": [
+        "runtime.schedule",
+        "diag.write"
+      ]
+    }
+  ]
+}

@@ -7,10 +7,12 @@ export const DEFAULT_CAPABILITIES = [
   'fire.write',
   'agent.spawn',
   'agent.switch',
+  'agent.read',
   'field.read',
   'field.write',
   'rng.use',
   'runtime.schedule',
+  'effects.emit',
   'diag.write',
 ];
 
@@ -119,9 +121,13 @@ function createDefaultNatives(host, logger, rngApi) {
   const igniteFn = safeHost.ignite ?? safeHost.scenarioIgnite ?? null;
   const spawnFn = safeHost.spawnAgent ?? safeHost.spawnNPC ?? null;
   const switchFactionFn = safeHost.switchFaction ?? null;
+  const agentTileFn = safeHost.agentTile ?? safeHost.scenarioAgentTile ?? null;
+  const agentCountFn = safeHost.agentCount ?? safeHost.scenarioAgentCount ?? null;
+  const agentIdsFn = safeHost.agentIds ?? safeHost.scenarioAgentIds ?? null;
   const fieldReadFn = safeHost.field ?? safeHost.fieldRead ?? null;
   const fieldWriteFn = safeHost.fieldWrite ?? null;
   const randTileFn = safeHost.randTile ?? null;
+  const emitEffectFn = safeHost.emitEffect ?? safeHost.scenarioEmitEffect ?? null;
 
   const { random, range } = resolveRng(rngApi);
 
@@ -134,6 +140,15 @@ function createDefaultNatives(host, logger, rngApi) {
     ),
     switchFaction: makeHostNative('switchFaction', 'agent.switch', ({ args, tick }) =>
       callHostNative('switchFaction', switchFactionFn, args, { tick }),
+    ),
+    agentTile: makeHostNative('agentTile', 'agent.read', ({ args, tick }) =>
+      callHostNative('agentTile', agentTileFn, args, { tick }),
+    ),
+    agentCount: makeHostNative('agentCount', 'agent.read', ({ args, tick }) =>
+      callHostNative('agentCount', agentCountFn, args, { tick }),
+    ),
+    agentIds: makeHostNative('agentIds', 'agent.read', ({ args, tick }) =>
+      callHostNative('agentIds', agentIdsFn, args, { tick }),
     ),
     field: makeHostNative('field', 'field.read', ({ args, tick }) =>
       callHostNative('field', fieldReadFn, args, { tick }),
@@ -148,6 +163,9 @@ function createDefaultNatives(host, logger, rngApi) {
     }),
     randTile: makeHostNative('randTile', 'rng.use', ({ args, tick }) =>
       callHostNative('randTile', randTileFn, args, { tick }),
+    ),
+    emitEffect: makeHostNative('emitEffect', 'effects.emit', ({ args, tick }) =>
+      callHostNative('emitEffect', emitEffectFn, args, { tick }),
     ),
     logDebug: makeHostNative('logDebug', 'diag.write', ({ args, tick, span, chunk }) => {
       const [tag, value] = args;

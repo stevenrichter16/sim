@@ -1,0 +1,8 @@
+{
+  "name": "tutorial-agent-effects",
+  "capabilities": [
+    "agent.read",
+    "effects.emit",
+    "diag.write"
+  ]
+}

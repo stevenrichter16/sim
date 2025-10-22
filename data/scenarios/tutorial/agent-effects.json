@@ -1,0 +1,713 @@
+{
+  "name": "tutorial-agent-effects",
+  "capabilities": [
+    "agent.read",
+    "effects.emit",
+    "diag.write"
+  ],
+  "bytecode": {
+    "chunks": [
+      {
+        "name": "<init>",
+        "params": 0,
+        "span": {
+          "start": {
+            "index": 0,
+            "line": 1,
+            "column": 1
+          },
+          "end": {
+            "index": 312,
+            "line": 17,
+            "column": 2
+          }
+        },
+        "instructions": [
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 16,
+                "line": 1,
+                "column": 17
+              },
+              "end": {
+                "index": 17,
+                "line": 1,
+                "column": 18
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "index": 18,
+                "line": 1,
+                "column": 19
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "index": 18,
+                "line": 1,
+                "column": 19
+              }
+            }
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "index": 312,
+                "line": 17,
+                "column": 2
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "onInit",
+        "params": 1,
+        "span": {
+          "start": {
+            "index": 20,
+            "line": 3,
+            "column": 1
+          },
+          "end": {
+            "index": 108,
+            "line": 6,
+            "column": 2
+          }
+        },
+        "instructions": [
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              1
+            ],
+            "span": {
+              "start": {
+                "index": 52,
+                "line": 4,
+                "column": 15
+              },
+              "end": {
+                "index": 53,
+                "line": 4,
+                "column": 16
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 40,
+                "line": 4,
+                "column": 3
+              },
+              "end": {
+                "index": 53,
+                "line": 4,
+                "column": 16
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 40,
+                "line": 4,
+                "column": 3
+              },
+              "end": {
+                "index": 54,
+                "line": 4,
+                "column": 17
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 71,
+                "line": 5,
+                "column": 17
+              },
+              "end": {
+                "index": 81,
+                "line": 5,
+                "column": 27
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              3
+            ],
+            "span": {
+              "start": {
+                "index": 83,
+                "line": 5,
+                "column": 29
+              },
+              "end": {
+                "index": 104,
+                "line": 5,
+                "column": 50
+              }
+            }
+          },
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              0,
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 57,
+                "line": 5,
+                "column": 3
+              },
+              "end": {
+                "index": 105,
+                "line": 5,
+                "column": 51
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 57,
+                "line": 5,
+                "column": 3
+              },
+              "end": {
+                "index": 106,
+                "line": 5,
+                "column": 52
+              }
+            }
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 20,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "index": 108,
+                "line": 6,
+                "column": 2
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "onTick",
+        "params": 2,
+        "span": {
+          "start": {
+            "index": 110,
+            "line": 8,
+            "column": 1
+          },
+          "end": {
+            "index": 312,
+            "line": 17,
+            "column": 2
+          }
+        },
+        "instructions": [
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              1,
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 152,
+                "line": 9,
+                "column": 20
+              },
+              "end": {
+                "index": 169,
+                "line": 9,
+                "column": 37
+              }
+            }
+          },
+          {
+            "op": "STORE_LOCAL",
+            "args": [
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 135,
+                "line": 9,
+                "column": 3
+              },
+              "end": {
+                "index": 170,
+                "line": 9,
+                "column": 38
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 135,
+                "line": 9,
+                "column": 3
+              },
+              "end": {
+                "index": 170,
+                "line": 9,
+                "column": 38
+              }
+            }
+          },
+          {
+            "op": "LOAD_LOCAL",
+            "args": [
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 177,
+                "line": 10,
+                "column": 7
+              },
+              "end": {
+                "index": 187,
+                "line": 10,
+                "column": 17
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              4
+            ],
+            "span": {
+              "start": {
+                "index": 191,
+                "line": 10,
+                "column": 21
+              },
+              "end": {
+                "index": 192,
+                "line": 10,
+                "column": 22
+              }
+            }
+          },
+          {
+            "op": "CMP_EQ",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 177,
+                "line": 10,
+                "column": 7
+              },
+              "end": {
+                "index": 192,
+                "line": 10,
+                "column": 22
+              }
+            }
+          },
+          {
+            "op": "JMPF",
+            "args": [
+              8
+            ],
+            "span": {
+              "start": {
+                "index": 177,
+                "line": 10,
+                "column": 7
+              },
+              "end": {
+                "index": 192,
+                "line": 10,
+                "column": 22
+              }
+            }
+          },
+          {
+            "op": "RET",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 200,
+                "line": 11,
+                "column": 5
+              },
+              "end": {
+                "index": 207,
+                "line": 11,
+                "column": 12
+              }
+            }
+          },
+          {
+            "op": "LOAD_LOCAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 218,
+                "line": 13,
+                "column": 7
+              },
+              "end": {
+                "index": 223,
+                "line": 13,
+                "column": 12
+              }
+            }
+          },
+          {
+            "op": "LOAD_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 227,
+                "line": 13,
+                "column": 16
+              },
+              "end": {
+                "index": 236,
+                "line": 13,
+                "column": 25
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              5
+            ],
+            "span": {
+              "start": {
+                "index": 239,
+                "line": 13,
+                "column": 28
+              },
+              "end": {
+                "index": 242,
+                "line": 13,
+                "column": 31
+              }
+            }
+          },
+          {
+            "op": "ADD",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 227,
+                "line": 13,
+                "column": 16
+              },
+              "end": {
+                "index": 242,
+                "line": 13,
+                "column": 31
+              }
+            }
+          },
+          {
+            "op": "CMP_GE",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 218,
+                "line": 13,
+                "column": 7
+              },
+              "end": {
+                "index": 242,
+                "line": 13,
+                "column": 31
+              }
+            }
+          },
+          {
+            "op": "JMPF",
+            "args": [
+              22
+            ],
+            "span": {
+              "start": {
+                "index": 218,
+                "line": 13,
+                "column": 7
+              },
+              "end": {
+                "index": 242,
+                "line": 13,
+                "column": 31
+              }
+            }
+          },
+          {
+            "op": "LOAD_LOCAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 262,
+                "line": 14,
+                "column": 17
+              },
+              "end": {
+                "index": 267,
+                "line": 14,
+                "column": 22
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 250,
+                "line": 14,
+                "column": 5
+              },
+              "end": {
+                "index": 267,
+                "line": 14,
+                "column": 22
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 250,
+                "line": 14,
+                "column": 5
+              },
+              "end": {
+                "index": 268,
+                "line": 14,
+                "column": 23
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              6
+            ],
+            "span": {
+              "start": {
+                "index": 289,
+                "line": 15,
+                "column": 21
+              },
+              "end": {
+                "index": 296,
+                "line": 15,
+                "column": 28
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              7
+            ],
+            "span": {
+              "start": {
+                "index": 298,
+                "line": 15,
+                "column": 30
+              },
+              "end": {
+                "index": 300,
+                "line": 15,
+                "column": 32
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              8
+            ],
+            "span": {
+              "start": {
+                "index": 302,
+                "line": 15,
+                "column": 34
+              },
+              "end": {
+                "index": 304,
+                "line": 15,
+                "column": 36
+              }
+            }
+          },
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              2,
+              3
+            ],
+            "span": {
+              "start": {
+                "index": 273,
+                "line": 15,
+                "column": 5
+              },
+              "end": {
+                "index": 305,
+                "line": 15,
+                "column": 37
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 273,
+                "line": 15,
+                "column": 5
+              },
+              "end": {
+                "index": 306,
+                "line": 15,
+                "column": 38
+              }
+            }
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 110,
+                "line": 8,
+                "column": 1
+              },
+              "end": {
+                "index": 312,
+                "line": 17,
+                "column": 2
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "constants": [
+      0,
+      0,
+      "tutorial",
+      "agent effects ready",
+      0,
+      120,
+      "flash",
+      40,
+      20
+    ],
+    "globals": [
+      [
+        "lastPulse",
+        0
+      ]
+    ],
+    "nativeIds": [
+      [
+        "logDebug",
+        0
+      ],
+      [
+        "agentCount",
+        1
+      ],
+      [
+        "emitEffect",
+        2
+      ]
+    ],
+    "entryPoints": {
+      "onInit": "onInit",
+      "onTick": "onTick"
+    }
+  },
+  "meta": {
+    "source": "agent-effects.sscript",
+    "relativeSource": "tutorial/agent-effects.sscript",
+    "generatedAt": "2025-10-22T00:09:29.884Z"
+  }
+}

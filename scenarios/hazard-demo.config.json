@@ -1,0 +1,9 @@
+{
+  "name": "hazard-demo",
+  "capabilities": [
+    "fire.write",
+    "rng.use",
+    "runtime.schedule",
+    "diag.write"
+  ]
+}

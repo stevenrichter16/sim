@@ -1,0 +1,584 @@
+{
+  "name": "tutorial-loop",
+  "capabilities": [
+    "runtime.schedule",
+    "diag.write"
+  ],
+  "bytecode": {
+    "chunks": [
+      {
+        "name": "<init>",
+        "params": 0,
+        "span": {
+          "start": {
+            "index": 0,
+            "line": 1,
+            "column": 1
+          },
+          "end": {
+            "index": 208,
+            "line": 13,
+            "column": 2
+          }
+        },
+        "instructions": [
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 16,
+                "line": 1,
+                "column": 17
+              },
+              "end": {
+                "index": 17,
+                "line": 1,
+                "column": 18
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "index": 18,
+                "line": 1,
+                "column": 19
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "index": 18,
+                "line": 1,
+                "column": 19
+              }
+            }
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "index": 208,
+                "line": 13,
+                "column": 2
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "onInit",
+        "params": 1,
+        "span": {
+          "start": {
+            "index": 20,
+            "line": 3,
+            "column": 1
+          },
+          "end": {
+            "index": 91,
+            "line": 6,
+            "column": 2
+          }
+        },
+        "instructions": [
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              1
+            ],
+            "span": {
+              "start": {
+                "index": 52,
+                "line": 4,
+                "column": 15
+              },
+              "end": {
+                "index": 53,
+                "line": 4,
+                "column": 16
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 40,
+                "line": 4,
+                "column": 3
+              },
+              "end": {
+                "index": 53,
+                "line": 4,
+                "column": 16
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 40,
+                "line": 4,
+                "column": 3
+              },
+              "end": {
+                "index": 54,
+                "line": 4,
+                "column": 17
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 71,
+                "line": 5,
+                "column": 17
+              },
+              "end": {
+                "index": 81,
+                "line": 5,
+                "column": 27
+              }
+            }
+          },
+          {
+            "op": "LOAD_LOCAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 83,
+                "line": 5,
+                "column": 29
+              },
+              "end": {
+                "index": 87,
+                "line": 5,
+                "column": 33
+              }
+            }
+          },
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              0,
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 57,
+                "line": 5,
+                "column": 3
+              },
+              "end": {
+                "index": 88,
+                "line": 5,
+                "column": 34
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 57,
+                "line": 5,
+                "column": 3
+              },
+              "end": {
+                "index": 89,
+                "line": 5,
+                "column": 35
+              }
+            }
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 20,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "index": 91,
+                "line": 6,
+                "column": 2
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "onTick",
+        "params": 2,
+        "span": {
+          "start": {
+            "index": 93,
+            "line": 8,
+            "column": 1
+          },
+          "end": {
+            "index": 208,
+            "line": 13,
+            "column": 2
+          }
+        },
+        "instructions": [
+          {
+            "op": "LOAD_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 130,
+                "line": 9,
+                "column": 15
+              },
+              "end": {
+                "index": 139,
+                "line": 9,
+                "column": 24
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              3
+            ],
+            "span": {
+              "start": {
+                "index": 142,
+                "line": 9,
+                "column": 27
+              },
+              "end": {
+                "index": 143,
+                "line": 9,
+                "column": 28
+              }
+            }
+          },
+          {
+            "op": "ADD",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 130,
+                "line": 9,
+                "column": 15
+              },
+              "end": {
+                "index": 143,
+                "line": 9,
+                "column": 28
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 118,
+                "line": 9,
+                "column": 3
+              },
+              "end": {
+                "index": 143,
+                "line": 9,
+                "column": 28
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 118,
+                "line": 9,
+                "column": 3
+              },
+              "end": {
+                "index": 144,
+                "line": 9,
+                "column": 29
+              }
+            }
+          },
+          {
+            "op": "LOAD_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 151,
+                "line": 10,
+                "column": 7
+              },
+              "end": {
+                "index": 160,
+                "line": 10,
+                "column": 16
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              4
+            ],
+            "span": {
+              "start": {
+                "index": 163,
+                "line": 10,
+                "column": 19
+              },
+              "end": {
+                "index": 166,
+                "line": 10,
+                "column": 22
+              }
+            }
+          },
+          {
+            "op": "MOD",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 151,
+                "line": 10,
+                "column": 7
+              },
+              "end": {
+                "index": 166,
+                "line": 10,
+                "column": 22
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              5
+            ],
+            "span": {
+              "start": {
+                "index": 170,
+                "line": 10,
+                "column": 26
+              },
+              "end": {
+                "index": 171,
+                "line": 10,
+                "column": 27
+              }
+            }
+          },
+          {
+            "op": "CMP_EQ",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 151,
+                "line": 10,
+                "column": 7
+              },
+              "end": {
+                "index": 171,
+                "line": 10,
+                "column": 27
+              }
+            }
+          },
+          {
+            "op": "JMPF",
+            "args": [
+              15
+            ],
+            "span": {
+              "start": {
+                "index": 151,
+                "line": 10,
+                "column": 7
+              },
+              "end": {
+                "index": 171,
+                "line": 10,
+                "column": 27
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              6
+            ],
+            "span": {
+              "start": {
+                "index": 188,
+                "line": 11,
+                "column": 14
+              },
+              "end": {
+                "index": 190,
+                "line": 11,
+                "column": 16
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              7
+            ],
+            "span": {
+              "start": {
+                "index": 192,
+                "line": 11,
+                "column": 18
+              },
+              "end": {
+                "index": 200,
+                "line": 11,
+                "column": 26
+              }
+            }
+          },
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              1,
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 179,
+                "line": 11,
+                "column": 5
+              },
+              "end": {
+                "index": 202,
+                "line": 11,
+                "column": 28
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 179,
+                "line": 11,
+                "column": 5
+              },
+              "end": {
+                "index": 202,
+                "line": 11,
+                "column": 28
+              }
+            }
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 93,
+                "line": 8,
+                "column": 1
+              },
+              "end": {
+                "index": 208,
+                "line": 13,
+                "column": 2
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "constants": [
+      0,
+      0,
+      "tutorial",
+      1,
+      120,
+      0,
+      10,
+      "onTick"
+    ],
+    "globals": [
+      [
+        "tickCount",
+        0
+      ]
+    ],
+    "nativeIds": [
+      [
+        "logDebug",
+        0
+      ],
+      [
+        "schedule",
+        1
+      ]
+    ],
+    "entryPoints": {
+      "onInit": "onInit",
+      "onTick": "onTick"
+    }
+  },
+  "meta": {
+    "source": "seeded-loop.sscript",
+    "relativeSource": "tutorial/seeded-loop.sscript",
+    "generatedAt": "2025-10-22T00:09:29.887Z"
+  }
+}

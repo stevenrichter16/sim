@@ -30,6 +30,8 @@ function parseArgs(argv) {
   return options;
 }
 
+const KNOWN_CAPABILITIES = new Set(DEFAULT_CAPABILITIES);
+
 function isScriptFile(filename) {
   return filename.endsWith('.sscript') || filename.endsWith('.scenario');
 }
@@ -64,11 +66,24 @@ async function compileScript(sourcePath, options) {
   const bytecode = serialiseCompiledProgram(compiled);
   const config = await loadConfig(sourcePath);
   const name = config.name ?? path.basename(sourcePath, path.extname(sourcePath));
-  const capabilities = Array.isArray(config.capabilities) && config.capabilities.length > 0
-    ? [...config.capabilities]
+  const capabilitiesFromConfig = Array.isArray(config.capabilities) ? config.capabilities.filter((cap) => typeof cap === 'string' && cap.trim().length > 0) : null;
+  const capabilities = capabilitiesFromConfig && capabilitiesFromConfig.length > 0
+    ? [...capabilitiesFromConfig]
     : [...DEFAULT_CAPABILITIES];
+  const strictCapabilities = process.env.CI || process.env.SCENARIO_STRICT_CAPABILITIES === 'true';
+  if (capabilitiesFromConfig && capabilitiesFromConfig.length > 0) {
+    for (const cap of capabilitiesFromConfig) {
+      if (!KNOWN_CAPABILITIES.has(cap)) {
+        const message = `[compile-scripts] ${path.relative(options.src, sourcePath)}: unknown capability "${cap}"`;
+        if (strictCapabilities) {
+          throw new Error(message);
+        }
+        console.warn(message);
+      }
+    }
+  }
   const sourceName = path.basename(sourcePath);
-  const relativeSource = path.relative(options.src, sourcePath);
+  const relativeSource = path.relative(options.src, sourcePath).replace(/\\/g, '/');
   const asset = {
     name,
     capabilities,
@@ -80,10 +95,33 @@ async function compileScript(sourcePath, options) {
     },
   };
 
-  const outFile = path.join(options.out, `${path.basename(sourcePath, path.extname(sourcePath))}.json`);
+  const relativeFile = relativeSource.replace(/\.(sscript|scenario)$/i, '.json');
+  const outFile = path.join(options.out, relativeFile);
   await ensureDir(path.dirname(outFile));
   await writeFile(outFile, `${JSON.stringify(asset, null, 2)}\n`, 'utf8');
-  return outFile;
+  return {
+    outputFile: outFile,
+    manifestEntry: {
+      key: relativeFile.replace(/\.json$/i, ''),
+      name,
+      file: relativeFile,
+      source: relativeSource,
+      capabilities,
+    },
+  };
+}
+
+async function collectScripts(dir, scripts = []) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await collectScripts(fullPath, scripts);
+    } else if (entry.isFile() && isScriptFile(entry.name)) {
+      scripts.push(fullPath);
+    }
+  }
+  return scripts;
 }
 
 async function main() {
@@ -106,10 +144,7 @@ async function main() {
     return;
   }
 
-  const entries = await readdir(options.src, { withFileTypes: true });
-  const scripts = entries
-    .filter((entry) => entry.isFile() && isScriptFile(entry.name))
-    .map((entry) => path.join(options.src, entry.name));
+  const scripts = await collectScripts(options.src);
 
   if (scripts.length === 0) {
     console.warn(`No .sscript or .scenario files found in ${options.src}.`);
@@ -117,14 +152,26 @@ async function main() {
   }
 
   let failure = false;
+  const manifestEntries = [];
   for (const scriptPath of scripts) {
     try {
-      const outputFile = await compileScript(scriptPath, options);
+      const { outputFile, manifestEntry } = await compileScript(scriptPath, options);
+      manifestEntries.push(manifestEntry);
       console.log(`Compiled ${path.basename(scriptPath)} → ${path.relative(workspaceRoot, outputFile)}`);
     } catch (error) {
       failure = true;
       console.error(error.message);
     }
+  }
+
+  if (manifestEntries.length > 0) {
+    const indexPath = path.join(options.out, 'index.json');
+    await ensureDir(path.dirname(indexPath));
+    const manifest = {
+      generatedAt: new Date().toISOString(),
+      scenarios: manifestEntries.sort((a, b) => a.name.localeCompare(b.name)),
+    };
+    await writeFile(indexPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   }
 
   if (failure) {

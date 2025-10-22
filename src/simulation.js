@@ -1643,6 +1643,91 @@ export function scenarioSwitchFaction(agentId, factionRef){
   return { ok: true, agentId, factionId: faction.id };
 }
 
+export function scenarioAgentTile(agentId){
+  const agent = getAgentById(agentId);
+  if(!agent){
+    return { ok: false, error: 'agent-not-found', agentId };
+  }
+  return { ok: true, value: idx(agent.x, agent.y) };
+}
+
+export function scenarioAgentCount(factionRef){
+  let factionId = null;
+  if(factionRef !== undefined){
+    const faction = normalizeFaction(factionRef);
+    if(!faction){
+      return { ok: false, error: 'invalid-faction', faction: factionRef };
+    }
+    factionId = faction.id;
+  }
+  let count = 0;
+  for(const agent of world.agents){
+    if(!agent) continue;
+    if(factionId != null && agent.factionId !== factionId) continue;
+    count += 1;
+  }
+  return { ok: true, value: count };
+}
+
+function normaliseModeFilter(value){
+  if(value == null) return null;
+  if(typeof value === 'number' && Number.isFinite(value)) return value;
+  const key = String(value).toUpperCase();
+  return Object.prototype.hasOwnProperty.call(Mode, key) ? Mode[key] : null;
+}
+
+export function scenarioAgentIds(filterSpec = {}){
+  const filter = (filterSpec && typeof filterSpec === 'object') ? filterSpec : {};
+  let factionId = null;
+  if(filter.faction !== undefined || filter.factionId !== undefined){
+    const faction = normalizeFaction(filter.faction ?? filter.factionId);
+    if(!faction){
+      return { ok: false, error: 'invalid-faction', faction: filter.faction ?? filter.factionId };
+    }
+    factionId = faction.id;
+  }
+  const modeFilter = filter.mode !== undefined ? normaliseModeFilter(filter.mode) : null;
+  if(filter.mode !== undefined && modeFilter == null){
+    return { ok: false, error: 'invalid-mode', mode: filter.mode };
+  }
+  const onlyScenarioOwned = filter.scenarioOwned === true;
+  const limit = Math.max(1, Math.min(Number.isFinite(filter.limit) ? filter.limit : 64, 256));
+
+  const ids = [];
+  for(const agent of world.agents){
+    if(!agent) continue;
+    if(factionId != null && agent.factionId !== factionId) continue;
+    if(modeFilter != null && agent.role !== modeFilter && agent.S?.mode !== modeFilter) continue;
+    if(onlyScenarioOwned && !world.scenarioAgents?.has(agent.id)) continue;
+    ids.push(agent.id);
+    if(ids.length >= limit) break;
+  }
+  return { ok: true, value: ids };
+}
+
+export function scenarioEmitEffect(effectType, x, y, options = {}){
+  const kind = typeof effectType === 'string' ? effectType.toLowerCase() : 'burst';
+  const nx = Number(x);
+  const ny = Number(y);
+  if(!Number.isFinite(nx) || !Number.isFinite(ny)){
+    return { ok: false, error: 'invalid-coordinates' };
+  }
+  const opts = (options && typeof options === 'object') ? options : {};
+  if(kind === 'flash'){
+    const radius = Number.isFinite(opts.radius) ? Math.max(0, opts.radius) : 1;
+    const life = Number.isFinite(opts.life) ? Math.max(1, opts.life) : 24;
+    const colorStart = typeof opts.colorStart === 'string' ? opts.colorStart : '#ff4bf0';
+    const colorEnd = typeof opts.colorEnd === 'string' ? opts.colorEnd : '#c9c9d6';
+    emitFlash(nx, ny, { radius, life, colorStart, colorEnd });
+  } else {
+    const burstType = typeof opts.type === 'string' ? opts.type : 'spark';
+    const intensityValue = Number(opts.intensity);
+    const intensity = Number.isFinite(intensityValue) ? clamp01(intensityValue) : 1;
+    emitParticleBurst(nx, ny, { type: burstType, intensity });
+  }
+  return { ok: true, value: null };
+}
+
 function scenarioTileMatchesFilter(tileIdx, filterKey){
   if(tileIdx == null || tileIdx < 0 || tileIdx >= world.heat.length){
     return false;
@@ -1792,9 +1877,13 @@ let acidBasePairs = new Set();
       ignite: (tileIdx, intensity, meta) => scenarioIgnite(tileIdx, intensity),
       spawnAgent: (factionRef, mode, tileIdx, meta) => scenarioSpawnAgentHost(factionRef, mode, tileIdx),
       switchFaction: (agentId, factionRef, meta) => scenarioSwitchFaction(agentId, factionRef),
+      agentTile: (agentId, meta) => scenarioAgentTile(agentId),
+      agentCount: (factionRef, meta) => scenarioAgentCount(factionRef),
+      agentIds: (filterSpec, meta) => scenarioAgentIds(filterSpec),
       field: (tileIdx, fieldName, meta) => scenarioReadField(tileIdx, fieldName),
       fieldWrite: (tileIdx, fieldName, value, meta) => scenarioWriteField(tileIdx, fieldName, value),
       randTile: (filterKey, meta) => scenarioRandTile(filterKey),
+      emitEffect: (effectType, x, y, options, meta) => scenarioEmitEffect(effectType, x, y, options),
     };
     return { ...baseHost, ...overrides };
   }
@@ -2298,6 +2387,11 @@ let acidBasePairs = new Set();
     },
     getScenarioDiagnostics(){
       return [...scenarioContext.diagnostics];
+    },
+    drainScenarioDiagnostics(){
+      const events = scenarioContext.diagnostics ? [...scenarioContext.diagnostics] : [];
+      scenarioContext.diagnostics = [];
+      return events;
     },
     getScenarioStatus(){
       if(!scenarioContext.runtime){
