@@ -1,4 +1,4 @@
-import { Mode } from './constants.js';
+import { Mode, DIRS4 } from './constants.js';
 import { world, idx, inBounds } from './state.js';
 import { baseStringFor } from './materials.js';
 
@@ -85,11 +85,16 @@ function createFactoryState(){
     orientation: 'east',
     nodes: new Map(),
     structures: new Map(),
+    jobs: [],
+    workers: [],
+    workerAgents: [],
+    nextWorkerId: 1,
     stats: {
       produced: Object.create(null),
       stored: Object.create(null),
       delivered: Object.create(null),
       constructorComplete: 0,
+      jobsCompleted: 0,
     },
   };
 }
@@ -153,7 +158,7 @@ function incrementCounter(target, key, amount = 1){
 function createStructure(kind, orientation){
   switch(kind){
     case FactoryKind.MINER:
-      return { kind, orientation, progress: 0, rate: MINER_RATE };
+      return { kind, orientation, progress: 0, rate: MINER_RATE, jobAssigned: false };
     case FactoryKind.BELT:
       return { kind, orientation, progress: 0, speed: BELT_SPEED, item: null };
     case FactoryKind.SMELTER:
@@ -246,12 +251,19 @@ function updateMiner(tileIdx, structure, factory){
     structure.progress = 0;
     return;
   }
-  structure.progress = Math.min(1, (structure.progress ?? 0) + (structure.rate ?? MINER_RATE));
-  if(structure.progress >= 1){
-    if(pushItemFrom(tileIdx, structure.orientation, FactoryItem.IRON_ORE, factory)){
-      incrementCounter(factory.stats.produced, FactoryItem.IRON_ORE, 1);
-      structure.progress = 0;
-    }
+  structure.active = true;
+  if(!structure.jobAssigned){
+    const target = neighborIndex(tileIdx, structure.orientation);
+    enqueueFactoryJob({
+      kind: 'mine',
+      tileIdx,
+      payload: {
+        duration: 3,
+        targetStructure: target,
+        sourceStructure: tileIdx,
+      },
+    });
+    structure.jobAssigned = true;
   }
 }
 
@@ -313,35 +325,41 @@ function updateSmelter(tileIdx, structure, factory){
 
 export function stepFactory(){
   const factory = ensureFactoryState();
-  if(!factory.structures.size) return;
-  const beltEntries = [];
-  for(const entry of factory.structures.entries()){
-    if(entry[1]?.kind === FactoryKind.BELT){
-      beltEntries.push(entry);
+  if(factory.structures.size){
+    const beltEntries = [];
+    for(const entry of factory.structures.entries()){
+      if(entry[1]?.kind === FactoryKind.BELT){
+        beltEntries.push(entry);
+      }
+    }
+    for(const [tileIdx, structure] of beltEntries){
+      updateBelt(tileIdx, structure, factory);
+    }
+    for(const [tileIdx, structure] of factory.structures.entries()){
+      switch(structure.kind){
+        case FactoryKind.MINER:
+          updateMiner(tileIdx, structure, factory);
+          break;
+        case FactoryKind.SMELTER:
+          updateSmelter(tileIdx, structure, factory);
+          break;
+        case FactoryKind.CONSTRUCTOR:
+          updateConstructor(tileIdx, structure, factory);
+          break;
+        default:
+          break;
+      }
     }
   }
-  for(const [tileIdx, structure] of beltEntries){
-    updateBelt(tileIdx, structure, factory);
-  }
-  for(const [tileIdx, structure] of factory.structures.entries()){
-    switch(structure.kind){
-      case FactoryKind.MINER:
-        updateMiner(tileIdx, structure, factory);
-        break;
-      case FactoryKind.SMELTER:
-        updateSmelter(tileIdx, structure, factory);
-        break;
-      case FactoryKind.CONSTRUCTOR:
-        updateConstructor(tileIdx, structure, factory);
-        break;
-      default:
-        break;
-    }
-  }
+  stepFactoryWorkers();
 }
 
 export function isFactoryBrush(brush){
   return Object.prototype.hasOwnProperty.call(BRUSH_SPEC, brush);
+}
+
+export function getFactoryBrushKeys(){
+  return Object.keys(BRUSH_SPEC);
 }
 
 export function placeFactoryStructure(tileIdx, brush, { orientation } = {}){
@@ -421,6 +439,42 @@ export function getFactoryNodes(){
   return ensureFactoryState().nodes;
 }
 
+export function getFactoryJobQueue(){
+  const factory = ensureFactoryState();
+  return factory.jobs;
+}
+
+function normaliseJobPayload(job){
+  if(!job || typeof job !== 'object') return null;
+  const kind = typeof job.kind === 'string' ? job.kind : null;
+  if(!kind) return null;
+  return {
+    kind,
+    tileIdx: Number.isFinite(job.tileIdx) ? job.tileIdx | 0 : null,
+    payload: job.payload ?? null,
+  };
+}
+
+export function enqueueFactoryJob(job){
+  const payload = normaliseJobPayload(job);
+  if(!payload) return false;
+  const factory = ensureFactoryState();
+  factory.jobs.push(payload);
+  return true;
+}
+
+export function peekFactoryJob(){
+  const factory = ensureFactoryState();
+  if(!factory.jobs.length) return null;
+  return factory.jobs[0];
+}
+
+export function popFactoryJob(){
+  const factory = ensureFactoryState();
+  if(!factory.jobs.length) return null;
+  return factory.jobs.shift() ?? null;
+}
+
 export function getFactoryStatus(){
   const factory = ensureFactoryState();
   const produced = factory.stats.produced || {};
@@ -441,6 +495,7 @@ export function getFactoryStatus(){
     nodes: factory.nodes.size,
     structures: factory.structures.size,
     constructorComplete: factory.stats.constructorComplete ?? (stored[FactoryItem.PLATE] ?? 0),
+    jobsCompleted: factory.stats.jobsCompleted ?? 0,
   };
 }
 
@@ -480,6 +535,211 @@ export function isFactoryMode(mode){
   return FACTORY_MODE_SET.has(mode);
 }
 
-export function getFactoryBrushKeys(){
-  return Object.keys(BRUSH_SPEC);
+let workerSpawner = null;
+
+export function setFactoryWorkerSpawner(fn){
+  workerSpawner = typeof fn === 'function' ? fn : null;
+}
+
+export function getFactoryWorkers(){
+  const factory = ensureFactoryState();
+  return {
+    workers: factory.workers,
+    agents: factory.workerAgents ?? [],
+  };
+}
+
+export function spawnFactoryWorker(tileIdx){
+  const factory = ensureFactoryState();
+  const id = (factory.nextWorkerId = ((factory.nextWorkerId ?? 1) + 1));
+  const agent = instantiateWorkerAgent(tileIdx);
+  const worker = {
+    id,
+    tileIdx: Number.isFinite(tileIdx) ? tileIdx | 0 : null,
+    state: 'idle',
+    job: null,
+    dwell: 0,
+    carriedItem: null,
+    pendingDuration: 0,
+    path: [],
+    agentId: agent?.id ?? null,
+  };
+  factory.workers.push(worker);
+  if(agent){
+    if(!factory.workerAgents){
+      factory.workerAgents = [];
+    }
+    factory.workerAgents.push({ workerId: id, agent });
+  }
+  if(worker.tileIdx != null){
+    setWorkerPosition(worker, worker.tileIdx);
+  }
+  return { ok: true, worker };
+}
+
+function assignJobToWorker(worker, factory){
+  if(worker.state !== 'idle') return;
+  const job = popFactoryJob();
+  if(!job) return;
+  worker.job = job;
+  const payload = job.payload ?? {};
+  const duration = Number.isFinite(payload.duration) && payload.duration > 0 ? Math.floor(payload.duration) : 1;
+  worker.pendingDuration = duration;
+  worker.path = [];
+  if(job.tileIdx != null){
+    const startIdx = worker.tileIdx ?? job.tileIdx;
+    const path = findFactoryPath(startIdx, job.tileIdx);
+    if(path == null){
+      enqueueFactoryJob(job);
+      worker.job = null;
+      worker.pendingDuration = 0;
+      return;
+    }
+    if(path.length){
+      worker.path = path;
+      worker.state = 'moving';
+      return;
+    }
+  }
+  startWorkerAction(worker);
+}
+
+function completeWorkerJob(worker, factory){
+  if(worker.job){
+    handleWorkerJobEffect(worker, factory);
+    factory.stats.jobsCompleted = (factory.stats.jobsCompleted ?? 0) + 1;
+  }
+  worker.job = null;
+  worker.state = 'idle';
+  worker.dwell = 0;
+  worker.pendingDuration = 0;
+  worker.path = [];
+}
+
+export function stepFactoryWorkers(){
+  const factory = ensureFactoryState();
+  if(!factory.workers.length) return;
+  for(const worker of factory.workers){
+    if(worker.state === 'idle'){
+      assignJobToWorker(worker, factory);
+    }
+    if(worker.state === 'moving'){
+      if(worker.path.length === 0){
+        startWorkerAction(worker);
+      } else {
+        const nextTile = worker.path.shift();
+        setWorkerPosition(worker, nextTile);
+        if(worker.path.length === 0){
+          startWorkerAction(worker);
+        }
+      }
+    }
+    if(worker.state === 'working'){
+      worker.dwell = Math.max(0, (worker.dwell ?? 0) - 1);
+      if(worker.dwell === 0){
+        completeWorkerJob(worker, factory);
+      }
+    }
+  }
+}
+
+function instantiateWorkerAgent(tileIdx){
+  if(workerSpawner){
+    return workerSpawner(tileIdx);
+  }
+  return null;
+}
+
+function startWorkerAction(worker){
+  worker.state = 'working';
+  worker.dwell = worker.pendingDuration > 0 ? worker.pendingDuration : 1;
+  worker.pendingDuration = 0;
+}
+
+function handleWorkerJobEffect(worker, factory){
+  const job = worker.job;
+  if(!job) return;
+  switch(job.kind){
+    case 'mine':
+      worker.carriedItem = FactoryItem.IRON_ORE;
+      incrementCounter(factory.stats.produced, FactoryItem.IRON_ORE, 1);
+      const source = job.payload?.sourceStructure;
+      if(typeof source === 'number'){
+        const miner = factory.structures.get(source);
+        if(miner) miner.jobAssigned = false;
+      }
+      if(job.payload?.targetStructure != null){
+        enqueueFactoryJob({
+          kind: 'deliver',
+          tileIdx: job.payload.targetStructure,
+          payload: {
+            item: FactoryItem.IRON_ORE,
+            duration: 1,
+          },
+        });
+      }
+      break;
+    case 'deliver':
+      if(job.payload?.item){
+        worker.carriedItem = null;
+        const target = factory.structures.get(job.tileIdx ?? -1);
+        if(target){
+          acceptItem(target, job.tileIdx, job.payload.item, factory);
+        }
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+function tileIdxToPoint(tileIdx){
+  return {
+    x: tileIdx % world.W,
+    y: (tileIdx / world.W) | 0,
+  };
+}
+
+function setWorkerPosition(worker, tileIdx){
+  worker.tileIdx = tileIdx;
+  const agentRef = ensureFactoryState().workerAgents?.find(entry => entry.workerId === worker.id);
+  if(agentRef && agentRef.agent){
+    const coords = tileIdxToPoint(tileIdx);
+    if(agentRef.agent.x != null) agentRef.agent.x = coords.x;
+    if(agentRef.agent.y != null) agentRef.agent.y = coords.y;
+  }
+}
+
+function findFactoryPath(startIdx, targetIdx){
+  if(startIdx == null || targetIdx == null) return null;
+  if(startIdx === targetIdx) return [];
+  const queue = [startIdx];
+  const cameFrom = new Map([[startIdx, null]]);
+  while(queue.length){
+    const current = queue.shift();
+    if(current === targetIdx){
+      const path = [];
+      let node = targetIdx;
+      while(node !== startIdx && node != null){
+        path.push(node);
+        node = cameFrom.get(node) ?? null;
+      }
+      path.reverse();
+      return path;
+    }
+    const cx = current % world.W;
+    const cy = (current / world.W) | 0;
+    for(const [dx,dy] of DIRS4){
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if(!inBounds(nx, ny)) continue;
+      const ni = idx(nx, ny);
+      if(world.wall?.[ni]) continue;
+      if(!cameFrom.has(ni)){
+        cameFrom.set(ni, current);
+        queue.push(ni);
+      }
+    }
+  }
+  return null;
 }
