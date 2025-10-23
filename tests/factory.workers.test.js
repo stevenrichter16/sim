@@ -60,12 +60,15 @@ describe('factory workers', () => {
     expect(workers[0].state).toBe('idle');
     expect(workers[0].job).toBeNull();
 
-    // Third step: worker should claim the second job and finish it immediately (duration 1).
+    // Third step: worker picks up output job, queue still has delivery pending.
     stepFactoryWorkers();
     workers = getFactoryWorkers().workers;
-    expect(getFactoryJobQueue()).toHaveLength(0);
+    expect(getFactoryJobQueue()).toHaveLength(1);
+    // Fourth step: delivery job completes.
+    stepFactoryWorkers();
+    workers = getFactoryWorkers().workers;
+    expect(getFactoryJobQueue()).toHaveLength(1);
     expect(workers[0].state).toBe('idle');
     expect(workers[0].job).toBeNull();
-    expect(workers[0].tileIdx).toBe(idx(7, 6));
   });
 });

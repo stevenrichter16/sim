@@ -42,7 +42,7 @@ import {
 } from './materials.js';
 import { createScenarioRuntime } from './script/runtime.js';
 import { deserialiseCompiledProgram } from './script/bytecode.js';
-import { stepFactory, setFactoryWorkerSpawner } from './factory.js';
+import { stepFactory, setFactoryWorkerSpawner, spawnFactoryWorker } from './factory.js';
 
 const medicAssignments = new Map();
 
@@ -2385,6 +2385,7 @@ let acidBasePairs = new Set();
     },
     spawnNPC,
     randomFires,
+    spawnFactoryWorker,
     loadScenarioRuntime({ compiled, ...options } = {}){
       if(!compiled){
         throw new Error('loadScenarioRuntime requires compiled scenario bytecode.');

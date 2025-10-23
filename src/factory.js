@@ -36,6 +36,12 @@ const ORIENTATION_ANGLE = Object.freeze({
   west: Math.PI,
   north: -Math.PI / 2,
 });
+const ORIENTATION_OPPOSITE = Object.freeze({
+  north: 'south',
+  east: 'west',
+  south: 'north',
+  west: 'east',
+});
 
 const FACTORY_MODE_SET = new Set([
   Mode.FACTORY_NODE,
@@ -169,6 +175,8 @@ function createStructure(kind, orientation){
         progress: 0,
         active: false,
         outputBuffer: 0,
+        pendingInputJob: false,
+        pendingOutputJob: false,
         recipe: {
           input: FactoryItem.IRON_ORE,
           inputAmount: 1,
@@ -184,6 +192,8 @@ function createStructure(kind, orientation){
         progress: 0,
         active: false,
         outputBuffer: 0,
+        pendingInputJob: false,
+        pendingOutputJob: false,
         recipe: {
           input: FactoryItem.IRON_INGOT,
           inputAmount: CONSTRUCTOR_INPUT,
@@ -295,6 +305,21 @@ function maybeStartJob(structure){
 function updateRecipeProducer(tileIdx, structure, factory){
   const recipe = structure.recipe;
   if(!recipe) return;
+  const opposite = ORIENTATION_OPPOSITE[structure.orientation] || 'west';
+  const sourceIdx = neighborIndex(tileIdx, opposite);
+  if(!structure.pendingInputJob && !structure.active && structure.input < (recipe.inputAmount ?? 1) && sourceIdx >= 0){
+    structure.pendingInputJob = true;
+    enqueueFactoryJob({
+      kind: 'pull',
+      tileIdx: sourceIdx,
+      payload: {
+        duration: 1,
+        item: recipe.input,
+        source: sourceIdx,
+        target: tileIdx,
+      },
+    });
+  }
   if(!structure.active){
     maybeStartJob(structure);
   }
@@ -308,10 +333,18 @@ function updateRecipeProducer(tileIdx, structure, factory){
       maybeStartJob(structure);
     }
   }
-  if(structure.outputBuffer > 0){
-    if(pushItemFrom(tileIdx, structure.orientation, recipe.output, factory)){
-      structure.outputBuffer -= 1;
-    }
+  const outputTarget = neighborIndex(tileIdx, structure.orientation);
+  if(structure.outputBuffer > 0 && !structure.pendingOutputJob && outputTarget >= 0){
+    structure.pendingOutputJob = true;
+    enqueueFactoryJob({
+      kind: 'pickup-output',
+      tileIdx,
+      payload: {
+        duration: 1,
+        item: recipe.output,
+        target: outputTarget,
+      },
+    });
   }
 }
 
@@ -473,6 +506,28 @@ export function popFactoryJob(){
   const factory = ensureFactoryState();
   if(!factory.jobs.length) return null;
   return factory.jobs.shift() ?? null;
+}
+
+export function getFactoryDiagnostics(limit = 8){
+  const factory = ensureFactoryState();
+  const queue = factory.jobs ?? [];
+  const workers = factory.workers ?? [];
+  return {
+    queueLength: queue.length,
+    queue: queue.slice(0, limit).map((job, index) => ({
+      index,
+      kind: job.kind,
+      tileIdx: job.tileIdx ?? null,
+      item: job.payload?.item ?? null,
+    })),
+    workers: workers.map((worker) => ({
+      id: worker.id,
+      state: worker.state,
+      tileIdx: worker.tileIdx ?? null,
+      carrying: worker.carriedItem ?? null,
+      jobKind: worker.job?.kind ?? null,
+    })),
+  };
 }
 
 export function getFactoryStatus(){
@@ -660,7 +715,7 @@ function handleWorkerJobEffect(worker, factory){
   const job = worker.job;
   if(!job) return;
   switch(job.kind){
-    case 'mine':
+    case 'mine': {
       worker.carriedItem = FactoryItem.IRON_ORE;
       incrementCounter(factory.stats.produced, FactoryItem.IRON_ORE, 1);
       const source = job.payload?.sourceStructure;
@@ -668,26 +723,103 @@ function handleWorkerJobEffect(worker, factory){
         const miner = factory.structures.get(source);
         if(miner) miner.jobAssigned = false;
       }
-      if(job.payload?.targetStructure != null){
+      const targetTile = job.payload?.targetStructure;
+      if(targetTile != null){
         enqueueFactoryJob({
           kind: 'deliver',
-          tileIdx: job.payload.targetStructure,
+          tileIdx: targetTile,
           payload: {
             item: FactoryItem.IRON_ORE,
             duration: 1,
+            targetStructure: targetTile,
           },
         });
       }
       break;
-    case 'deliver':
+    }
+    case 'pull': {
+      const sourceIdx = job.payload?.source ?? job.tileIdx;
+      const targetIdx = job.payload?.target;
+      const requiredItem = job.payload?.item;
+      const sourceStructure = factory.structures.get(sourceIdx ?? -1);
+      if(!sourceStructure){
+        const targetStructure = factory.structures.get(targetIdx ?? -1);
+        if(targetStructure) targetStructure.pendingInputJob = false;
+        return;
+      }
+      let itemTaken = null;
+      if(sourceStructure.kind === FactoryKind.BELT && sourceStructure.item){
+        if(!requiredItem || sourceStructure.item === requiredItem){
+          itemTaken = sourceStructure.item;
+          sourceStructure.item = null;
+          sourceStructure.progress = 0;
+        }
+      }
+      if(itemTaken){
+        worker.carriedItem = itemTaken;
+        enqueueFactoryJob({
+          kind: 'deliver',
+          tileIdx: targetIdx,
+          payload: {
+            item: itemTaken,
+            duration: job.payload?.duration ?? 1,
+            targetStructure: targetIdx,
+          },
+        });
+      } else {
+        const targetStructure = factory.structures.get(targetIdx ?? -1);
+        if(targetStructure) targetStructure.pendingInputJob = false;
+        enqueueFactoryJob(job);
+      }
+      break;
+    }
+    case 'pickup-output': {
+      const structure = factory.structures.get(job.tileIdx ?? -1);
+      const outputItem = job.payload?.item ?? null;
+      if(!structure || !structure.outputBuffer){
+        if(structure) structure.pendingOutputJob = false;
+        return;
+      }
+      structure.outputBuffer -= 1;
+      structure.pendingOutputJob = false;
+      const carryItem = outputItem ?? FactoryItem.IRON_INGOT;
+      worker.carriedItem = carryItem;
+      const targetIdx = job.payload?.target;
+      if(targetIdx != null){
+        enqueueFactoryJob({
+          kind: 'deliver',
+          tileIdx: targetIdx,
+          payload: {
+            item: carryItem,
+            duration: job.payload?.duration ?? 1,
+            targetStructure: targetIdx,
+          },
+        });
+      }
+      break;
+    }
+    case 'deliver': {
       if(job.payload?.item){
-        worker.carriedItem = null;
+        const delivered = job.payload.item;
         const target = factory.structures.get(job.tileIdx ?? -1);
         if(target){
-          acceptItem(target, job.tileIdx, job.payload.item, factory);
+          const accepted = acceptItem(target, job.tileIdx, delivered, factory);
+          if(accepted){
+            worker.carriedItem = null;
+            if('pendingInputJob' in target){
+              target.pendingInputJob = false;
+            }
+          } else {
+            enqueueFactoryJob(job);
+            return;
+          }
+        } else {
+          enqueueFactoryJob(job);
+          return;
         }
       }
       break;
+    }
     default:
       break;
   }

@@ -38,9 +38,10 @@ describe('factory logistics loop', () => {
     placeFactoryStructure(idx(26, 20), 'factory-storage', buildOrientation('east'));
 
     spawnFactoryWorker(base);
-    spawnFactoryWorker(idx(23, 20));
+    spawnFactoryWorker(idx(22, 20));
+    spawnFactoryWorker(idx(24, 20));
 
-    for(let i = 0; i < 220; i += 1){
+    for(let i = 0; i < 400; i += 1){
       stepFactory();
     }
 

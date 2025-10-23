@@ -39,6 +39,7 @@ import {
   getFactoryStatus,
   getOrientationLabelText,
   isFactoryMode,
+  getFactoryDiagnostics,
 } from './factory.js';
 
 const MODE_LABEL = Object.fromEntries(
@@ -55,6 +56,8 @@ export function initInput({ canvas, draw }){
   const factoryRotateRightBtn = document.getElementById('factoryRotateRight');
   const factoryOrientationLabel = document.getElementById('factoryOrientation');
   const factoryStatusNode = document.getElementById('factoryStatus');
+  const factoryJobsNode = document.getElementById('factoryJobs');
+  const factoryWorkersNode = document.getElementById('factoryWorkers');
   const toggleDrawBtn = document.getElementById('toggleDraw');
   const spawnCalmABtn = document.getElementById('spawnCalmA');
   const spawnCalmBBtn = document.getElementById('spawnCalmB');
@@ -62,6 +65,7 @@ export function initInput({ canvas, draw }){
   const spawnPanicABtn = document.getElementById('spawnPanicA');
   const spawnPanicBBtn = document.getElementById('spawnPanicB');
   const spawnMedicBtn = document.getElementById('spawnMedic');
+  const spawnWorkerBtn = document.getElementById('spawnWorker');
   const sparkBtn = document.getElementById('spark');
   const clearBtn = document.getElementById('clear');
   const dHeat = document.getElementById('dHeat');
@@ -648,6 +652,25 @@ function toggleScenarioDiagPanel(force){
     const produced = status.produced || {};
     const stored = status.stored || {};
     factoryStatusNode.textContent = `Ore ${produced.ore ?? 0} • Ingots ${produced.ingot ?? 0} • Plates ${produced.plate ?? 0} • Stored Plates ${stored.plate ?? 0}`;
+    const diagnostics = getFactoryDiagnostics();
+    if(factoryJobsNode){
+      const queuePreview = diagnostics.queue
+        .map((job) => `${job.kind}${job.item ? `(${job.item})` : ''}`)
+        .join(', ');
+      factoryJobsNode.textContent = diagnostics.queueLength
+        ? `Jobs: ${diagnostics.queueLength} [${queuePreview}]`
+        : 'Jobs: 0';
+    }
+    if(factoryWorkersNode){
+      const workerText = diagnostics.workers
+        .map((w) => {
+          const carrying = w.carrying ? ` carrying ${w.carrying}` : '';
+          const job = w.jobKind ? ` → ${w.jobKind}` : '';
+          return `#${w.id} ${w.state}${job}${carrying}`;
+        })
+        .join(' | ');
+      factoryWorkersNode.textContent = workerText || 'Workers: —';
+    }
     syncFactoryOrientation();
   };
 
@@ -1598,6 +1621,16 @@ function toggleScenarioDiagPanel(force){
     if(spawnMedicBtn){
       spawnMedicBtn.onclick = ()=>{
         handleSpawnResult(simulation.spawnNPC(Mode.MEDIC), { mode: Mode.MEDIC });
+      };
+    }
+    if(spawnWorkerBtn){
+      spawnWorkerBtn.onclick = () => {
+        const workerSpawn = simulation.spawnFactoryWorker?.(idx(world.W / 2 | 0, world.H / 2 | 0));
+        if(workerSpawn?.ok){
+          clearSpawnStatus();
+        } else {
+          showSpawnStatus('Unable to spawn worker.');
+        }
       };
     }
     if(sparkBtn){

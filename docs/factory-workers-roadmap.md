@@ -40,7 +40,7 @@ To make workers visibly handle resources, we’ll layer a job/worker system on t
 
 - New worker sprite or overlay to indicate carrying status.
 - Trigger `emitEffect` or `logDebug` calls on job completion (handy for debugging).
-- Extend the factory HUD to display active jobs, worker states (idle/moving/working), and job queue composition.
+- Extend the factory HUD to display active jobs, worker states (idle/moving/working), and job queue composition. *(factory HUD now shows job queue + worker states via `getFactoryDiagnostics()`)*
 
 ## 6. Implementation Stages
 
