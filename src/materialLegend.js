@@ -164,6 +164,84 @@ export const materialLegend = {
     },
     interactions: [],
   },
+  [Mode.FACTORY_NODE]: {
+    label: 'Ore Node',
+    color: '#6b4a2d',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Miner', effect: 'Feeds miners with steady iron ore output' },
+    ],
+  },
+  [Mode.FACTORY_MINER]: {
+    label: 'Miner',
+    color: '#424b5f',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Conveyor', effect: 'Drops iron ore items onto connected belts' },
+    ],
+  },
+  [Mode.FACTORY_BELT]: {
+    label: 'Conveyor',
+    color: '#212939',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Smelter', effect: 'Delivers items into smelter or constructor inputs' },
+    ],
+  },
+  [Mode.FACTORY_SMELTER]: {
+    label: 'Smelter',
+    color: '#52342a',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Conveyor', effect: 'Outputs iron ingots when supplied with ore' },
+    ],
+  },
+  [Mode.FACTORY_CONSTRUCTOR]: {
+    label: 'Constructor',
+    color: '#333b68',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Storage', effect: 'Sends crafted plates forward once available' },
+    ],
+  },
+  [Mode.FACTORY_STORAGE]: {
+    label: 'Storage Crate',
+    color: '#6c512b',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Conveyor', effect: 'Collects final products for scoring' },
+    ],
+  },
 };
 
 export function getMaterialLegend(mode){

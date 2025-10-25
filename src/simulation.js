@@ -42,6 +42,7 @@ import {
 } from './materials.js';
 import { createScenarioRuntime } from './script/runtime.js';
 import { deserialiseCompiledProgram } from './script/bytecode.js';
+import { stepFactory, setFactoryWorkerSpawner, spawnFactoryWorker } from './factory.js';
 
 const medicAssignments = new Map();
 
@@ -1801,6 +1802,18 @@ export function cleanupScenarioArtifacts(){
 world.despawnAgent = despawnAgent;
 world.cleanupScenarioArtifacts = cleanupScenarioArtifacts;
 
+setFactoryWorkerSpawner((tileIdx) => {
+  if(tileIdx == null) return null;
+  const x = tileIdx % world.W;
+  const y = (tileIdx / world.W) | 0;
+  const agent = new Agent(x, y, Mode.CALM);
+  agent.worker = true;
+  world.agents.push(agent);
+  registerAgentHandle(agent, world.agents.length - 1);
+  markScenarioAgent(agent.id);
+  return agent;
+});
+
 function diffuse(field, diff){
   const MAX_ALPHA = 0.22;
   const steps = Math.max(1, Math.ceil(diff / MAX_ALPHA));
@@ -2097,6 +2110,7 @@ let acidBasePairs = new Set();
     stepMycelium();
     handlePhaseTransitions();
     stepCryofoam();
+    stepFactory();
 
     const toIgnite=[];
     const baseO2 = settings.o2Base || 0.21;
@@ -2371,6 +2385,7 @@ let acidBasePairs = new Set();
     },
     spawnNPC,
     randomFires,
+    spawnFactoryWorker,
     loadScenarioRuntime({ compiled, ...options } = {}){
       if(!compiled){
         throw new Error('loadScenarioRuntime requires compiled scenario bytecode.');

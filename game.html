@@ -75,6 +75,29 @@
             <button class="btn" id="toggleDraw">✏️ Draw</button>
           </div>
 
+          <div class="factory-panel" id="factoryPanel">
+            <div class="factory-header">
+              <h4>Factory Builder</h4>
+              <div class="factory-orientation" aria-live="polite">
+                <button class="btn factory-rotate" id="factoryRotateLeft" type="button">⟲</button>
+                <span class="factory-orientation-label" id="factoryOrientation">East</span>
+                <button class="btn factory-rotate" id="factoryRotateRight" type="button">⟳</button>
+              </div>
+            </div>
+            <div class="grid factory-grid" id="factoryBrushGrid" aria-label="Factory builder brushes">
+              <button class="btn" data-brush="factory-node">🪨 Ore Node</button>
+              <button class="btn" data-brush="factory-miner">⛏️ Miner</button>
+              <button class="btn" data-brush="factory-belt">➡️ Conveyor</button>
+              <button class="btn" data-brush="factory-smelter">🔥 Smelter</button>
+              <button class="btn" data-brush="factory-constructor">🏭 Constructor</button>
+              <button class="btn" data-brush="factory-storage">📦 Storage</button>
+            </div>
+            <div class="small factory-status" id="factoryStatus">Ore 0 • Ingots 0 • Plates 0 • Stored Plates 0</div>
+            <div class="small factory-status" id="factoryJobs">Jobs: 0</div>
+            <div class="small factory-status" id="factoryWorkers">Workers: —</div>
+            <div class="small factory-hint">Use ⟲/⟳ or [ / ] keys to rotate placement direction. Hold Alt while erasing to remove ore nodes.</div>
+          </div>
+
           <!-- Actions -->
           <div class="grid actions-grid">
             <button class="btn" id="spawnCalmA">🙂 NPC Calm A</button>
@@ -83,6 +106,7 @@
             <button class="btn" id="spawnPanicA">😱 NPC Panic A</button>
             <button class="btn" id="spawnPanicB">😱 NPC Panic B</button>
             <button class="btn" id="spawnMedic">💊 Medic</button>
+            <button class="btn" id="spawnWorker">🛠️ Spawn Worker</button>
             <button class="btn" id="spark">⚡ Random Fire</button>
             <button class="btn" id="clear">🧼 Clear</button>
           </div>
@@ -183,6 +207,10 @@
       <div id="historyScrubber" style="display:flex;align-items:center;gap:6px;width:100%">
         <input id="historyIndex" type="range" min="0" max="0" value="0" step="1" style="flex:1">
         <span class="kbd" id="historyLabel">—</span>
+      </div>
+      <div id="telemetryFactory" class="telemetry-factory" aria-live="polite">
+        <div class="telemetry-factory-heading small">Factory Telemetry</div>
+        <div id="telemetryFactoryList" class="telemetry-factory-list"></div>
       </div>
     </div>
     </div>

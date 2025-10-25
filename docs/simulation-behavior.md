@@ -73,3 +73,15 @@
   ```
 - Update this document and the observation suite when mechanics change so assertions reflect expected behaviour.
 - Add targeted unit tests alongside new features (e.g., CLF₃ diffusion, new modes) to keep coverage current.
+
+## Factory Logistics & Production Chain
+
+- `world.factory` (see `src/factory.js`) keeps track of nodes, structures, item flow, and aggregate production stats.
+- Factory structures are expressed as dedicated modes (`Mode.FACTORY_NODE`, `Mode.FACTORY_MINER`, etc.) so they render in the sim and appear in the legend/brush palette.
+- `stepFactory()` runs once per tick (hooked into `stepSimulation`) to:
+  - Advance conveyor progress for any items currently on belts.
+  - Extract ore from miners placed on ore nodes and feed output to the next structure.
+  - Consume ore inside smelters to produce ingots, then pass them downstream.
+  - Assemble ingots into plates inside constructors and deliver finished goods into storage crates.
+- Orientation can be rotated via the builder UI (`⟲/⟳` buttons) or the `[` / `]` hotkeys; placement honours the active direction.
+- Production totals from `getFactoryStatus()` drive the factory HUD and are covered by `tests/factory.gameplay.test.js` to keep the chain healthy.

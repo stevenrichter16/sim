@@ -11,6 +11,12 @@ export const Mode = Object.freeze({
   CALM: 101,
   PANIC: 102,
   MEDIC: 103,
+  FACTORY_NODE: 201,
+  FACTORY_MINER: 202,
+  FACTORY_BELT: 203,
+  FACTORY_SMELTER: 204,
+  FACTORY_CONSTRUCTOR: 205,
+  FACTORY_STORAGE: 206,
 });
 
 export const TAU = Math.PI * 2;
