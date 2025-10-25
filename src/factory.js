@@ -1,4 +1,4 @@
-import { Mode, DIRS4 } from './constants.js';
+import { Mode, DIRS4, clamp01 } from './constants.js';
 import { world, idx, inBounds } from './state.js';
 import { baseStringFor } from './materials.js';
 
@@ -58,6 +58,130 @@ const SMELTER_TIME = 8;
 const CONSTRUCTOR_TIME = 12;
 const CONSTRUCTOR_INPUT = 2;
 
+const FACTORY_KIND_META = Object.freeze({
+  [FactoryKind.NODE]: { icon: '🪨', name: 'Ore Node' },
+  [FactoryKind.MINER]: { icon: '⛏️', name: 'Miner' },
+  [FactoryKind.BELT]: { icon: '➡️', name: 'Conveyor' },
+  [FactoryKind.SMELTER]: { icon: '🔥', name: 'Smelter' },
+  [FactoryKind.CONSTRUCTOR]: { icon: '🏭', name: 'Constructor' },
+  [FactoryKind.STORAGE]: { icon: '📦', name: 'Storage' },
+});
+
+function factoryKindMeta(kind){
+  return FACTORY_KIND_META[kind] || { icon: '❓', name: kind ?? 'Unknown' };
+}
+
+function factoryItemLabel(item){
+  switch(item){
+    case FactoryItem.IRON_ORE:
+      return 'Iron Ore';
+    case FactoryItem.IRON_INGOT:
+      return 'Iron Ingot';
+    case FactoryItem.PLATE:
+      return 'Iron Plate';
+    default:
+      if(typeof item === 'string'){ return item.replace(/_/g,' ').replace(/\b\w/g, ch => ch.toUpperCase()); }
+      return '—';
+  }
+}
+
+function createStructureTelemetry(kind){
+  const factory = ensureFactoryState();
+  const tick = factory.ticks ?? 0;
+  switch(kind){
+    case FactoryKind.MINER:
+      return {
+        kind,
+        createdTick: tick,
+        jobsQueued: 0,
+        oreExtracted: 0,
+        totalTicks: 0,
+        activeTicks: 0,
+        lastJobTick: null,
+        lastOutputTick: null,
+      };
+    case FactoryKind.BELT:
+      return {
+        kind,
+        createdTick: tick,
+        totalTicks: 0,
+        occupiedTicks: 0,
+        itemsReceived: 0,
+        itemsMoved: 0,
+        itemsPulled: 0,
+        lastReceivedTick: null,
+        lastMovedTick: null,
+        lastReceivedItem: null,
+        lastMovedItem: null,
+        currentItem: null,
+      };
+    case FactoryKind.SMELTER:
+    case FactoryKind.CONSTRUCTOR:
+      return {
+        kind,
+        createdTick: tick,
+        totalTicks: 0,
+        activeTicks: 0,
+        waitingForInputTicks: 0,
+        cyclesStarted: 0,
+        cyclesCompleted: 0,
+        itemsAccepted: 0,
+        itemsConsumed: 0,
+        outputRequests: 0,
+        inputRequests: 0,
+        outputsPicked: 0,
+        lastInputTick: null,
+        lastOutputTick: null,
+        lastCycleStartTick: null,
+        lastOutputRequestTick: null,
+        outputBuffer: 0,
+        inputBuffer: 0,
+        lastOutputItem: null,
+      };
+    case FactoryKind.STORAGE:
+      return {
+        kind,
+        createdTick: tick,
+        deliveries: 0,
+        lastDeliveryTick: null,
+        lastDeliveryItem: null,
+      };
+    default:
+      return { kind, createdTick: tick };
+  }
+}
+
+function createNodeTelemetry(){
+  const factory = ensureFactoryState();
+  return {
+    createdTick: factory.ticks ?? 0,
+    mined: 0,
+    lastMinedTick: null,
+  };
+}
+
+function ensureStructureTelemetry(structure){
+  if(!structure) return null;
+  if(!structure.telemetry){
+    structure.telemetry = createStructureTelemetry(structure.kind);
+  }
+  return structure.telemetry;
+}
+
+function formatTickValue(tick){
+  if(tick == null) return '—';
+  return `#${tick}`;
+}
+
+function mapContentsToSummary(contents){
+  if(!contents || !contents.size) return 'Empty';
+  const parts = [];
+  for(const [item, count] of contents.entries()){
+    parts.push(`${factoryItemLabel(item)} ${count}`);
+  }
+  return parts.join(', ');
+}
+
 const BRUSH_SPEC = Object.freeze({
   'factory-node': {
     kind: FactoryKind.NODE,
@@ -95,6 +219,7 @@ function createFactoryState(){
     workers: [],
     workerAgents: [],
     nextWorkerId: 1,
+    ticks: 0,
     stats: {
       produced: Object.create(null),
       stored: Object.create(null),
@@ -162,11 +287,12 @@ function incrementCounter(target, key, amount = 1){
 }
 
 function createStructure(kind, orientation){
+  const telemetry = createStructureTelemetry(kind);
   switch(kind){
     case FactoryKind.MINER:
-      return { kind, orientation, progress: 0, rate: MINER_RATE, jobAssigned: false };
+      return { kind, orientation, progress: 0, rate: MINER_RATE, jobAssigned: false, telemetry };
     case FactoryKind.BELT:
-      return { kind, orientation, progress: 0, speed: BELT_SPEED, item: null };
+      return { kind, orientation, progress: 0, speed: BELT_SPEED, item: null, telemetry };
     case FactoryKind.SMELTER:
       return {
         kind,
@@ -183,6 +309,7 @@ function createStructure(kind, orientation){
           output: FactoryItem.IRON_INGOT,
           speed: 1 / SMELTER_TIME,
         },
+        telemetry,
       };
     case FactoryKind.CONSTRUCTOR:
       return {
@@ -200,12 +327,17 @@ function createStructure(kind, orientation){
           output: FactoryItem.PLATE,
           speed: 1 / CONSTRUCTOR_TIME,
         },
+        telemetry,
       };
     case FactoryKind.STORAGE:
-      return { kind, orientation, contents: new Map() };
+      return { kind, orientation, contents: new Map(), telemetry };
     default:
-      return { kind, orientation };
+      return { kind, orientation, telemetry };
   }
+}
+
+function createNode(resource){
+  return { resource, telemetry: createNodeTelemetry() };
 }
 
 function neighborIndex(tileIdx, orientation){
@@ -219,19 +351,37 @@ function neighborIndex(tileIdx, orientation){
 }
 
 function acceptItem(structure, tileIdx, item, factory){
+  const telemetry = ensureStructureTelemetry(structure);
+  const nowTick = factory?.ticks ?? 0;
   switch(structure.kind){
     case FactoryKind.BELT:
       if(structure.item) return false;
       structure.item = item;
       structure.progress = 0;
+      if(telemetry){
+        telemetry.itemsReceived = (telemetry.itemsReceived ?? 0) + 1;
+        telemetry.lastReceivedTick = nowTick;
+        telemetry.lastReceivedItem = item;
+        telemetry.currentItem = item;
+      }
       return true;
     case FactoryKind.SMELTER:
       if(item !== structure.recipe.input) return false;
       structure.input += 1;
+      if(telemetry){
+        telemetry.itemsAccepted = (telemetry.itemsAccepted ?? 0) + 1;
+        telemetry.lastInputTick = nowTick;
+        telemetry.inputBuffer = structure.input;
+      }
       return true;
     case FactoryKind.CONSTRUCTOR:
       if(item !== structure.recipe.input) return false;
       structure.input += 1;
+      if(telemetry){
+        telemetry.itemsAccepted = (telemetry.itemsAccepted ?? 0) + 1;
+        telemetry.lastInputTick = nowTick;
+        telemetry.inputBuffer = structure.input;
+      }
       return true;
     case FactoryKind.STORAGE: {
       const contents = structure.contents;
@@ -240,6 +390,11 @@ function acceptItem(structure, tileIdx, item, factory){
       if(item === FactoryItem.PLATE){
         incrementCounter(factory.stats.delivered, item, 1);
         factory.stats.constructorComplete = (factory.stats.constructorComplete ?? 0) + 1;
+      }
+      if(telemetry){
+        telemetry.deliveries = (telemetry.deliveries ?? 0) + 1;
+        telemetry.lastDeliveryTick = nowTick;
+        telemetry.lastDeliveryItem = item;
       }
       return true;
     }
@@ -257,6 +412,13 @@ function pushItemFrom(tileIdx, orientation, item, factory){
 }
 
 function updateMiner(tileIdx, structure, factory){
+  const telemetry = ensureStructureTelemetry(structure);
+  if(telemetry){
+    telemetry.totalTicks = (telemetry.totalTicks ?? 0) + 1;
+    if(structure.jobAssigned){
+      telemetry.activeTicks = (telemetry.activeTicks ?? 0) + 1;
+    }
+  }
   if(!factory.nodes.has(tileIdx)){
     structure.progress = 0;
     return;
@@ -274,24 +436,43 @@ function updateMiner(tileIdx, structure, factory){
       },
     });
     structure.jobAssigned = true;
+    if(telemetry){
+      telemetry.jobsQueued = (telemetry.jobsQueued ?? 0) + 1;
+      telemetry.lastJobTick = factory.ticks ?? 0;
+    }
   }
 }
 
 function updateBelt(tileIdx, structure, factory){
+  const telemetry = ensureStructureTelemetry(structure);
+  if(telemetry){
+    telemetry.totalTicks = (telemetry.totalTicks ?? 0) + 1;
+    telemetry.currentItem = structure.item;
+    if(structure.item){
+      telemetry.occupiedTicks = (telemetry.occupiedTicks ?? 0) + 1;
+    }
+  }
   if(!structure.item){
     structure.progress = 0;
     return;
   }
   structure.progress = Math.min(1, (structure.progress ?? 0) + (structure.speed ?? BELT_SPEED));
   if(structure.progress >= 1){
-    if(pushItemFrom(tileIdx, structure.orientation, structure.item, factory)){
+    const movedItem = structure.item;
+    if(pushItemFrom(tileIdx, structure.orientation, movedItem, factory)){
+      if(telemetry){
+        telemetry.itemsMoved = (telemetry.itemsMoved ?? 0) + 1;
+        telemetry.lastMovedTick = factory.ticks ?? 0;
+        telemetry.lastMovedItem = movedItem;
+        telemetry.currentItem = null;
+      }
       structure.item = null;
       structure.progress = 0;
     }
   }
 }
 
-function maybeStartJob(structure){
+function maybeStartJob(structure, factory){
   if(structure.active) return;
   const recipe = structure.recipe;
   if(!recipe) return;
@@ -299,12 +480,29 @@ function maybeStartJob(structure){
     structure.input -= recipe.inputAmount ?? 1;
     structure.active = true;
     structure.progress = 0;
+    const telemetry = ensureStructureTelemetry(structure);
+    if(telemetry){
+      telemetry.cyclesStarted = (telemetry.cyclesStarted ?? 0) + 1;
+      telemetry.lastCycleStartTick = factory?.ticks ?? 0;
+      telemetry.inputBuffer = structure.input;
+    }
   }
 }
 
 function updateRecipeProducer(tileIdx, structure, factory){
   const recipe = structure.recipe;
   if(!recipe) return;
+  const telemetry = ensureStructureTelemetry(structure);
+  if(telemetry){
+    telemetry.totalTicks = (telemetry.totalTicks ?? 0) + 1;
+    if(structure.active){
+      telemetry.activeTicks = (telemetry.activeTicks ?? 0) + 1;
+    } else if(structure.pendingInputJob){
+      telemetry.waitingForInputTicks = (telemetry.waitingForInputTicks ?? 0) + 1;
+    }
+    telemetry.inputBuffer = structure.input;
+    telemetry.outputBuffer = structure.outputBuffer ?? 0;
+  }
   const opposite = ORIENTATION_OPPOSITE[structure.orientation] || 'west';
   const sourceIdx = neighborIndex(tileIdx, opposite);
   if(!structure.pendingInputJob && !structure.active && structure.input < (recipe.inputAmount ?? 1) && sourceIdx >= 0){
@@ -319,9 +517,13 @@ function updateRecipeProducer(tileIdx, structure, factory){
         target: tileIdx,
       },
     });
+    if(telemetry){
+      telemetry.inputRequests = (telemetry.inputRequests ?? 0) + 1;
+      telemetry.lastInputTick = factory.ticks ?? 0;
+    }
   }
   if(!structure.active){
-    maybeStartJob(structure);
+    maybeStartJob(structure, factory);
   }
   if(structure.active){
     structure.progress = Math.min(1, (structure.progress ?? 0) + (recipe.speed ?? 0.1));
@@ -330,7 +532,14 @@ function updateRecipeProducer(tileIdx, structure, factory){
       structure.active = false;
       structure.progress = 0;
       incrementCounter(factory.stats.produced, recipe.output, 1);
-      maybeStartJob(structure);
+      if(telemetry){
+        telemetry.cyclesCompleted = (telemetry.cyclesCompleted ?? 0) + 1;
+        telemetry.itemsConsumed = (telemetry.itemsConsumed ?? 0) + (recipe.inputAmount ?? 1);
+        telemetry.lastOutputTick = factory.ticks ?? 0;
+        telemetry.outputBuffer = structure.outputBuffer ?? 0;
+        telemetry.lastOutputItem = recipe.output;
+      }
+      maybeStartJob(structure, factory);
     }
   }
   const outputTarget = neighborIndex(tileIdx, structure.orientation);
@@ -345,6 +554,11 @@ function updateRecipeProducer(tileIdx, structure, factory){
         target: outputTarget,
       },
     });
+    if(telemetry){
+      telemetry.outputRequests = (telemetry.outputRequests ?? 0) + 1;
+      telemetry.outputBuffer = structure.outputBuffer ?? 0;
+      telemetry.lastOutputRequestTick = factory.ticks ?? 0;
+    }
   }
 }
 
@@ -358,6 +572,7 @@ function updateSmelter(tileIdx, structure, factory){
 
 export function stepFactory(){
   const factory = ensureFactoryState();
+  factory.ticks = (factory.ticks ?? 0) + 1;
   if(factory.structures.size){
     const beltEntries = [];
     for(const entry of factory.structures.entries()){
@@ -406,7 +621,7 @@ export function placeFactoryStructure(tileIdx, brush, { orientation } = {}){
     if(world.wall) world.wall[tileIdx] = 0;
     if(world.vent) world.vent[tileIdx] = 0;
     if(world.fire) world.fire.delete(tileIdx);
-    factory.nodes.set(tileIdx, { resource: spec.resource || FactoryItem.IRON_ORE });
+    factory.nodes.set(tileIdx, createNode(spec.resource || FactoryItem.IRON_ORE));
     world.strings[tileIdx] = baseStringFor(spec.mode);
     return { ok: true, kind: FactoryKind.NODE };
   }
@@ -528,6 +743,162 @@ export function getFactoryDiagnostics(limit = 8){
       jobKind: worker.job?.kind ?? null,
     })),
   };
+}
+
+export function getFactoryTelemetry(){
+  const factory = ensureFactoryState();
+  const ticks = factory.ticks ?? 0;
+  const entries = [];
+
+  for(const [tileIdx, node] of factory.nodes.entries()){
+    if(!node.telemetry){
+      node.telemetry = createNodeTelemetry();
+    }
+    const telemetry = node.telemetry;
+    const coords = tileIdxToPoint(tileIdx);
+    const meta = factoryKindMeta(FactoryKind.NODE);
+    const lifetime = Math.max(1, (ticks - (telemetry.createdTick ?? ticks)) + 1);
+    const mined = telemetry.mined ?? 0;
+    const average = mined / lifetime;
+    entries.push({
+      tileIdx,
+      kind: FactoryKind.NODE,
+      title: `${meta.icon} ${meta.name}`,
+      coords,
+      summary: `${factoryItemLabel(node.resource)} mined ${mined}`,
+      stats: [
+        { label: 'Resource', value: factoryItemLabel(node.resource) },
+        { label: 'Mined', value: String(mined) },
+        { label: 'Avg / tick', value: average.toFixed(3) },
+        { label: 'Last mined', value: formatTickValue(telemetry.lastMinedTick) },
+      ],
+    });
+  }
+
+  for(const [tileIdx, structure] of factory.structures.entries()){
+    const telemetry = ensureStructureTelemetry(structure);
+    const coords = tileIdxToPoint(tileIdx);
+    const meta = factoryKindMeta(structure.kind);
+    const orientationLabel = getOrientationLabel(structure.orientation);
+    const lifetime = Math.max(1, (ticks - (telemetry?.createdTick ?? ticks)) + 1);
+    switch(structure.kind){
+      case FactoryKind.MINER: {
+        const node = factory.nodes.get(tileIdx);
+        const resourceName = factoryItemLabel(node?.resource ?? FactoryItem.IRON_ORE);
+        const totalTicks = telemetry?.totalTicks ?? 0;
+        const uptime = totalTicks > 0 ? (telemetry.activeTicks ?? 0) / totalTicks : 0;
+        entries.push({
+          tileIdx,
+          kind: structure.kind,
+          title: `${meta.icon} ${meta.name} (${orientationLabel})`,
+          coords,
+          summary: `${telemetry?.oreExtracted ?? 0} ${resourceName} extracted`,
+          stats: [
+            { label: 'Resource', value: resourceName },
+            { label: 'Orientation', value: orientationLabel },
+            { label: 'Jobs queued', value: String(telemetry?.jobsQueued ?? 0) },
+            { label: 'Ore extracted', value: String(telemetry?.oreExtracted ?? 0) },
+            { label: 'Uptime', value: `${Math.round(uptime * 100)}%` },
+            { label: 'Last output', value: formatTickValue(telemetry?.lastOutputTick ?? null) },
+            { label: 'State', value: structure.jobAssigned ? 'Working' : 'Idle' },
+          ],
+        });
+        break;
+      }
+      case FactoryKind.BELT: {
+        const totalTicks = telemetry?.totalTicks ?? 0;
+        const occupied = telemetry?.occupiedTicks ?? 0;
+        const moved = telemetry?.itemsMoved ?? 0;
+        const pulled = telemetry?.itemsPulled ?? 0;
+        const throughput = totalTicks > 0 ? moved / totalTicks : 0;
+        const occupancy = totalTicks > 0 ? occupied / totalTicks : 0;
+        const currentItem = structure.item ? `${factoryItemLabel(structure.item)} (${Math.round(clamp01(structure.progress ?? 0) * 100)}%)` : 'Empty';
+        entries.push({
+          tileIdx,
+          kind: structure.kind,
+          title: `${meta.icon} ${meta.name} (${orientationLabel})`,
+          coords,
+          summary: `${moved} items moved (${throughput.toFixed(3)}/tick)`,
+          stats: [
+            { label: 'Orientation', value: orientationLabel },
+            { label: 'Speed', value: (structure.speed ?? BELT_SPEED).toFixed(2) },
+            { label: 'Current', value: currentItem },
+            { label: 'Items moved', value: String(moved) },
+            { label: 'Items pulled', value: String(pulled) },
+            { label: 'Avg / tick', value: throughput.toFixed(3) },
+            { label: 'Occupancy', value: `${Math.round(occupancy * 100)}%` },
+            { label: 'Last move', value: formatTickValue(telemetry?.lastMovedTick ?? null) },
+          ],
+        });
+        break;
+      }
+      case FactoryKind.SMELTER:
+      case FactoryKind.CONSTRUCTOR: {
+        const recipe = structure.recipe;
+        const recipeLabel = recipe ? `${factoryItemLabel(recipe.input)} → ${factoryItemLabel(recipe.output)}` : '—';
+        const totalTicks = telemetry?.totalTicks ?? 0;
+        const uptime = totalTicks > 0 ? (telemetry.activeTicks ?? 0) / totalTicks : 0;
+        const waiting = totalTicks > 0 ? (telemetry.waitingForInputTicks ?? 0) / totalTicks : 0;
+        entries.push({
+          tileIdx,
+          kind: structure.kind,
+          title: `${meta.icon} ${meta.name} (${orientationLabel})`,
+          coords,
+          summary: `${telemetry?.cyclesCompleted ?? 0} cycles complete`,
+          stats: [
+            { label: 'Recipe', value: recipeLabel },
+            { label: 'Orientation', value: orientationLabel },
+            { label: 'Input buffer', value: String(structure.input ?? 0) },
+            { label: 'Output buffer', value: String(structure.outputBuffer ?? 0) },
+            { label: 'Cycles done', value: String(telemetry?.cyclesCompleted ?? 0) },
+            { label: 'Consumed', value: String(telemetry?.itemsConsumed ?? 0) },
+            { label: 'Uptime', value: `${Math.round(uptime * 100)}%` },
+            { label: 'Waiting', value: `${Math.round(waiting * 100)}%` },
+            { label: 'Last output', value: formatTickValue(telemetry?.lastOutputTick ?? null) },
+          ],
+        });
+        break;
+      }
+      case FactoryKind.STORAGE: {
+        const contents = structure.contents ?? new Map();
+        const totalStored = [...contents.values()].reduce((sum, value) => sum + value, 0);
+        entries.push({
+          tileIdx,
+          kind: structure.kind,
+          title: `${meta.icon} ${meta.name} (${orientationLabel})`,
+          coords,
+          summary: `${totalStored} items stored`,
+          stats: [
+            { label: 'Orientation', value: orientationLabel },
+            { label: 'Stored total', value: String(totalStored) },
+            { label: 'Contents', value: mapContentsToSummary(contents) },
+            { label: 'Deliveries', value: String(telemetry?.deliveries ?? 0) },
+            { label: 'Last delivery', value: formatTickValue(telemetry?.lastDeliveryTick ?? null) },
+            { label: 'Last item', value: factoryItemLabel(telemetry?.lastDeliveryItem ?? null) },
+          ],
+        });
+        break;
+      }
+      default: {
+        entries.push({
+          tileIdx,
+          kind: structure.kind,
+          title: `${meta.icon} ${meta.name} (${orientationLabel})`,
+          coords,
+          summary: `Created ${lifetime} ticks ago`,
+          stats: [
+            { label: 'Orientation', value: orientationLabel },
+            { label: 'Lifetime ticks', value: String(lifetime) },
+          ],
+        });
+        break;
+      }
+    }
+  }
+
+  entries.sort((a, b) => (a.tileIdx ?? 0) - (b.tileIdx ?? 0));
+
+  return { tick: ticks, entries };
 }
 
 export function getFactoryStatus(){
@@ -721,7 +1092,25 @@ function handleWorkerJobEffect(worker, factory){
       const source = job.payload?.sourceStructure;
       if(typeof source === 'number'){
         const miner = factory.structures.get(source);
-        if(miner) miner.jobAssigned = false;
+        if(miner){
+          miner.jobAssigned = false;
+          const minerTelemetry = ensureStructureTelemetry(miner);
+          if(minerTelemetry){
+            minerTelemetry.oreExtracted = (minerTelemetry.oreExtracted ?? 0) + 1;
+            minerTelemetry.lastOutputTick = factory.ticks ?? 0;
+          }
+        }
+      }
+      const nodeTile = job.tileIdx;
+      if(typeof nodeTile === 'number'){
+        const node = factory.nodes.get(nodeTile);
+        if(node){
+          if(!node.telemetry){
+            node.telemetry = createNodeTelemetry();
+          }
+          node.telemetry.mined = (node.telemetry.mined ?? 0) + 1;
+          node.telemetry.lastMinedTick = factory.ticks ?? 0;
+        }
       }
       const targetTile = job.payload?.targetStructure;
       if(targetTile != null){
@@ -753,6 +1142,13 @@ function handleWorkerJobEffect(worker, factory){
           itemTaken = sourceStructure.item;
           sourceStructure.item = null;
           sourceStructure.progress = 0;
+          const beltTelemetry = ensureStructureTelemetry(sourceStructure);
+          if(beltTelemetry){
+            beltTelemetry.itemsPulled = (beltTelemetry.itemsPulled ?? 0) + 1;
+            beltTelemetry.lastMovedTick = factory.ticks ?? 0;
+            beltTelemetry.lastMovedItem = itemTaken;
+            beltTelemetry.currentItem = null;
+          }
         }
       }
       if(itemTaken){
@@ -782,6 +1178,11 @@ function handleWorkerJobEffect(worker, factory){
       }
       structure.outputBuffer -= 1;
       structure.pendingOutputJob = false;
+      const telemetry = ensureStructureTelemetry(structure);
+      if(telemetry){
+        telemetry.outputBuffer = structure.outputBuffer ?? 0;
+        telemetry.outputsPicked = (telemetry.outputsPicked ?? 0) + 1;
+      }
       const carryItem = outputItem ?? FactoryItem.IRON_INGOT;
       worker.carriedItem = carryItem;
       const targetIdx = job.payload?.target;

@@ -40,6 +40,7 @@ import {
   getOrientationLabelText,
   isFactoryMode,
   getFactoryDiagnostics,
+  getFactoryTelemetry,
 } from './factory.js';
 
 const MODE_LABEL = Object.fromEntries(
@@ -117,6 +118,8 @@ export function initInput({ canvas, draw }){
   const historyScrubber = document.getElementById('historyScrubber');
   const historySlider = document.getElementById('historyIndex');
   const historyLabel = document.getElementById('historyLabel');
+  const telemetryFactorySection = document.getElementById('telemetryFactory');
+  const telemetryFactoryList = document.getElementById('telemetryFactoryList');
   const overlayToggleKeys = {
     Digit1: 'help',
     Digit2: 'panic',
@@ -723,6 +726,77 @@ function toggleScenarioDiagPanel(force){
     return false;
   }
 
+  function renderFactoryTelemetry(tileIdx = getInspectedTile()){
+    if(!telemetryFactorySection || !telemetryFactoryList){
+      return;
+    }
+    if(!isTelemetryEnabled()){
+      telemetryFactorySection.style.display = 'none';
+      telemetryFactoryList.innerHTML = '';
+      return;
+    }
+    const telemetry = getFactoryTelemetry();
+    const entries = telemetry?.entries ?? [];
+    if(!entries.length){
+      telemetryFactorySection.style.display = 'none';
+      telemetryFactoryList.innerHTML = '';
+      return;
+    }
+    telemetryFactorySection.style.display = 'flex';
+    telemetryFactoryList.innerHTML = '';
+    const inspected = tileIdx ?? getInspectedTile();
+    for(const entry of entries){
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'telemetry-factory-card';
+      card.setAttribute('data-tile', String(entry.tileIdx));
+      const coords = entry.coords || { x: entry.tileIdx % world.W, y: Math.floor(entry.tileIdx / world.W) };
+      const header = document.createElement('div');
+      header.className = 'telemetry-factory-card-header';
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'telemetry-factory-title';
+      titleSpan.textContent = entry.title || `Tile ${entry.tileIdx}`;
+      const coordSpan = document.createElement('span');
+      coordSpan.className = 'telemetry-factory-coords';
+      coordSpan.textContent = `(${coords.x}, ${coords.y})`;
+      header.append(titleSpan, coordSpan);
+      card.append(header);
+      if(entry.summary){
+        const summary = document.createElement('div');
+        summary.className = 'telemetry-factory-summary';
+        summary.textContent = entry.summary;
+        card.append(summary);
+      }
+      if(Array.isArray(entry.stats) && entry.stats.length){
+        const statsList = document.createElement('div');
+        statsList.className = 'telemetry-factory-stats';
+        for(const stat of entry.stats){
+          const row = document.createElement('div');
+          row.className = 'telemetry-factory-stat';
+          const labelSpan = document.createElement('span');
+          labelSpan.className = 'telemetry-factory-stat-label';
+          labelSpan.textContent = stat?.label ?? '';
+          const valueSpan = document.createElement('span');
+          valueSpan.className = 'telemetry-factory-stat-value';
+          valueSpan.textContent = stat?.value ?? '—';
+          row.append(labelSpan, valueSpan);
+          statsList.append(row);
+        }
+        card.append(statsList);
+      }
+      if(entry.tileIdx === inspected){
+        card.classList.add('active');
+      }
+      card.addEventListener('click', ()=>{
+        setInspectActive(true);
+        setInspectedTile(entry.tileIdx);
+        updateTelemetryInspector(entry.tileIdx);
+        draw();
+      });
+      telemetryFactoryList.append(card);
+    }
+  }
+
   function updateTelemetryInspector(tileIdx = getInspectedTile()){
     if(!telemetryPanel) return;
     if(!isTelemetryEnabled()){
@@ -738,12 +812,15 @@ function toggleScenarioDiagPanel(force){
       if(tHeatBar) tHeatBar.style.width = '0%';
       if(historyScrubber) historyScrubber.style.display = 'none';
       if(historyLabel) historyLabel.title = '(no threshold change)';
+      if(telemetryFactorySection) telemetryFactorySection.style.display = 'none';
+      if(telemetryFactoryList) telemetryFactoryList.innerHTML = '';
       lastInspectState = null;
       updateLegendHighlights(null);
       return;
     }
     telemetryPanel.style.display = 'flex';
     updateHistoryUI();
+    renderFactoryTelemetry(tileIdx);
 
     if(tileIdx == null){
       if(tMode) tMode.textContent = '—';
