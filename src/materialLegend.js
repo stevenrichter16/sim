@@ -174,7 +174,7 @@ export const materialLegend = {
       phase: [],
     },
     interactions: [
-      { target: 'Harvest Surgeon', effect: 'Provides living tissue samples ready for harvesting' },
+      { target: 'Harvest Surgeon', effect: 'Provides dermal, blood, organ, synapse, osteo, or endocrine samples depending on node strain' },
     ],
   },
   [Mode.FACTORY_MINER]: {
@@ -213,7 +213,7 @@ export const materialLegend = {
       phase: [],
     },
     interactions: [
-      { target: 'Vein Conveyor', effect: 'Outputs body system capsules when infused with tissues' },
+      { target: 'Vein Conveyor', effect: 'Outputs body systems, neural weaves, skeletal frames, or endocrine blooms as recipes complete' },
     ],
   },
   [Mode.FACTORY_CONSTRUCTOR]: {
@@ -226,7 +226,7 @@ export const materialLegend = {
       phase: [],
     },
     interactions: [
-      { target: 'Cradle Vault', effect: 'Sends grown humans forward once assembled' },
+      { target: 'Cradle Vault', effect: 'Sends grown humans, caretaker drones, or emissary avatars forward once assembled' },
     ],
   },
   [Mode.FACTORY_STORAGE]: {
@@ -239,7 +239,7 @@ export const materialLegend = {
       phase: [],
     },
     interactions: [
-      { target: 'Vein Conveyor', effect: 'Collects resting humans for faction deployment' },
+      { target: 'Vein Conveyor', effect: 'Collects resting humans, drones, and emissaries for faction deployment' },
     ],
   },
 };

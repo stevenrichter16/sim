@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { idx } from '../src/state.js';
-import { placeFactoryStructure, stepFactory, getFactoryStatus, spawnFactoryWorker, setFactoryWorkerSpawner, FactoryItem } from '../src/factory.js';
+import { placeFactoryStructure, stepFactory, getFactoryStatus, spawnFactoryWorker, setFactoryWorkerSpawner, FactoryItem, getFactoryCatalog } from '../src/factory.js';
 import { world } from '../src/state.js';
 import { initWorld } from './helpers/worldHarness.js';
 
@@ -63,5 +63,25 @@ describe('factory logistics loop', () => {
     expect(status.produced.organs).toBeGreaterThan(0);
     expect(status.produced.systems).toBeGreaterThan(0);
     expect(status.stored.humans).toBeGreaterThan(0);
+    expect(status.extended.constructs.some((entry) => entry.output === FactoryItem.HUMAN_SHELL)).toBe(true);
+    expect(status.produced.nerves).toBeGreaterThanOrEqual(0);
+  });
+
+  it('exposes catalog entries for advanced harvest, forge, and construct stages', () => {
+    const catalog = getFactoryCatalog();
+    const harvestItems = catalog.harvestables.map((entry) => entry.item);
+    expect(harvestItems).toEqual(expect.arrayContaining([
+      FactoryItem.NERVE_THREAD,
+      FactoryItem.BONE_FRAGMENT,
+      FactoryItem.GLAND_SEED,
+    ]));
+    const neuralRecipe = catalog.bioforge.find((entry) => entry.key === 'neural_weave');
+    expect(neuralRecipe).toBeDefined();
+    expect(neuralRecipe?.inputs.map((input) => input.item)).toEqual(expect.arrayContaining([
+      FactoryItem.NERVE_THREAD,
+      FactoryItem.BLOOD_VIAL,
+    ]));
+    const emissaryBlueprint = catalog.constructs.find((entry) => entry.output === FactoryItem.EMISSARY_AVATAR);
+    expect(emissaryBlueprint).toBeDefined();
   });
 });

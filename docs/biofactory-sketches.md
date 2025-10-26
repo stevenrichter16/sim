@@ -59,3 +59,110 @@ The rounded frame resembles an incubator cradle, sketched with overlapping penci
       '-.__.-'
 ```
 This capsule, shaded lightly around the rim, represents the circulatory lattice that the Bioforge Vat extrudes from blood vials.
+
+## Synapse Node
+```
+        .-"""-.
+      .'  .-.  '.
+     /   (   )   \
+    ;     `-'     ;
+    |  .-""""-.   |
+    ; (  ⚡  ) ;  ;
+     \  '-.-'  / /
+      '.___.-' .'
+         /|\
+        /_|_\
+```
+A bundle of pencil arcs encircle an implied spark, hinting at the neural charge that threads are teased from.
+
+## Osteo Node
+```
+       ________
+     .'  /\   '.
+    /   /  \   \
+   ;   / /\ \   ;
+   |  / /  \ \  |
+   ;  \ \__/ /  ;
+    \   \__/   /
+     '.______.'
+```
+Layered crosshatching sells a mineral shell, signalling the powdered osteo fragments waiting beneath.
+
+## Endocrine Node
+```
+        .-""-.
+      .' .--. '.
+     /  (____)  \
+    ;  .-----.  ;
+    | (  oo  )  |
+    ;  '----'  ;
+     \   ||   /
+      '.__.__.'
+```
+Bulbous shading suggests hormone sacs clustered in a ring, ready to be coaxed into gland seeds.
+
+## Neural Loom Array
+```
+     /\\  /\\
+    //\\\//\\\\
+   ||  ||  ||
+   ||==||==||
+   ||  ||  ||
+    \\\//\\/
+     \/  \/
+```
+Interlaced diagonals mimic fibres being braided, evoking the loom that spins nerve thread into neural weaves.
+
+## Osteo Frame Press
+```
+    .------------.
+   /|  ________  |\
+  / | |  ||  | | | \
+ |  | |  ||  | | |  |
+ |  | |__||__| | |  |
+ |  |  ______  | |  |
+ |  | |______| | |  |
+  \ |          | | /
+   \|__________|/
+```
+Heavy block shading and inset rails hint at the machine compressing bone fragments into skeletal frames.
+
+## Endocrine Bloom Vat
+```
+       .-~~~~-.
+     .'  .--.  '.
+    /   /\  /\   \
+   ;   /  \/  \   ;
+   |   |  🜁  |   |
+   ;   \      /   ;
+    \   '.__.'   /
+     '._/====\_.'
+```
+Soft concentric curves and a subtle alchemical sigil communicate the hormonal bloom forming inside.
+
+## Caretaker Drone Shell
+```
+      .--------.
+     / .------. \
+    / /  ()  \ \
+    | |  __   | |
+    | | (__)  | |
+    | |  ||   | |
+    | |__||__ | |
+    \ '------' /
+     '--------'
+```
+Squared shoulders with a soft centre line hint at a gentle, med-tech frame built to cradle new agents.
+
+## Emissary Avatar Core
+```
+        .-""-.
+      .'  ()  '.
+     /  .----.  \
+    ;  / .--. \  ;
+    |  |( 💠 )|  |
+    ;  \ '--' /  ;
+     \  '.__.'  /
+      '._/\_.'
+```
+The diamond sigil and mirrored shading suggest poise and balance, a vessel tuned for diplomatic deployments.

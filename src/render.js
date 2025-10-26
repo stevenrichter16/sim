@@ -634,6 +634,22 @@ function factoryItemColor(item){
       return '#7ddcd3';
     case FactoryItem.HUMAN_SHELL:
       return '#ffe9ad';
+    case FactoryItem.NERVE_THREAD:
+      return '#d0b4ff';
+    case FactoryItem.BONE_FRAGMENT:
+      return '#d9d2c7';
+    case FactoryItem.GLAND_SEED:
+      return '#f6c27a';
+    case FactoryItem.NEURAL_WEAVE:
+      return '#8a6bf6';
+    case FactoryItem.SKELETAL_FRAME:
+      return '#b7a694';
+    case FactoryItem.GLANDULAR_NETWORK:
+      return '#f4a761';
+    case FactoryItem.CARETAKER_DRONE:
+      return '#9fe3f9';
+    case FactoryItem.EMISSARY_AVATAR:
+      return '#ffe0f3';
     default:
       return '#ffffff';
   }

@@ -17,6 +17,88 @@ export const FactoryItem = Object.freeze({
   ORGAN_MASS: 'organ_mass',
   BODY_SYSTEM: 'body_system',
   HUMAN_SHELL: 'human_shell',
+  NERVE_THREAD: 'nerve_thread',
+  BONE_FRAGMENT: 'bone_fragment',
+  GLAND_SEED: 'gland_seed',
+  NEURAL_WEAVE: 'neural_weave',
+  SKELETAL_FRAME: 'skeletal_frame',
+  GLANDULAR_NETWORK: 'glandular_network',
+  CARETAKER_DRONE: 'caretaker_drone',
+  EMISSARY_AVATAR: 'emissary_avatar',
+});
+
+const ItemStage = Object.freeze({
+  HARVEST: 'harvest',
+  BIOFORGE: 'bioforge',
+  CONSTRUCT: 'construct',
+});
+
+const FACTORY_ITEM_META = Object.freeze({
+  [FactoryItem.SKIN_PATCH]: {
+    label: 'Skin Patch',
+    stage: ItemStage.HARVEST,
+    description: 'Dermal graft segments shaved from willing faction donors.',
+  },
+  [FactoryItem.BLOOD_VIAL]: {
+    label: 'Blood Vial',
+    stage: ItemStage.HARVEST,
+    description: 'Stabilised haem reserves suspended in oxygenated gel.',
+  },
+  [FactoryItem.ORGAN_MASS]: {
+    label: 'Organ Mass',
+    stage: ItemStage.HARVEST,
+    description: 'Amorphous visceral tissue primed for sculpting new anatomy.',
+  },
+  [FactoryItem.NERVE_THREAD]: {
+    label: 'Nerve Thread',
+    stage: ItemStage.HARVEST,
+    description: 'Axonal spindles teased from synapse nodes for neural looms.',
+  },
+  [FactoryItem.BONE_FRAGMENT]: {
+    label: 'Osteo Fragment',
+    stage: ItemStage.HARVEST,
+    description: 'Calcified lattice dust, ideal for printing skeletal frames.',
+  },
+  [FactoryItem.GLAND_SEED]: {
+    label: 'Gland Seed',
+    stage: ItemStage.HARVEST,
+    description: 'Endocrine starter pods infused with hormonal catalysts.',
+  },
+  [FactoryItem.BODY_SYSTEM]: {
+    label: 'Body System Capsule',
+    stage: ItemStage.BIOFORGE,
+    description: 'Multi-organ capsules ready to dock into a waiting chassis.',
+  },
+  [FactoryItem.NEURAL_WEAVE]: {
+    label: 'Neural Weave',
+    stage: ItemStage.BIOFORGE,
+    description: 'Bioelectric mesh woven from nerve threads and blood serum.',
+  },
+  [FactoryItem.SKELETAL_FRAME]: {
+    label: 'Skeletal Frame',
+    stage: ItemStage.BIOFORGE,
+    description: 'Rigid osteo scaffolds pressed into humanoid proportions.',
+  },
+  [FactoryItem.GLANDULAR_NETWORK]: {
+    label: 'Glandular Network',
+    stage: ItemStage.BIOFORGE,
+    description: 'Regulatory endocrine clusters that temper emergent agents.',
+  },
+  [FactoryItem.HUMAN_SHELL]: {
+    label: 'Constructed Human',
+    stage: ItemStage.CONSTRUCT,
+    description: 'Baseline faction recruit assembled from modular systems.',
+  },
+  [FactoryItem.CARETAKER_DRONE]: {
+    label: 'Caretaker Drone',
+    stage: ItemStage.CONSTRUCT,
+    description: 'Med-tech assistant that shepherds newborn agents to safety.',
+  },
+  [FactoryItem.EMISSARY_AVATAR]: {
+    label: 'Emissary Avatar',
+    stage: ItemStage.CONSTRUCT,
+    description: 'Diplomatic synth grown for negotiation bursts and envoy duty.',
+  },
 });
 
 const ORIENTATIONS = Object.freeze(['north', 'east', 'south', 'west']);
@@ -59,20 +141,104 @@ const BELT_SPEED = 0.35;
 const SMELTER_TIME = 8;
 const CONSTRUCTOR_TIME = 12;
 
-const BIOFORGE_RECIPE = Object.freeze({
-  inputs: new Map([
-    [FactoryItem.SKIN_PATCH, 1],
-    [FactoryItem.BLOOD_VIAL, 1],
-    [FactoryItem.ORGAN_MASS, 1],
-  ]),
-  output: FactoryItem.BODY_SYSTEM,
-  speed: 1 / SMELTER_TIME,
+function createRecipeDefinition({ key, label, description, inputs, output, speed, stage }){
+  const map = new Map();
+  if(Array.isArray(inputs)){
+    for(const [item, amount] of inputs){
+      if(item == null || amount == null) continue;
+      map.set(item, amount);
+    }
+  }
+  return Object.freeze({ key, label, description, inputs: map, output, speed, stage });
+}
+
+const BIOFORGE_RECIPES = Object.freeze({
+  body_system: createRecipeDefinition({
+    key: 'body_system',
+    label: 'Body System Capsule',
+    description: 'Tri-fold infusion of dermal, blood, and visceral stock into sealed systems.',
+    inputs: [
+      [FactoryItem.SKIN_PATCH, 1],
+      [FactoryItem.BLOOD_VIAL, 1],
+      [FactoryItem.ORGAN_MASS, 1],
+    ],
+    output: FactoryItem.BODY_SYSTEM,
+    speed: 1 / SMELTER_TIME,
+    stage: ItemStage.BIOFORGE,
+  }),
+  neural_weave: createRecipeDefinition({
+    key: 'neural_weave',
+    label: 'Neural Weave Loom',
+    description: 'Spins nerve thread through blood serum into sentient-ready wiring.',
+    inputs: [
+      [FactoryItem.NERVE_THREAD, 2],
+      [FactoryItem.BLOOD_VIAL, 1],
+    ],
+    output: FactoryItem.NEURAL_WEAVE,
+    speed: 1 / (SMELTER_TIME * 1.2),
+    stage: ItemStage.BIOFORGE,
+  }),
+  skeletal_frame: createRecipeDefinition({
+    key: 'skeletal_frame',
+    label: 'Osteo Frame Press',
+    description: 'Compresses osteo fragments and dermal binding into rigid frames.',
+    inputs: [
+      [FactoryItem.BONE_FRAGMENT, 2],
+      [FactoryItem.SKIN_PATCH, 1],
+    ],
+    output: FactoryItem.SKELETAL_FRAME,
+    speed: 1 / (SMELTER_TIME * 1.35),
+    stage: ItemStage.BIOFORGE,
+  }),
+  glandular_network: createRecipeDefinition({
+    key: 'glandular_network',
+    label: 'Endocrine Bloom',
+    description: 'Coaxes gland seeds and organ mass into hormonal regulatory webs.',
+    inputs: [
+      [FactoryItem.GLAND_SEED, 2],
+      [FactoryItem.ORGAN_MASS, 1],
+    ],
+    output: FactoryItem.GLANDULAR_NETWORK,
+    speed: 1 / (SMELTER_TIME * 1.5),
+    stage: ItemStage.BIOFORGE,
+  }),
 });
 
-const CONSTRUCTOR_RECIPE = Object.freeze({
-  inputs: new Map([[FactoryItem.BODY_SYSTEM, 3]]),
-  output: FactoryItem.HUMAN_SHELL,
-  speed: 1 / CONSTRUCTOR_TIME,
+const CONSTRUCTOR_BLUEPRINTS = Object.freeze({
+  human_shell: createRecipeDefinition({
+    key: 'human_shell',
+    label: 'Baseline Recruit',
+    description: 'Standardised recruit frame seeded with three body systems.',
+    inputs: [[FactoryItem.BODY_SYSTEM, 3]],
+    output: FactoryItem.HUMAN_SHELL,
+    speed: 1 / CONSTRUCTOR_TIME,
+    stage: ItemStage.CONSTRUCT,
+  }),
+  caretaker_drone: createRecipeDefinition({
+    key: 'caretaker_drone',
+    label: 'Caretaker Drone',
+    description: 'Pairs neural weave with skeletal frame for med-tech chassis.',
+    inputs: [
+      [FactoryItem.NEURAL_WEAVE, 1],
+      [FactoryItem.SKELETAL_FRAME, 1],
+    ],
+    output: FactoryItem.CARETAKER_DRONE,
+    speed: 1 / (CONSTRUCTOR_TIME * 1.25),
+    stage: ItemStage.CONSTRUCT,
+  }),
+  emissary_avatar: createRecipeDefinition({
+    key: 'emissary_avatar',
+    label: 'Emissary Avatar',
+    description: 'An envoy-grade synth mixing systems with endocrine and neural webs.',
+    inputs: [
+      [FactoryItem.BODY_SYSTEM, 2],
+      [FactoryItem.NEURAL_WEAVE, 1],
+      [FactoryItem.GLANDULAR_NETWORK, 1],
+    ],
+    output: FactoryItem.EMISSARY_AVATAR,
+    speed: 1 / (CONSTRUCTOR_TIME * 1.75),
+    stage: ItemStage.CONSTRUCT,
+  }),
 });
 
 const FACTORY_KIND_META = Object.freeze({
@@ -84,27 +250,66 @@ const FACTORY_KIND_META = Object.freeze({
   [FactoryKind.STORAGE]: { icon: '🛏️', name: 'Cradle Vault' },
 });
 
+const DEFAULT_BIOFORGE_RECIPE = BIOFORGE_RECIPES.body_system;
+const DEFAULT_CONSTRUCTOR_BLUEPRINT = CONSTRUCTOR_BLUEPRINTS.human_shell;
+
+function getBioforgeRecipe(key){
+  if(key && BIOFORGE_RECIPES[key]){
+    return BIOFORGE_RECIPES[key];
+  }
+  return DEFAULT_BIOFORGE_RECIPE;
+}
+
+function getConstructorBlueprint(key){
+  if(key && CONSTRUCTOR_BLUEPRINTS[key]){
+    return CONSTRUCTOR_BLUEPRINTS[key];
+  }
+  return DEFAULT_CONSTRUCTOR_BLUEPRINT;
+}
+
 function factoryKindMeta(kind){
   return FACTORY_KIND_META[kind] || { icon: '❓', name: kind ?? 'Unknown' };
 }
 
 function factoryItemLabel(item){
-  switch(item){
-    case FactoryItem.SKIN_PATCH:
-      return 'Skin Patch';
-    case FactoryItem.BLOOD_VIAL:
-      return 'Blood Vial';
-    case FactoryItem.ORGAN_MASS:
-      return 'Organ Mass';
-    case FactoryItem.BODY_SYSTEM:
-      return 'Body System Capsule';
-    case FactoryItem.HUMAN_SHELL:
-      return 'Constructed Human';
-    default:
-      if(typeof item === 'string'){ return item.replace(/_/g,' ').replace(/\b\w/g, ch => ch.toUpperCase()); }
-      return '—';
+  const meta = item && FACTORY_ITEM_META[item];
+  if(meta?.label){
+    return meta.label;
   }
+  if(typeof item === 'string'){
+    return item.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }
+  return '—';
 }
+
+function describeRecipe(recipe){
+  if(!recipe) return null;
+  return {
+    key: recipe.key,
+    label: recipe.label ?? factoryItemLabel(recipe.output),
+    description: recipe.description ?? '',
+    output: recipe.output,
+    outputLabel: factoryItemLabel(recipe.output),
+    stage: recipe.stage ?? null,
+    inputs: [...(recipe.inputs ?? new Map()).entries()].map(([item, amount]) => ({
+      item,
+      amount,
+      label: factoryItemLabel(item),
+    })),
+  };
+}
+
+const FACTORY_CATALOG = Object.freeze({
+  harvestables: Object.entries(FACTORY_ITEM_META)
+    .filter(([, meta]) => meta.stage === ItemStage.HARVEST)
+    .map(([item, meta]) => ({
+      item,
+      label: meta.label,
+      description: meta.description,
+    })),
+  bioforge: Object.values(BIOFORGE_RECIPES).map(describeRecipe),
+  constructs: Object.values(CONSTRUCTOR_BLUEPRINTS).map(describeRecipe),
+});
 
 function createStructureTelemetry(kind){
   const factory = ensureFactoryState();
@@ -242,6 +447,24 @@ const BRUSH_SPEC = Object.freeze({
     resource: FactoryItem.ORGAN_MASS,
     label: 'Organ Bloom Node',
   },
+  'factory-node-nerve': {
+    kind: FactoryKind.NODE,
+    mode: Mode.FACTORY_NODE,
+    resource: FactoryItem.NERVE_THREAD,
+    label: 'Synapse Node',
+  },
+  'factory-node-bone': {
+    kind: FactoryKind.NODE,
+    mode: Mode.FACTORY_NODE,
+    resource: FactoryItem.BONE_FRAGMENT,
+    label: 'Osteo Node',
+  },
+  'factory-node-gland': {
+    kind: FactoryKind.NODE,
+    mode: Mode.FACTORY_NODE,
+    resource: FactoryItem.GLAND_SEED,
+    label: 'Endocrine Node',
+  },
   'factory-miner': {
     kind: FactoryKind.MINER,
     mode: Mode.FACTORY_MINER,
@@ -253,10 +476,37 @@ const BRUSH_SPEC = Object.freeze({
   'factory-smelter': {
     kind: FactoryKind.SMELTER,
     mode: Mode.FACTORY_SMELTER,
+    recipeKey: 'body_system',
+  },
+  'factory-smelter-neural': {
+    kind: FactoryKind.SMELTER,
+    mode: Mode.FACTORY_SMELTER,
+    recipeKey: 'neural_weave',
+  },
+  'factory-smelter-frame': {
+    kind: FactoryKind.SMELTER,
+    mode: Mode.FACTORY_SMELTER,
+    recipeKey: 'skeletal_frame',
+  },
+  'factory-smelter-gland': {
+    kind: FactoryKind.SMELTER,
+    mode: Mode.FACTORY_SMELTER,
+    recipeKey: 'glandular_network',
   },
   'factory-constructor': {
     kind: FactoryKind.CONSTRUCTOR,
     mode: Mode.FACTORY_CONSTRUCTOR,
+    recipeKey: 'human_shell',
+  },
+  'factory-constructor-caretaker': {
+    kind: FactoryKind.CONSTRUCTOR,
+    mode: Mode.FACTORY_CONSTRUCTOR,
+    recipeKey: 'caretaker_drone',
+  },
+  'factory-constructor-emissary': {
+    kind: FactoryKind.CONSTRUCTOR,
+    mode: Mode.FACTORY_CONSTRUCTOR,
+    recipeKey: 'emissary_avatar',
   },
   'factory-storage': {
     kind: FactoryKind.STORAGE,
@@ -358,7 +608,8 @@ function createStructure(kind, orientation){
         pendingInputJob: new Set(),
         pendingOutputJob: false,
         currentCycle: null,
-        recipe: BIOFORGE_RECIPE,
+        recipe: DEFAULT_BIOFORGE_RECIPE,
+        recipeKey: DEFAULT_BIOFORGE_RECIPE.key,
         telemetry,
       };
     case FactoryKind.CONSTRUCTOR:
@@ -372,7 +623,8 @@ function createStructure(kind, orientation){
         pendingInputJob: new Set(),
         pendingOutputJob: false,
         currentCycle: null,
-        recipe: CONSTRUCTOR_RECIPE,
+        recipe: DEFAULT_CONSTRUCTOR_BLUEPRINT,
+        recipeKey: DEFAULT_CONSTRUCTOR_BLUEPRINT.key,
         telemetry,
       };
     case FactoryKind.STORAGE:
@@ -789,6 +1041,17 @@ export function placeFactoryStructure(tileIdx, brush, { orientation } = {}){
   if(world.vent) world.vent[tileIdx] = 0;
   if(world.fire) world.fire.delete(tileIdx);
   const structure = createStructure(spec.kind, dir);
+  if(structure && spec.recipeKey){
+    if(structure.kind === FactoryKind.SMELTER){
+      const recipe = getBioforgeRecipe(spec.recipeKey);
+      structure.recipe = recipe;
+      structure.recipeKey = recipe.key;
+    } else if(structure.kind === FactoryKind.CONSTRUCTOR){
+      const recipe = getConstructorBlueprint(spec.recipeKey);
+      structure.recipe = recipe;
+      structure.recipeKey = recipe.key;
+    }
+  }
   factory.structures.set(tileIdx, structure);
   world.strings[tileIdx] = baseStringFor(spec.mode);
   return { ok: true, kind: spec.kind, orientation: dir };
@@ -1057,38 +1320,103 @@ export function getFactoryTelemetry(){
   return { tick: ticks, entries };
 }
 
+export function getFactoryCatalog(){
+  return {
+    harvestables: FACTORY_CATALOG.harvestables.map((entry) => ({ ...entry })),
+    bioforge: FACTORY_CATALOG.bioforge.map((recipe) => ({
+      ...recipe,
+      inputs: recipe.inputs.map((input) => ({ ...input })),
+    })),
+    constructs: FACTORY_CATALOG.constructs.map((recipe) => ({
+      ...recipe,
+      inputs: recipe.inputs.map((input) => ({ ...input })),
+    })),
+  };
+}
+
 export function getFactoryStatus(){
   const factory = ensureFactoryState();
   const produced = factory.stats.produced || {};
   const stored = factory.stats.stored || {};
+  const deliveredStats = factory.stats.delivered || {};
+  const countStat = (bucket, item) => bucket?.[item] ?? 0;
   return {
     orientation: factory.orientation,
     orientationLabel: getOrientationLabel(factory.orientation),
     produced: {
-      skin: produced[FactoryItem.SKIN_PATCH] ?? 0,
-      blood: produced[FactoryItem.BLOOD_VIAL] ?? 0,
-      organs: produced[FactoryItem.ORGAN_MASS] ?? 0,
-      systems: produced[FactoryItem.BODY_SYSTEM] ?? 0,
-      humans: produced[FactoryItem.HUMAN_SHELL] ?? 0,
+      skin: countStat(produced, FactoryItem.SKIN_PATCH),
+      blood: countStat(produced, FactoryItem.BLOOD_VIAL),
+      organs: countStat(produced, FactoryItem.ORGAN_MASS),
+      nerves: countStat(produced, FactoryItem.NERVE_THREAD),
+      bone: countStat(produced, FactoryItem.BONE_FRAGMENT),
+      glands: countStat(produced, FactoryItem.GLAND_SEED),
+      systems: countStat(produced, FactoryItem.BODY_SYSTEM),
+      neural: countStat(produced, FactoryItem.NEURAL_WEAVE),
+      frames: countStat(produced, FactoryItem.SKELETAL_FRAME),
+      endocrine: countStat(produced, FactoryItem.GLANDULAR_NETWORK),
+      humans: countStat(produced, FactoryItem.HUMAN_SHELL),
+      caretakers: countStat(produced, FactoryItem.CARETAKER_DRONE),
+      emissaries: countStat(produced, FactoryItem.EMISSARY_AVATAR),
     },
     stored: {
-      skin: stored[FactoryItem.SKIN_PATCH] ?? 0,
-      blood: stored[FactoryItem.BLOOD_VIAL] ?? 0,
-      organs: stored[FactoryItem.ORGAN_MASS] ?? 0,
-      systems: stored[FactoryItem.BODY_SYSTEM] ?? 0,
-      humans: stored[FactoryItem.HUMAN_SHELL] ?? 0,
+      skin: countStat(stored, FactoryItem.SKIN_PATCH),
+      blood: countStat(stored, FactoryItem.BLOOD_VIAL),
+      organs: countStat(stored, FactoryItem.ORGAN_MASS),
+      nerves: countStat(stored, FactoryItem.NERVE_THREAD),
+      bone: countStat(stored, FactoryItem.BONE_FRAGMENT),
+      glands: countStat(stored, FactoryItem.GLAND_SEED),
+      systems: countStat(stored, FactoryItem.BODY_SYSTEM),
+      neural: countStat(stored, FactoryItem.NEURAL_WEAVE),
+      frames: countStat(stored, FactoryItem.SKELETAL_FRAME),
+      endocrine: countStat(stored, FactoryItem.GLANDULAR_NETWORK),
+      humans: countStat(stored, FactoryItem.HUMAN_SHELL),
+      caretakers: countStat(stored, FactoryItem.CARETAKER_DRONE),
+      emissaries: countStat(stored, FactoryItem.EMISSARY_AVATAR),
     },
     delivered: {
-      skin: factory.stats.delivered?.[FactoryItem.SKIN_PATCH] ?? 0,
-      blood: factory.stats.delivered?.[FactoryItem.BLOOD_VIAL] ?? 0,
-      organs: factory.stats.delivered?.[FactoryItem.ORGAN_MASS] ?? 0,
-      systems: factory.stats.delivered?.[FactoryItem.BODY_SYSTEM] ?? 0,
-      humans: factory.stats.delivered?.[FactoryItem.HUMAN_SHELL] ?? 0,
+      skin: countStat(deliveredStats, FactoryItem.SKIN_PATCH),
+      blood: countStat(deliveredStats, FactoryItem.BLOOD_VIAL),
+      organs: countStat(deliveredStats, FactoryItem.ORGAN_MASS),
+      nerves: countStat(deliveredStats, FactoryItem.NERVE_THREAD),
+      bone: countStat(deliveredStats, FactoryItem.BONE_FRAGMENT),
+      glands: countStat(deliveredStats, FactoryItem.GLAND_SEED),
+      systems: countStat(deliveredStats, FactoryItem.BODY_SYSTEM),
+      neural: countStat(deliveredStats, FactoryItem.NEURAL_WEAVE),
+      frames: countStat(deliveredStats, FactoryItem.SKELETAL_FRAME),
+      endocrine: countStat(deliveredStats, FactoryItem.GLANDULAR_NETWORK),
+      humans: countStat(deliveredStats, FactoryItem.HUMAN_SHELL),
+      caretakers: countStat(deliveredStats, FactoryItem.CARETAKER_DRONE),
+      emissaries: countStat(deliveredStats, FactoryItem.EMISSARY_AVATAR),
     },
     nodes: factory.nodes.size,
     structures: factory.structures.size,
     constructorComplete: factory.stats.constructorComplete ?? (stored[FactoryItem.HUMAN_SHELL] ?? 0),
     jobsCompleted: factory.stats.jobsCompleted ?? 0,
+    extended: {
+      harvest: FACTORY_CATALOG.harvestables.map(({ item, label }) => ({
+        item,
+        label,
+        produced: countStat(produced, item),
+        stored: countStat(stored, item),
+        delivered: countStat(deliveredStats, item),
+      })),
+      bioforge: FACTORY_CATALOG.bioforge.map((recipe) => ({
+        key: recipe.key,
+        label: recipe.label,
+        output: recipe.output,
+        produced: countStat(produced, recipe.output),
+        stored: countStat(stored, recipe.output),
+        delivered: countStat(deliveredStats, recipe.output),
+      })),
+      constructs: FACTORY_CATALOG.constructs.map((recipe) => ({
+        key: recipe.key,
+        label: recipe.label,
+        output: recipe.output,
+        produced: countStat(produced, recipe.output),
+        stored: countStat(stored, recipe.output),
+        delivered: countStat(deliveredStats, recipe.output),
+      })),
+    },
   };
 }
 
