@@ -26,29 +26,42 @@ describe('factory logistics loop', () => {
     expect(result.error).toBe('miner-needs-node');
   });
 
-  it('produces plates when a full chain is assembled', () => {
-    const base = idx(20, 20);
-    placeFactoryStructure(base, 'factory-node');
-    placeFactoryStructure(base, 'factory-miner', buildOrientation('east'));
+  it('assembles humans when the biofoundry loop is fed', () => {
+    const skinNode = idx(18, 19);
+    const bloodNode = idx(19, 19);
+    const organNode = idx(20, 19);
+
+    placeFactoryStructure(skinNode, 'factory-node-skin');
+    placeFactoryStructure(bloodNode, 'factory-node-blood');
+    placeFactoryStructure(organNode, 'factory-node-organ');
+
+    placeFactoryStructure(skinNode, 'factory-miner', buildOrientation('south'));
+    placeFactoryStructure(bloodNode, 'factory-miner', buildOrientation('south'));
+    placeFactoryStructure(organNode, 'factory-miner', buildOrientation('south'));
+
+    placeFactoryStructure(idx(18, 20), 'factory-belt', buildOrientation('east'));
+    placeFactoryStructure(idx(19, 20), 'factory-belt', buildOrientation('east'));
+    placeFactoryStructure(idx(20, 20), 'factory-belt', buildOrientation('east'));
     placeFactoryStructure(idx(21, 20), 'factory-belt', buildOrientation('east'));
     placeFactoryStructure(idx(22, 20), 'factory-smelter', buildOrientation('east'));
-    placeFactoryStructure(idx(23, 20), 'factory-belt', buildOrientation('east'));
-    placeFactoryStructure(idx(24, 20), 'factory-constructor', buildOrientation('east'));
-    placeFactoryStructure(idx(25, 20), 'factory-belt', buildOrientation('east'));
-    placeFactoryStructure(idx(26, 20), 'factory-storage', buildOrientation('east'));
+    placeFactoryStructure(idx(23, 20), 'factory-constructor', buildOrientation('east'));
+    placeFactoryStructure(idx(24, 20), 'factory-storage', buildOrientation('east'));
 
-    spawnFactoryWorker(base);
+    spawnFactoryWorker(skinNode);
+    spawnFactoryWorker(bloodNode);
+    spawnFactoryWorker(organNode);
     spawnFactoryWorker(idx(22, 20));
-    spawnFactoryWorker(idx(24, 20));
+    spawnFactoryWorker(idx(23, 20));
 
-    for(let i = 0; i < 400; i += 1){
+    for(let i = 0; i < 600; i += 1){
       stepFactory();
     }
 
     const status = getFactoryStatus();
-    expect(status.produced.ore).toBeGreaterThan(0);
-    expect(status.produced.ingot).toBeGreaterThan(0);
-    expect(status.produced.plate).toBeGreaterThan(0);
-    expect(status.stored.plate).toBeGreaterThan(0);
+    expect(status.produced.skin).toBeGreaterThan(0);
+    expect(status.produced.blood).toBeGreaterThan(0);
+    expect(status.produced.organs).toBeGreaterThan(0);
+    expect(status.produced.systems).toBeGreaterThan(0);
+    expect(status.stored.humans).toBeGreaterThan(0);
   });
 });

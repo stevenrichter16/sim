@@ -165,8 +165,8 @@ export const materialLegend = {
     interactions: [],
   },
   [Mode.FACTORY_NODE]: {
-    label: 'Ore Node',
-    color: '#6b4a2d',
+    label: 'Biological Node',
+    color: '#43262f',
     attributes: {
       heat: [],
       amplitude: [],
@@ -174,12 +174,12 @@ export const materialLegend = {
       phase: [],
     },
     interactions: [
-      { target: 'Miner', effect: 'Feeds miners with steady iron ore output' },
+      { target: 'Harvest Surgeon', effect: 'Provides living tissue samples ready for harvesting' },
     ],
   },
   [Mode.FACTORY_MINER]: {
-    label: 'Miner',
-    color: '#424b5f',
+    label: 'Harvest Surgeon',
+    color: '#2f3747',
     attributes: {
       heat: [],
       amplitude: [],
@@ -187,12 +187,12 @@ export const materialLegend = {
       phase: [],
     },
     interactions: [
-      { target: 'Conveyor', effect: 'Drops iron ore items onto connected belts' },
+      { target: 'Vein Conveyor', effect: 'Drops extracted skin, blood, or organ bundles onto connected belts' },
     ],
   },
   [Mode.FACTORY_BELT]: {
-    label: 'Conveyor',
-    color: '#212939',
+    label: 'Vein Conveyor',
+    color: '#201429',
     attributes: {
       heat: [],
       amplitude: [],
@@ -204,8 +204,8 @@ export const materialLegend = {
     ],
   },
   [Mode.FACTORY_SMELTER]: {
-    label: 'Smelter',
-    color: '#52342a',
+    label: 'Bioforge Vat',
+    color: '#4b1e2b',
     attributes: {
       heat: [],
       amplitude: [],
@@ -213,12 +213,12 @@ export const materialLegend = {
       phase: [],
     },
     interactions: [
-      { target: 'Conveyor', effect: 'Outputs iron ingots when supplied with ore' },
+      { target: 'Vein Conveyor', effect: 'Outputs body system capsules when infused with tissues' },
     ],
   },
   [Mode.FACTORY_CONSTRUCTOR]: {
-    label: 'Constructor',
-    color: '#333b68',
+    label: 'Synth Constructor',
+    color: '#2b334e',
     attributes: {
       heat: [],
       amplitude: [],
@@ -226,12 +226,12 @@ export const materialLegend = {
       phase: [],
     },
     interactions: [
-      { target: 'Storage', effect: 'Sends crafted plates forward once available' },
+      { target: 'Cradle Vault', effect: 'Sends grown humans forward once assembled' },
     ],
   },
   [Mode.FACTORY_STORAGE]: {
-    label: 'Storage Crate',
-    color: '#6c512b',
+    label: 'Cradle Vault',
+    color: '#453524',
     attributes: {
       heat: [],
       amplitude: [],
@@ -239,7 +239,7 @@ export const materialLegend = {
       phase: [],
     },
     interactions: [
-      { target: 'Conveyor', effect: 'Collects final products for scoring' },
+      { target: 'Vein Conveyor', effect: 'Collects resting humans for faction deployment' },
     ],
   },
 };

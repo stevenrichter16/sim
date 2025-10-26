@@ -654,7 +654,8 @@ function toggleScenarioDiagPanel(force){
     if(!status) return;
     const produced = status.produced || {};
     const stored = status.stored || {};
-    factoryStatusNode.textContent = `Ore ${produced.ore ?? 0} • Ingots ${produced.ingot ?? 0} • Plates ${produced.plate ?? 0} • Stored Plates ${stored.plate ?? 0}`;
+    const delivered = status.delivered || {};
+    factoryStatusNode.textContent = `Skin ${produced.skin ?? 0} • Blood ${produced.blood ?? 0} • Organs ${produced.organs ?? 0} • Systems ${produced.systems ?? 0} • Humans ${stored.humans ?? 0} (Delivered ${delivered.humans ?? 0})`;
     const diagnostics = getFactoryDiagnostics();
     if(factoryJobsNode){
       const queuePreview = diagnostics.queue
