@@ -45,7 +45,7 @@ describe('factory workers', () => {
   it('assigns jobs FIFO and completes them after dwell duration', () => {
     spawnFactoryWorker(idx(6, 6));
     enqueueFactoryJob({ kind: 'mine', tileIdx: idx(6, 6), payload: { duration: 2 } });
-    enqueueFactoryJob({ kind: 'deliver', tileIdx: idx(7, 6), payload: { duration: 1, item: FactoryItem.IRON_ORE } });
+    enqueueFactoryJob({ kind: 'deliver', tileIdx: idx(7, 6), payload: { duration: 1, item: FactoryItem.SKIN_PATCH } });
 
     // Initial step: worker should claim the first job.
     stepFactoryWorkers();

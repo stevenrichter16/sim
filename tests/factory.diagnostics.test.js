@@ -25,7 +25,7 @@ describe('factory diagnostics', () => {
   });
 
   it('summarises queue and worker state', () => {
-    enqueueFactoryJob({ kind: 'deliver', tileIdx: idx(3, 3), payload: { item: FactoryItem.IRON_ORE } });
+    enqueueFactoryJob({ kind: 'deliver', tileIdx: idx(3, 3), payload: { item: FactoryItem.SKIN_PATCH } });
     spawnFactoryWorker(idx(1, 1));
     const diagnostics = getFactoryDiagnostics();
     expect(diagnostics.queueLength).toBe(1);

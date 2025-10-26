@@ -654,7 +654,18 @@ function toggleScenarioDiagPanel(force){
     if(!status) return;
     const produced = status.produced || {};
     const stored = status.stored || {};
-    factoryStatusNode.textContent = `Ore ${produced.ore ?? 0} • Ingots ${produced.ingot ?? 0} • Plates ${produced.plate ?? 0} • Stored Plates ${stored.plate ?? 0}`;
+    const delivered = status.delivered || {};
+    const stageSummary = (title, entries) => {
+      if(!entries || !entries.length) return `${title} —`;
+      const parts = entries.map((entry) => `${entry.label} ${entry.produced ?? 0}`);
+      return `${title} ${parts.join(' • ')}`;
+    };
+    const harvestSummary = stageSummary('Harvest', status.extended?.harvest ?? []);
+    const forgeSummary = stageSummary('Forge', status.extended?.bioforge ?? []);
+    const constructSummary = stageSummary('Construct', status.extended?.constructs ?? []);
+    const stockLine = `Stock Humans ${stored.humans ?? 0} • Caretakers ${stored.caretakers ?? 0} • Emissaries ${stored.emissaries ?? 0}`;
+    const deliveryLine = `Delivered Humans ${delivered.humans ?? 0} • Caretakers ${delivered.caretakers ?? 0} • Emissaries ${delivered.emissaries ?? 0}`;
+    factoryStatusNode.textContent = `${harvestSummary}\n${forgeSummary}\n${constructSummary}\n${stockLine} (${deliveryLine})`;
     const diagnostics = getFactoryDiagnostics();
     if(factoryJobsNode){
       const queuePreview = diagnostics.queue

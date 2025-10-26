@@ -480,113 +480,176 @@ function drawMyceliumTile(ctx, x, y, size, S, tileIndex, ticker){
 
 
 function drawFactoryNodeTile(ctx, x, y, size){
-  drawShadedTile(ctx, x, y, size, '#6b4a2d', { outline: '#2f1c0c', sheen: 0.1 });
+  drawShadedTile(ctx, x, y, size, '#43262f', { outline: '#1e0d15', sheen: 0.18 });
   ctx.save();
-  ctx.fillStyle = '#d5a86d';
+  const cx = x + size * 0.5;
+  const cy = y + size * 0.52;
+  const gradient = ctx.createRadialGradient(cx, cy, size * 0.05, cx, cy, size * 0.32);
+  gradient.addColorStop(0, 'rgba(255,228,220,0.95)');
+  gradient.addColorStop(0.5, 'rgba(236,163,173,0.85)');
+  gradient.addColorStop(1, 'rgba(130,54,80,0.6)');
+  ctx.fillStyle = gradient;
   ctx.beginPath();
-  ctx.arc(x + size * 0.5, y + size * 0.55, size * 0.24, 0, Math.PI * 2);
+  ctx.arc(cx, cy, size * 0.3, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.strokeStyle = 'rgba(60,15,28,0.6)';
   ctx.lineWidth = Math.max(1, size * 0.08);
   ctx.stroke();
+  ctx.globalAlpha = 0.65;
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.beginPath();
+  ctx.arc(cx - size * 0.12, cy - size * 0.08, size * 0.1, 0, Math.PI * 2);
+  ctx.arc(cx + size * 0.14, cy + size * 0.1, size * 0.08, 0, Math.PI * 2);
+  ctx.arc(cx + size * 0.05, cy - size * 0.18, size * 0.06, 0, Math.PI * 2);
+  ctx.fill('evenodd');
   ctx.restore();
 }
 
 function drawFactoryMinerTile(ctx, x, y, size, orientation){
-  drawShadedTile(ctx, x, y, size, '#424b5f', { outline: '#1b2334', sheen: 0.18 });
+  drawShadedTile(ctx, x, y, size, '#2f3747', { outline: '#0f1626', sheen: 0.2 });
   const angle = getOrientationAngle(orientation);
   ctx.save();
   ctx.translate(x + size / 2, y + size / 2);
   ctx.rotate(angle);
-  ctx.fillStyle = '#ccd4de';
+  ctx.fillStyle = '#f3f7ff';
   ctx.beginPath();
-  ctx.moveTo(-size * 0.28, -size * 0.22);
-  ctx.lineTo(size * 0.3, 0);
-  ctx.lineTo(-size * 0.28, size * 0.22);
+  ctx.moveTo(-size * 0.3, -size * 0.2);
+  ctx.lineTo(size * 0.26, 0);
+  ctx.lineTo(-size * 0.3, size * 0.2);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#3fe0ff';
-  ctx.fillRect(-size * 0.22, -size * 0.14, size * 0.2, size * 0.28);
+  ctx.fillStyle = '#c24a6f';
+  ctx.fillRect(-size * 0.24, -size * 0.12, size * 0.16, size * 0.24);
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = Math.max(1, size * 0.05);
+  ctx.beginPath();
+  ctx.moveTo(size * 0.04, -size * 0.18);
+  ctx.lineTo(size * 0.24, -size * 0.04);
+  ctx.lineTo(size * 0.24, size * 0.04);
+  ctx.lineTo(size * 0.04, size * 0.18);
+  ctx.stroke();
   ctx.restore();
 }
 
 function drawFactoryBeltTile(ctx, x, y, size, orientation){
-  drawShadedTile(ctx, x, y, size, '#212939', { outline: '#0f1626', sheen: 0.08 });
+  drawShadedTile(ctx, x, y, size, '#201429', { outline: '#0c060f', sheen: 0.12 });
   const angle = getOrientationAngle(orientation);
   ctx.save();
   ctx.translate(x + size / 2, y + size / 2);
   ctx.rotate(angle);
-  ctx.strokeStyle = '#62e0ff';
-  ctx.lineWidth = Math.max(1, size * 0.16);
+  ctx.strokeStyle = '#f76d94';
+  ctx.lineWidth = Math.max(1, size * 0.14);
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(-size * 0.32, 0);
-  ctx.lineTo(size * 0.18, 0);
+  ctx.quadraticCurveTo(-size * 0.05, size * 0.18, size * 0.22, 0);
   ctx.stroke();
-  ctx.fillStyle = '#62e0ff';
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.lineWidth = Math.max(1, size * 0.04);
   ctx.beginPath();
-  ctx.moveTo(size * 0.18, 0);
-  ctx.lineTo(size * 0.02, size * 0.18);
-  ctx.lineTo(size * 0.02, -size * 0.18);
+  ctx.moveTo(-size * 0.22, -size * 0.1);
+  ctx.lineTo(size * 0.18, size * 0.1);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFactorySmelterTile(ctx, x, y, size, orientation){
+  drawShadedTile(ctx, x, y, size, '#4b1e2b', { outline: '#1f0911', sheen: 0.18 });
+  ctx.save();
+  ctx.translate(x + size / 2, y + size / 2);
+  const vatGradient = ctx.createLinearGradient(-size * 0.28, -size * 0.3, size * 0.28, size * 0.3);
+  vatGradient.addColorStop(0, '#ffb7c9');
+  vatGradient.addColorStop(0.5, '#ff6f9d');
+  vatGradient.addColorStop(1, '#b43a6d');
+  ctx.fillStyle = vatGradient;
+  ctx.fillRect(-size * 0.3, -size * 0.28, size * 0.6, size * 0.56);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillRect(-size * 0.24, -size * 0.18, size * 0.18, size * 0.36);
+  const angle = getOrientationAngle(orientation);
+  ctx.rotate(angle);
+  ctx.fillStyle = '#ffdfef';
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.05, size * 0.28);
+  ctx.lineTo(size * 0.08, size * 0.2);
+  ctx.lineTo(size * 0.08, size * 0.36);
   ctx.closePath();
   ctx.fill();
   ctx.restore();
 }
 
-function drawFactorySmelterTile(ctx, x, y, size, orientation){
-  drawShadedTile(ctx, x, y, size, '#52342a', { outline: '#27140f', sheen: 0.14 });
-  ctx.save();
-  ctx.translate(x + size / 2, y + size / 2);
-  ctx.fillStyle = '#ff9357';
-  ctx.fillRect(-size * 0.28, -size * 0.22, size * 0.56, size * 0.44);
-  ctx.fillStyle = '#ffe2b0';
-  ctx.fillRect(-size * 0.18, -size * 0.12, size * 0.36, size * 0.12);
-  const angle = getOrientationAngle(orientation);
-  ctx.rotate(angle);
-  ctx.fillStyle = '#2b1a14';
-  ctx.fillRect(-size * 0.08, size * 0.22, size * 0.16, size * 0.16);
-  ctx.restore();
-}
-
 function drawFactoryConstructorTile(ctx, x, y, size, orientation){
-  drawShadedTile(ctx, x, y, size, '#333b68', { outline: '#181d33', sheen: 0.2 });
+  drawShadedTile(ctx, x, y, size, '#2b334e', { outline: '#101424', sheen: 0.22 });
   ctx.save();
   ctx.translate(x + size / 2, y + size / 2);
   const angle = getOrientationAngle(orientation);
   ctx.rotate(angle);
-  ctx.fillStyle = '#8ca8ff';
-  ctx.fillRect(-size * 0.24, -size * 0.16, size * 0.48, size * 0.32);
-  ctx.fillStyle = '#d6e1ff';
-  ctx.fillRect(-size * 0.12, -size * 0.08, size * 0.24, size * 0.16);
-  ctx.strokeStyle = 'rgba(30,40,80,0.9)';
-  ctx.lineWidth = Math.max(1, size * 0.08);
-  ctx.strokeRect(-size * 0.28, -size * 0.2, size * 0.56, size * 0.4);
+  ctx.fillStyle = '#92d8f0';
+  ctx.fillRect(-size * 0.28, -size * 0.2, size * 0.56, size * 0.4);
+  ctx.fillStyle = '#e0f7ff';
+  const radius = size * 0.08;
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.18 + radius, -size * 0.12);
+  ctx.lineTo(size * 0.18 - radius, -size * 0.12);
+  ctx.quadraticCurveTo(size * 0.18, -size * 0.12, size * 0.18, -size * 0.12 + radius);
+  ctx.lineTo(size * 0.18, size * 0.12 - radius);
+  ctx.quadraticCurveTo(size * 0.18, size * 0.12, size * 0.18 - radius, size * 0.12);
+  ctx.lineTo(-size * 0.18 + radius, size * 0.12);
+  ctx.quadraticCurveTo(-size * 0.18, size * 0.12, -size * 0.18, size * 0.12 - radius);
+  ctx.lineTo(-size * 0.18, -size * 0.12 + radius);
+  ctx.quadraticCurveTo(-size * 0.18, -size * 0.12, -size * 0.18 + radius, -size * 0.12);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = Math.max(1, size * 0.05);
+  ctx.strokeRect(-size * 0.3, -size * 0.22, size * 0.6, size * 0.44);
   ctx.restore();
 }
 
 function drawFactoryStorageTile(ctx, x, y, size){
-  drawShadedTile(ctx, x, y, size, '#6c512b', { outline: '#2e1d0c', sheen: 0.12 });
+  drawShadedTile(ctx, x, y, size, '#453524', { outline: '#1b1208', sheen: 0.16 });
   ctx.save();
-  ctx.strokeStyle = '#d9b27c';
+  ctx.fillStyle = 'rgba(255,235,200,0.22)';
+  ctx.fillRect(x + size * 0.18, y + size * 0.18, size * 0.64, size * 0.64);
+  ctx.strokeStyle = '#f8cfa8';
   ctx.lineWidth = Math.max(1, size * 0.08);
   ctx.strokeRect(x + size * 0.18, y + size * 0.18, size * 0.64, size * 0.64);
   ctx.beginPath();
-  ctx.moveTo(x + size * 0.18, y + size * 0.18);
-  ctx.lineTo(x + size * 0.82, y + size * 0.82);
-  ctx.moveTo(x + size * 0.82, y + size * 0.18);
-  ctx.lineTo(x + size * 0.18, y + size * 0.82);
+  ctx.moveTo(x + size * 0.18, y + size * 0.5);
+  ctx.lineTo(x + size * 0.82, y + size * 0.5);
+  ctx.moveTo(x + size * 0.5, y + size * 0.18);
+  ctx.lineTo(x + size * 0.5, y + size * 0.82);
   ctx.stroke();
   ctx.restore();
 }
 
 function factoryItemColor(item){
   switch(item){
-    case FactoryItem.IRON_ORE:
-      return '#c58a32';
-    case FactoryItem.IRON_INGOT:
-      return '#ffe17d';
-    case FactoryItem.PLATE:
-      return '#9acbff';
+    case FactoryItem.SKIN_PATCH:
+      return '#f2c7b8';
+    case FactoryItem.BLOOD_VIAL:
+      return '#d6415d';
+    case FactoryItem.ORGAN_MASS:
+      return '#9d6f5a';
+    case FactoryItem.BODY_SYSTEM:
+      return '#7ddcd3';
+    case FactoryItem.HUMAN_SHELL:
+      return '#ffe9ad';
+    case FactoryItem.NERVE_THREAD:
+      return '#d0b4ff';
+    case FactoryItem.BONE_FRAGMENT:
+      return '#d9d2c7';
+    case FactoryItem.GLAND_SEED:
+      return '#f6c27a';
+    case FactoryItem.NEURAL_WEAVE:
+      return '#8a6bf6';
+    case FactoryItem.SKELETAL_FRAME:
+      return '#b7a694';
+    case FactoryItem.GLANDULAR_NETWORK:
+      return '#f4a761';
+    case FactoryItem.CARETAKER_DRONE:
+      return '#9fe3f9';
+    case FactoryItem.EMISSARY_AVATAR:
+      return '#ffe0f3';
     default:
       return '#ffffff';
   }

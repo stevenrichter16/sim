@@ -12,9 +12,93 @@ export const FactoryKind = Object.freeze({
 });
 
 export const FactoryItem = Object.freeze({
-  IRON_ORE: 'iron_ore',
-  IRON_INGOT: 'iron_ingot',
-  PLATE: 'iron_plate',
+  SKIN_PATCH: 'skin_patch',
+  BLOOD_VIAL: 'blood_vial',
+  ORGAN_MASS: 'organ_mass',
+  BODY_SYSTEM: 'body_system',
+  HUMAN_SHELL: 'human_shell',
+  NERVE_THREAD: 'nerve_thread',
+  BONE_FRAGMENT: 'bone_fragment',
+  GLAND_SEED: 'gland_seed',
+  NEURAL_WEAVE: 'neural_weave',
+  SKELETAL_FRAME: 'skeletal_frame',
+  GLANDULAR_NETWORK: 'glandular_network',
+  CARETAKER_DRONE: 'caretaker_drone',
+  EMISSARY_AVATAR: 'emissary_avatar',
+});
+
+const ItemStage = Object.freeze({
+  HARVEST: 'harvest',
+  BIOFORGE: 'bioforge',
+  CONSTRUCT: 'construct',
+});
+
+const FACTORY_ITEM_META = Object.freeze({
+  [FactoryItem.SKIN_PATCH]: {
+    label: 'Skin Patch',
+    stage: ItemStage.HARVEST,
+    description: 'Dermal graft segments shaved from willing faction donors.',
+  },
+  [FactoryItem.BLOOD_VIAL]: {
+    label: 'Blood Vial',
+    stage: ItemStage.HARVEST,
+    description: 'Stabilised haem reserves suspended in oxygenated gel.',
+  },
+  [FactoryItem.ORGAN_MASS]: {
+    label: 'Organ Mass',
+    stage: ItemStage.HARVEST,
+    description: 'Amorphous visceral tissue primed for sculpting new anatomy.',
+  },
+  [FactoryItem.NERVE_THREAD]: {
+    label: 'Nerve Thread',
+    stage: ItemStage.HARVEST,
+    description: 'Axonal spindles teased from synapse nodes for neural looms.',
+  },
+  [FactoryItem.BONE_FRAGMENT]: {
+    label: 'Osteo Fragment',
+    stage: ItemStage.HARVEST,
+    description: 'Calcified lattice dust, ideal for printing skeletal frames.',
+  },
+  [FactoryItem.GLAND_SEED]: {
+    label: 'Gland Seed',
+    stage: ItemStage.HARVEST,
+    description: 'Endocrine starter pods infused with hormonal catalysts.',
+  },
+  [FactoryItem.BODY_SYSTEM]: {
+    label: 'Body System Capsule',
+    stage: ItemStage.BIOFORGE,
+    description: 'Multi-organ capsules ready to dock into a waiting chassis.',
+  },
+  [FactoryItem.NEURAL_WEAVE]: {
+    label: 'Neural Weave',
+    stage: ItemStage.BIOFORGE,
+    description: 'Bioelectric mesh woven from nerve threads and blood serum.',
+  },
+  [FactoryItem.SKELETAL_FRAME]: {
+    label: 'Skeletal Frame',
+    stage: ItemStage.BIOFORGE,
+    description: 'Rigid osteo scaffolds pressed into humanoid proportions.',
+  },
+  [FactoryItem.GLANDULAR_NETWORK]: {
+    label: 'Glandular Network',
+    stage: ItemStage.BIOFORGE,
+    description: 'Regulatory endocrine clusters that temper emergent agents.',
+  },
+  [FactoryItem.HUMAN_SHELL]: {
+    label: 'Constructed Human',
+    stage: ItemStage.CONSTRUCT,
+    description: 'Baseline faction recruit assembled from modular systems.',
+  },
+  [FactoryItem.CARETAKER_DRONE]: {
+    label: 'Caretaker Drone',
+    stage: ItemStage.CONSTRUCT,
+    description: 'Med-tech assistant that shepherds newborn agents to safety.',
+  },
+  [FactoryItem.EMISSARY_AVATAR]: {
+    label: 'Emissary Avatar',
+    stage: ItemStage.CONSTRUCT,
+    description: 'Diplomatic synth grown for negotiation bursts and envoy duty.',
+  },
 });
 
 const ORIENTATIONS = Object.freeze(['north', 'east', 'south', 'west']);
@@ -56,34 +140,176 @@ const MINER_RATE = 0.18;
 const BELT_SPEED = 0.35;
 const SMELTER_TIME = 8;
 const CONSTRUCTOR_TIME = 12;
-const CONSTRUCTOR_INPUT = 2;
+
+function createRecipeDefinition({ key, label, description, inputs, output, speed, stage }){
+  const map = new Map();
+  if(Array.isArray(inputs)){
+    for(const [item, amount] of inputs){
+      if(item == null || amount == null) continue;
+      map.set(item, amount);
+    }
+  }
+  return Object.freeze({ key, label, description, inputs: map, output, speed, stage });
+}
+
+const BIOFORGE_RECIPES = Object.freeze({
+  body_system: createRecipeDefinition({
+    key: 'body_system',
+    label: 'Body System Capsule',
+    description: 'Tri-fold infusion of dermal, blood, and visceral stock into sealed systems.',
+    inputs: [
+      [FactoryItem.SKIN_PATCH, 1],
+      [FactoryItem.BLOOD_VIAL, 1],
+      [FactoryItem.ORGAN_MASS, 1],
+    ],
+    output: FactoryItem.BODY_SYSTEM,
+    speed: 1 / SMELTER_TIME,
+    stage: ItemStage.BIOFORGE,
+  }),
+  neural_weave: createRecipeDefinition({
+    key: 'neural_weave',
+    label: 'Neural Weave Loom',
+    description: 'Spins nerve thread through blood serum into sentient-ready wiring.',
+    inputs: [
+      [FactoryItem.NERVE_THREAD, 2],
+      [FactoryItem.BLOOD_VIAL, 1],
+    ],
+    output: FactoryItem.NEURAL_WEAVE,
+    speed: 1 / (SMELTER_TIME * 1.2),
+    stage: ItemStage.BIOFORGE,
+  }),
+  skeletal_frame: createRecipeDefinition({
+    key: 'skeletal_frame',
+    label: 'Osteo Frame Press',
+    description: 'Compresses osteo fragments and dermal binding into rigid frames.',
+    inputs: [
+      [FactoryItem.BONE_FRAGMENT, 2],
+      [FactoryItem.SKIN_PATCH, 1],
+    ],
+    output: FactoryItem.SKELETAL_FRAME,
+    speed: 1 / (SMELTER_TIME * 1.35),
+    stage: ItemStage.BIOFORGE,
+  }),
+  glandular_network: createRecipeDefinition({
+    key: 'glandular_network',
+    label: 'Endocrine Bloom',
+    description: 'Coaxes gland seeds and organ mass into hormonal regulatory webs.',
+    inputs: [
+      [FactoryItem.GLAND_SEED, 2],
+      [FactoryItem.ORGAN_MASS, 1],
+    ],
+    output: FactoryItem.GLANDULAR_NETWORK,
+    speed: 1 / (SMELTER_TIME * 1.5),
+    stage: ItemStage.BIOFORGE,
+  }),
+});
+
+const CONSTRUCTOR_BLUEPRINTS = Object.freeze({
+  human_shell: createRecipeDefinition({
+    key: 'human_shell',
+    label: 'Baseline Recruit',
+    description: 'Standardised recruit frame seeded with three body systems.',
+    inputs: [[FactoryItem.BODY_SYSTEM, 3]],
+    output: FactoryItem.HUMAN_SHELL,
+    speed: 1 / CONSTRUCTOR_TIME,
+    stage: ItemStage.CONSTRUCT,
+  }),
+  caretaker_drone: createRecipeDefinition({
+    key: 'caretaker_drone',
+    label: 'Caretaker Drone',
+    description: 'Pairs neural weave with skeletal frame for med-tech chassis.',
+    inputs: [
+      [FactoryItem.NEURAL_WEAVE, 1],
+      [FactoryItem.SKELETAL_FRAME, 1],
+    ],
+    output: FactoryItem.CARETAKER_DRONE,
+    speed: 1 / (CONSTRUCTOR_TIME * 1.25),
+    stage: ItemStage.CONSTRUCT,
+  }),
+  emissary_avatar: createRecipeDefinition({
+    key: 'emissary_avatar',
+    label: 'Emissary Avatar',
+    description: 'An envoy-grade synth mixing systems with endocrine and neural webs.',
+    inputs: [
+      [FactoryItem.BODY_SYSTEM, 2],
+      [FactoryItem.NEURAL_WEAVE, 1],
+      [FactoryItem.GLANDULAR_NETWORK, 1],
+    ],
+    output: FactoryItem.EMISSARY_AVATAR,
+    speed: 1 / (CONSTRUCTOR_TIME * 1.75),
+    stage: ItemStage.CONSTRUCT,
+  }),
+});
 
 const FACTORY_KIND_META = Object.freeze({
-  [FactoryKind.NODE]: { icon: '🪨', name: 'Ore Node' },
-  [FactoryKind.MINER]: { icon: '⛏️', name: 'Miner' },
-  [FactoryKind.BELT]: { icon: '➡️', name: 'Conveyor' },
-  [FactoryKind.SMELTER]: { icon: '🔥', name: 'Smelter' },
-  [FactoryKind.CONSTRUCTOR]: { icon: '🏭', name: 'Constructor' },
-  [FactoryKind.STORAGE]: { icon: '📦', name: 'Storage' },
+  [FactoryKind.NODE]: { icon: '🧬', name: 'Biological Node' },
+  [FactoryKind.MINER]: { icon: '🩺', name: 'Harvest Surgeon' },
+  [FactoryKind.BELT]: { icon: '🫀', name: 'Vein Conveyor' },
+  [FactoryKind.SMELTER]: { icon: '🧪', name: 'Bioforge Vat' },
+  [FactoryKind.CONSTRUCTOR]: { icon: '🧍', name: 'Anthropo Constructor' },
+  [FactoryKind.STORAGE]: { icon: '🛏️', name: 'Cradle Vault' },
 });
+
+const DEFAULT_BIOFORGE_RECIPE = BIOFORGE_RECIPES.body_system;
+const DEFAULT_CONSTRUCTOR_BLUEPRINT = CONSTRUCTOR_BLUEPRINTS.human_shell;
+
+function getBioforgeRecipe(key){
+  if(key && BIOFORGE_RECIPES[key]){
+    return BIOFORGE_RECIPES[key];
+  }
+  return DEFAULT_BIOFORGE_RECIPE;
+}
+
+function getConstructorBlueprint(key){
+  if(key && CONSTRUCTOR_BLUEPRINTS[key]){
+    return CONSTRUCTOR_BLUEPRINTS[key];
+  }
+  return DEFAULT_CONSTRUCTOR_BLUEPRINT;
+}
 
 function factoryKindMeta(kind){
   return FACTORY_KIND_META[kind] || { icon: '❓', name: kind ?? 'Unknown' };
 }
 
 function factoryItemLabel(item){
-  switch(item){
-    case FactoryItem.IRON_ORE:
-      return 'Iron Ore';
-    case FactoryItem.IRON_INGOT:
-      return 'Iron Ingot';
-    case FactoryItem.PLATE:
-      return 'Iron Plate';
-    default:
-      if(typeof item === 'string'){ return item.replace(/_/g,' ').replace(/\b\w/g, ch => ch.toUpperCase()); }
-      return '—';
+  const meta = item && FACTORY_ITEM_META[item];
+  if(meta?.label){
+    return meta.label;
   }
+  if(typeof item === 'string'){
+    return item.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }
+  return '—';
 }
+
+function describeRecipe(recipe){
+  if(!recipe) return null;
+  return {
+    key: recipe.key,
+    label: recipe.label ?? factoryItemLabel(recipe.output),
+    description: recipe.description ?? '',
+    output: recipe.output,
+    outputLabel: factoryItemLabel(recipe.output),
+    stage: recipe.stage ?? null,
+    inputs: [...(recipe.inputs ?? new Map()).entries()].map(([item, amount]) => ({
+      item,
+      amount,
+      label: factoryItemLabel(item),
+    })),
+  };
+}
+
+const FACTORY_CATALOG = Object.freeze({
+  harvestables: Object.entries(FACTORY_ITEM_META)
+    .filter(([, meta]) => meta.stage === ItemStage.HARVEST)
+    .map(([item, meta]) => ({
+      item,
+      label: meta.label,
+      description: meta.description,
+    })),
+  bioforge: Object.values(BIOFORGE_RECIPES).map(describeRecipe),
+  constructs: Object.values(CONSTRUCTOR_BLUEPRINTS).map(describeRecipe),
+});
 
 function createStructureTelemetry(kind){
   const factory = ensureFactoryState();
@@ -94,11 +320,12 @@ function createStructureTelemetry(kind){
         kind,
         createdTick: tick,
         jobsQueued: 0,
-        oreExtracted: 0,
+        essenceExtracted: 0,
         totalTicks: 0,
         activeTicks: 0,
         lastJobTick: null,
         lastOutputTick: null,
+        lastOutputItem: null,
       };
     case FactoryKind.BELT:
       return {
@@ -157,6 +384,7 @@ function createNodeTelemetry(){
     createdTick: factory.ticks ?? 0,
     mined: 0,
     lastMinedTick: null,
+    lastOutputItem: null,
   };
 }
 
@@ -182,11 +410,60 @@ function mapContentsToSummary(contents){
   return parts.join(', ');
 }
 
+function formatRecipeDisplay(recipe){
+  if(!recipe) return '—';
+  const inputs = [];
+  if(recipe.inputs instanceof Map){
+    for(const [item, amount] of recipe.inputs.entries()){
+      inputs.push(`${factoryItemLabel(item)} ×${amount}`);
+    }
+  }
+  const inputText = inputs.length ? inputs.join(' + ') : '—';
+  return `${inputText} → ${factoryItemLabel(recipe.output)}`;
+}
+
 const BRUSH_SPEC = Object.freeze({
   'factory-node': {
     kind: FactoryKind.NODE,
     mode: Mode.FACTORY_NODE,
-    resource: FactoryItem.IRON_ORE,
+    resource: FactoryItem.SKIN_PATCH,
+    label: 'Dermal Node',
+  },
+  'factory-node-skin': {
+    kind: FactoryKind.NODE,
+    mode: Mode.FACTORY_NODE,
+    resource: FactoryItem.SKIN_PATCH,
+    label: 'Dermal Node',
+  },
+  'factory-node-blood': {
+    kind: FactoryKind.NODE,
+    mode: Mode.FACTORY_NODE,
+    resource: FactoryItem.BLOOD_VIAL,
+    label: 'Bloodwell Node',
+  },
+  'factory-node-organ': {
+    kind: FactoryKind.NODE,
+    mode: Mode.FACTORY_NODE,
+    resource: FactoryItem.ORGAN_MASS,
+    label: 'Organ Bloom Node',
+  },
+  'factory-node-nerve': {
+    kind: FactoryKind.NODE,
+    mode: Mode.FACTORY_NODE,
+    resource: FactoryItem.NERVE_THREAD,
+    label: 'Synapse Node',
+  },
+  'factory-node-bone': {
+    kind: FactoryKind.NODE,
+    mode: Mode.FACTORY_NODE,
+    resource: FactoryItem.BONE_FRAGMENT,
+    label: 'Osteo Node',
+  },
+  'factory-node-gland': {
+    kind: FactoryKind.NODE,
+    mode: Mode.FACTORY_NODE,
+    resource: FactoryItem.GLAND_SEED,
+    label: 'Endocrine Node',
   },
   'factory-miner': {
     kind: FactoryKind.MINER,
@@ -199,10 +476,37 @@ const BRUSH_SPEC = Object.freeze({
   'factory-smelter': {
     kind: FactoryKind.SMELTER,
     mode: Mode.FACTORY_SMELTER,
+    recipeKey: 'body_system',
+  },
+  'factory-smelter-neural': {
+    kind: FactoryKind.SMELTER,
+    mode: Mode.FACTORY_SMELTER,
+    recipeKey: 'neural_weave',
+  },
+  'factory-smelter-frame': {
+    kind: FactoryKind.SMELTER,
+    mode: Mode.FACTORY_SMELTER,
+    recipeKey: 'skeletal_frame',
+  },
+  'factory-smelter-gland': {
+    kind: FactoryKind.SMELTER,
+    mode: Mode.FACTORY_SMELTER,
+    recipeKey: 'glandular_network',
   },
   'factory-constructor': {
     kind: FactoryKind.CONSTRUCTOR,
     mode: Mode.FACTORY_CONSTRUCTOR,
+    recipeKey: 'human_shell',
+  },
+  'factory-constructor-caretaker': {
+    kind: FactoryKind.CONSTRUCTOR,
+    mode: Mode.FACTORY_CONSTRUCTOR,
+    recipeKey: 'caretaker_drone',
+  },
+  'factory-constructor-emissary': {
+    kind: FactoryKind.CONSTRUCTOR,
+    mode: Mode.FACTORY_CONSTRUCTOR,
+    recipeKey: 'emissary_avatar',
   },
   'factory-storage': {
     kind: FactoryKind.STORAGE,
@@ -297,36 +601,30 @@ function createStructure(kind, orientation){
       return {
         kind,
         orientation,
-        input: 0,
         progress: 0,
         active: false,
         outputBuffer: 0,
-        pendingInputJob: false,
+        inputBuffer: new Map(),
+        pendingInputJob: new Set(),
         pendingOutputJob: false,
-        recipe: {
-          input: FactoryItem.IRON_ORE,
-          inputAmount: 1,
-          output: FactoryItem.IRON_INGOT,
-          speed: 1 / SMELTER_TIME,
-        },
+        currentCycle: null,
+        recipe: DEFAULT_BIOFORGE_RECIPE,
+        recipeKey: DEFAULT_BIOFORGE_RECIPE.key,
         telemetry,
       };
     case FactoryKind.CONSTRUCTOR:
       return {
         kind,
         orientation,
-        input: 0,
         progress: 0,
         active: false,
         outputBuffer: 0,
-        pendingInputJob: false,
+        inputBuffer: new Map(),
+        pendingInputJob: new Set(),
         pendingOutputJob: false,
-        recipe: {
-          input: FactoryItem.IRON_INGOT,
-          inputAmount: CONSTRUCTOR_INPUT,
-          output: FactoryItem.PLATE,
-          speed: 1 / CONSTRUCTOR_TIME,
-        },
+        currentCycle: null,
+        recipe: DEFAULT_CONSTRUCTOR_BLUEPRINT,
+        recipeKey: DEFAULT_CONSTRUCTOR_BLUEPRINT.key,
         telemetry,
       };
     case FactoryKind.STORAGE:
@@ -338,6 +636,87 @@ function createStructure(kind, orientation){
 
 function createNode(resource){
   return { resource, telemetry: createNodeTelemetry() };
+}
+
+function getStructureInputBuffer(structure){
+  if(!structure) return new Map();
+  if(!structure.inputBuffer){
+    structure.inputBuffer = new Map();
+  }
+  return structure.inputBuffer;
+}
+
+function totalInputCount(structure){
+  const buffer = getStructureInputBuffer(structure);
+  let total = 0;
+  for(const value of buffer.values()){
+    total += value;
+  }
+  return total;
+}
+
+function adjustInputBuffer(structure, item, delta){
+  const buffer = getStructureInputBuffer(structure);
+  const prev = buffer.get(item) ?? 0;
+  const next = prev + delta;
+  if(next <= 0){
+    buffer.delete(item);
+    return 0;
+  }
+  buffer.set(item, next);
+  return next;
+}
+
+function hasRequiredInputs(structure){
+  const recipe = structure?.recipe;
+  if(!recipe) return false;
+  const requirements = recipe.inputs ?? new Map();
+  const buffer = getStructureInputBuffer(structure);
+  for(const [item, amount] of requirements.entries()){
+    if((buffer.get(item) ?? 0) < (amount ?? 0)){
+      return false;
+    }
+  }
+  return true;
+}
+
+function consumeRecipeInputs(structure){
+  const recipe = structure?.recipe;
+  if(!recipe) return new Map();
+  const consumed = new Map();
+  for(const [item, amount] of (recipe.inputs ?? new Map()).entries()){
+    if(!amount) continue;
+    adjustInputBuffer(structure, item, -amount);
+    consumed.set(item, amount);
+  }
+  return consumed;
+}
+
+function ensurePendingInputSet(structure){
+  if(structure && !(structure.pendingInputJob instanceof Set)){
+    structure.pendingInputJob = new Set();
+  }
+  return structure?.pendingInputJob instanceof Set ? structure.pendingInputJob : new Set();
+}
+
+function markPendingInput(structure, item){
+  const set = ensurePendingInputSet(structure);
+  if(item != null){
+    set.add(item);
+  }
+  return set;
+}
+
+function clearPendingInput(structure, item){
+  if(structure?.pendingInputJob instanceof Set){
+    if(item != null){
+      structure.pendingInputJob.delete(item);
+    } else {
+      structure.pendingInputJob.clear();
+    }
+  } else if(item == null){
+    structure.pendingInputJob = false;
+  }
 }
 
 function neighborIndex(tileIdx, orientation){
@@ -366,28 +745,36 @@ function acceptItem(structure, tileIdx, item, factory){
       }
       return true;
     case FactoryKind.SMELTER:
-      if(item !== structure.recipe.input) return false;
-      structure.input += 1;
+      if(!structure.recipe?.inputs?.has(item)) return false;
+      adjustInputBuffer(structure, item, 1);
+      if(structure.pendingInputJob instanceof Set){
+        structure.pendingInputJob.delete(item);
+      }
       if(telemetry){
         telemetry.itemsAccepted = (telemetry.itemsAccepted ?? 0) + 1;
         telemetry.lastInputTick = nowTick;
-        telemetry.inputBuffer = structure.input;
+        telemetry.lastInputItem = item;
+        telemetry.inputBuffer = totalInputCount(structure);
       }
       return true;
     case FactoryKind.CONSTRUCTOR:
-      if(item !== structure.recipe.input) return false;
-      structure.input += 1;
+      if(!structure.recipe?.inputs?.has(item)) return false;
+      adjustInputBuffer(structure, item, 1);
+      if(structure.pendingInputJob instanceof Set){
+        structure.pendingInputJob.delete(item);
+      }
       if(telemetry){
         telemetry.itemsAccepted = (telemetry.itemsAccepted ?? 0) + 1;
         telemetry.lastInputTick = nowTick;
-        telemetry.inputBuffer = structure.input;
+        telemetry.lastInputItem = item;
+        telemetry.inputBuffer = totalInputCount(structure);
       }
       return true;
     case FactoryKind.STORAGE: {
       const contents = structure.contents;
       contents.set(item, (contents.get(item) ?? 0) + 1);
       incrementCounter(factory.stats.stored, item, 1);
-      if(item === FactoryItem.PLATE){
+      if(item === FactoryItem.HUMAN_SHELL){
         incrementCounter(factory.stats.delivered, item, 1);
         factory.stats.constructorComplete = (factory.stats.constructorComplete ?? 0) + 1;
       }
@@ -476,15 +863,15 @@ function maybeStartJob(structure, factory){
   if(structure.active) return;
   const recipe = structure.recipe;
   if(!recipe) return;
-  if(structure.input >= (recipe.inputAmount ?? 1)){
-    structure.input -= recipe.inputAmount ?? 1;
+  if(hasRequiredInputs(structure)){
+    structure.currentCycle = consumeRecipeInputs(structure);
     structure.active = true;
     structure.progress = 0;
     const telemetry = ensureStructureTelemetry(structure);
     if(telemetry){
       telemetry.cyclesStarted = (telemetry.cyclesStarted ?? 0) + 1;
       telemetry.lastCycleStartTick = factory?.ticks ?? 0;
-      telemetry.inputBuffer = structure.input;
+      telemetry.inputBuffer = totalInputCount(structure);
     }
   }
 }
@@ -497,29 +884,39 @@ function updateRecipeProducer(tileIdx, structure, factory){
     telemetry.totalTicks = (telemetry.totalTicks ?? 0) + 1;
     if(structure.active){
       telemetry.activeTicks = (telemetry.activeTicks ?? 0) + 1;
-    } else if(structure.pendingInputJob){
+    } else if((structure.pendingInputJob instanceof Set ? structure.pendingInputJob.size : structure.pendingInputJob ? 1 : 0) > 0){
       telemetry.waitingForInputTicks = (telemetry.waitingForInputTicks ?? 0) + 1;
     }
-    telemetry.inputBuffer = structure.input;
+    telemetry.inputBuffer = totalInputCount(structure);
     telemetry.outputBuffer = structure.outputBuffer ?? 0;
   }
-  const opposite = ORIENTATION_OPPOSITE[structure.orientation] || 'west';
-  const sourceIdx = neighborIndex(tileIdx, opposite);
-  if(!structure.pendingInputJob && !structure.active && structure.input < (recipe.inputAmount ?? 1) && sourceIdx >= 0){
-    structure.pendingInputJob = true;
-    enqueueFactoryJob({
-      kind: 'pull',
-      tileIdx: sourceIdx,
-      payload: {
-        duration: 1,
-        item: recipe.input,
-        source: sourceIdx,
-        target: tileIdx,
-      },
-    });
-    if(telemetry){
-      telemetry.inputRequests = (telemetry.inputRequests ?? 0) + 1;
-      telemetry.lastInputTick = factory.ticks ?? 0;
+  const requirements = recipe.inputs ?? new Map();
+  if(!structure.active && requirements.size){
+    const opposite = ORIENTATION_OPPOSITE[structure.orientation] || 'west';
+    const sourceIdx = neighborIndex(tileIdx, opposite);
+    if(sourceIdx >= 0){
+      const buffer = getStructureInputBuffer(structure);
+      const pending = ensurePendingInputSet(structure);
+      for(const [item, amount] of requirements.entries()){
+        const have = buffer.get(item) ?? 0;
+        if(have < (amount ?? 0) && !pending.has(item)){
+          markPendingInput(structure, item);
+          enqueueFactoryJob({
+            kind: 'pull',
+            tileIdx: sourceIdx,
+            payload: {
+              duration: 1,
+              item,
+              source: sourceIdx,
+              target: tileIdx,
+            },
+          });
+          if(telemetry){
+            telemetry.inputRequests = (telemetry.inputRequests ?? 0) + 1;
+            telemetry.lastInputTick = factory.ticks ?? 0;
+          }
+        }
+      }
     }
   }
   if(!structure.active){
@@ -532,13 +929,19 @@ function updateRecipeProducer(tileIdx, structure, factory){
       structure.active = false;
       structure.progress = 0;
       incrementCounter(factory.stats.produced, recipe.output, 1);
+      const consumedTotals = structure.currentCycle instanceof Map ? [...structure.currentCycle.values()].reduce((sum, value) => sum + value, 0) : 0;
       if(telemetry){
         telemetry.cyclesCompleted = (telemetry.cyclesCompleted ?? 0) + 1;
-        telemetry.itemsConsumed = (telemetry.itemsConsumed ?? 0) + (recipe.inputAmount ?? 1);
+        telemetry.itemsConsumed = (telemetry.itemsConsumed ?? 0) + consumedTotals;
         telemetry.lastOutputTick = factory.ticks ?? 0;
         telemetry.outputBuffer = structure.outputBuffer ?? 0;
         telemetry.lastOutputItem = recipe.output;
+        if(structure.currentCycle instanceof Map){
+          telemetry.lastOutputMix = Object.fromEntries(structure.currentCycle.entries());
+        }
       }
+      structure.lastCompletedCycle = structure.currentCycle;
+      structure.currentCycle = null;
       maybeStartJob(structure, factory);
     }
   }
@@ -621,7 +1024,7 @@ export function placeFactoryStructure(tileIdx, brush, { orientation } = {}){
     if(world.wall) world.wall[tileIdx] = 0;
     if(world.vent) world.vent[tileIdx] = 0;
     if(world.fire) world.fire.delete(tileIdx);
-    factory.nodes.set(tileIdx, createNode(spec.resource || FactoryItem.IRON_ORE));
+    factory.nodes.set(tileIdx, createNode(spec.resource || FactoryItem.SKIN_PATCH));
     world.strings[tileIdx] = baseStringFor(spec.mode);
     return { ok: true, kind: FactoryKind.NODE };
   }
@@ -630,7 +1033,7 @@ export function placeFactoryStructure(tileIdx, brush, { orientation } = {}){
     return {
       ok: false,
       error: 'miner-needs-node',
-      message: 'Miners must be placed on an ore node.',
+      message: 'Harvest Surgeons must graft onto a biological node.',
     };
   }
   removeFactoryStructure(tileIdx, { removeNode: false });
@@ -638,6 +1041,17 @@ export function placeFactoryStructure(tileIdx, brush, { orientation } = {}){
   if(world.vent) world.vent[tileIdx] = 0;
   if(world.fire) world.fire.delete(tileIdx);
   const structure = createStructure(spec.kind, dir);
+  if(structure && spec.recipeKey){
+    if(structure.kind === FactoryKind.SMELTER){
+      const recipe = getBioforgeRecipe(spec.recipeKey);
+      structure.recipe = recipe;
+      structure.recipeKey = recipe.key;
+    } else if(structure.kind === FactoryKind.CONSTRUCTOR){
+      const recipe = getConstructorBlueprint(spec.recipeKey);
+      structure.recipe = recipe;
+      structure.recipeKey = recipe.key;
+    }
+  }
   factory.structures.set(tileIdx, structure);
   world.strings[tileIdx] = baseStringFor(spec.mode);
   return { ok: true, kind: spec.kind, orientation: dir };
@@ -765,12 +1179,13 @@ export function getFactoryTelemetry(){
       kind: FactoryKind.NODE,
       title: `${meta.icon} ${meta.name}`,
       coords,
-      summary: `${factoryItemLabel(node.resource)} mined ${mined}`,
+      summary: `${factoryItemLabel(node.resource)} harvested ${mined}`,
       stats: [
         { label: 'Resource', value: factoryItemLabel(node.resource) },
-        { label: 'Mined', value: String(mined) },
+        { label: 'Harvested', value: String(mined) },
         { label: 'Avg / tick', value: average.toFixed(3) },
-        { label: 'Last mined', value: formatTickValue(telemetry.lastMinedTick) },
+        { label: 'Last harvest', value: formatTickValue(telemetry.lastMinedTick) },
+        { label: 'Last sample', value: factoryItemLabel(telemetry.lastOutputItem ?? null) },
       ],
     });
   }
@@ -784,7 +1199,7 @@ export function getFactoryTelemetry(){
     switch(structure.kind){
       case FactoryKind.MINER: {
         const node = factory.nodes.get(tileIdx);
-        const resourceName = factoryItemLabel(node?.resource ?? FactoryItem.IRON_ORE);
+        const resourceName = factoryItemLabel(node?.resource ?? FactoryItem.SKIN_PATCH);
         const totalTicks = telemetry?.totalTicks ?? 0;
         const uptime = totalTicks > 0 ? (telemetry.activeTicks ?? 0) / totalTicks : 0;
         entries.push({
@@ -792,14 +1207,15 @@ export function getFactoryTelemetry(){
           kind: structure.kind,
           title: `${meta.icon} ${meta.name} (${orientationLabel})`,
           coords,
-          summary: `${telemetry?.oreExtracted ?? 0} ${resourceName} extracted`,
+          summary: `${telemetry?.essenceExtracted ?? 0} ${resourceName} harvested`,
           stats: [
             { label: 'Resource', value: resourceName },
             { label: 'Orientation', value: orientationLabel },
             { label: 'Jobs queued', value: String(telemetry?.jobsQueued ?? 0) },
-            { label: 'Ore extracted', value: String(telemetry?.oreExtracted ?? 0) },
+            { label: 'Harvested', value: String(telemetry?.essenceExtracted ?? 0) },
             { label: 'Uptime', value: `${Math.round(uptime * 100)}%` },
             { label: 'Last output', value: formatTickValue(telemetry?.lastOutputTick ?? null) },
+            { label: 'Last item', value: factoryItemLabel(telemetry?.lastOutputItem ?? null) },
             { label: 'State', value: structure.jobAssigned ? 'Working' : 'Idle' },
           ],
         });
@@ -835,10 +1251,12 @@ export function getFactoryTelemetry(){
       case FactoryKind.SMELTER:
       case FactoryKind.CONSTRUCTOR: {
         const recipe = structure.recipe;
-        const recipeLabel = recipe ? `${factoryItemLabel(recipe.input)} → ${factoryItemLabel(recipe.output)}` : '—';
+        const recipeLabel = formatRecipeDisplay(recipe);
         const totalTicks = telemetry?.totalTicks ?? 0;
         const uptime = totalTicks > 0 ? (telemetry.activeTicks ?? 0) / totalTicks : 0;
         const waiting = totalTicks > 0 ? (telemetry.waitingForInputTicks ?? 0) / totalTicks : 0;
+        const bufferDetails = structure.inputBuffer instanceof Map ? mapContentsToSummary(structure.inputBuffer) : String(totalInputCount(structure));
+        const cycleMix = telemetry?.lastOutputMix ? mapContentsToSummary(new Map(Object.entries(telemetry.lastOutputMix).map(([key, value]) => [key, value]))) : '—';
         entries.push({
           tileIdx,
           kind: structure.kind,
@@ -848,13 +1266,14 @@ export function getFactoryTelemetry(){
           stats: [
             { label: 'Recipe', value: recipeLabel },
             { label: 'Orientation', value: orientationLabel },
-            { label: 'Input buffer', value: String(structure.input ?? 0) },
+            { label: 'Input buffer', value: bufferDetails },
             { label: 'Output buffer', value: String(structure.outputBuffer ?? 0) },
             { label: 'Cycles done', value: String(telemetry?.cyclesCompleted ?? 0) },
             { label: 'Consumed', value: String(telemetry?.itemsConsumed ?? 0) },
             { label: 'Uptime', value: `${Math.round(uptime * 100)}%` },
             { label: 'Waiting', value: `${Math.round(waiting * 100)}%` },
             { label: 'Last output', value: formatTickValue(telemetry?.lastOutputTick ?? null) },
+            { label: 'Last mix', value: cycleMix },
           ],
         });
         break;
@@ -901,27 +1320,103 @@ export function getFactoryTelemetry(){
   return { tick: ticks, entries };
 }
 
+export function getFactoryCatalog(){
+  return {
+    harvestables: FACTORY_CATALOG.harvestables.map((entry) => ({ ...entry })),
+    bioforge: FACTORY_CATALOG.bioforge.map((recipe) => ({
+      ...recipe,
+      inputs: recipe.inputs.map((input) => ({ ...input })),
+    })),
+    constructs: FACTORY_CATALOG.constructs.map((recipe) => ({
+      ...recipe,
+      inputs: recipe.inputs.map((input) => ({ ...input })),
+    })),
+  };
+}
+
 export function getFactoryStatus(){
   const factory = ensureFactoryState();
   const produced = factory.stats.produced || {};
   const stored = factory.stats.stored || {};
+  const deliveredStats = factory.stats.delivered || {};
+  const countStat = (bucket, item) => bucket?.[item] ?? 0;
   return {
     orientation: factory.orientation,
     orientationLabel: getOrientationLabel(factory.orientation),
     produced: {
-      ore: produced[FactoryItem.IRON_ORE] ?? 0,
-      ingot: produced[FactoryItem.IRON_INGOT] ?? 0,
-      plate: produced[FactoryItem.PLATE] ?? 0,
+      skin: countStat(produced, FactoryItem.SKIN_PATCH),
+      blood: countStat(produced, FactoryItem.BLOOD_VIAL),
+      organs: countStat(produced, FactoryItem.ORGAN_MASS),
+      nerves: countStat(produced, FactoryItem.NERVE_THREAD),
+      bone: countStat(produced, FactoryItem.BONE_FRAGMENT),
+      glands: countStat(produced, FactoryItem.GLAND_SEED),
+      systems: countStat(produced, FactoryItem.BODY_SYSTEM),
+      neural: countStat(produced, FactoryItem.NEURAL_WEAVE),
+      frames: countStat(produced, FactoryItem.SKELETAL_FRAME),
+      endocrine: countStat(produced, FactoryItem.GLANDULAR_NETWORK),
+      humans: countStat(produced, FactoryItem.HUMAN_SHELL),
+      caretakers: countStat(produced, FactoryItem.CARETAKER_DRONE),
+      emissaries: countStat(produced, FactoryItem.EMISSARY_AVATAR),
     },
     stored: {
-      ore: stored[FactoryItem.IRON_ORE] ?? 0,
-      ingot: stored[FactoryItem.IRON_INGOT] ?? 0,
-      plate: stored[FactoryItem.PLATE] ?? 0,
+      skin: countStat(stored, FactoryItem.SKIN_PATCH),
+      blood: countStat(stored, FactoryItem.BLOOD_VIAL),
+      organs: countStat(stored, FactoryItem.ORGAN_MASS),
+      nerves: countStat(stored, FactoryItem.NERVE_THREAD),
+      bone: countStat(stored, FactoryItem.BONE_FRAGMENT),
+      glands: countStat(stored, FactoryItem.GLAND_SEED),
+      systems: countStat(stored, FactoryItem.BODY_SYSTEM),
+      neural: countStat(stored, FactoryItem.NEURAL_WEAVE),
+      frames: countStat(stored, FactoryItem.SKELETAL_FRAME),
+      endocrine: countStat(stored, FactoryItem.GLANDULAR_NETWORK),
+      humans: countStat(stored, FactoryItem.HUMAN_SHELL),
+      caretakers: countStat(stored, FactoryItem.CARETAKER_DRONE),
+      emissaries: countStat(stored, FactoryItem.EMISSARY_AVATAR),
+    },
+    delivered: {
+      skin: countStat(deliveredStats, FactoryItem.SKIN_PATCH),
+      blood: countStat(deliveredStats, FactoryItem.BLOOD_VIAL),
+      organs: countStat(deliveredStats, FactoryItem.ORGAN_MASS),
+      nerves: countStat(deliveredStats, FactoryItem.NERVE_THREAD),
+      bone: countStat(deliveredStats, FactoryItem.BONE_FRAGMENT),
+      glands: countStat(deliveredStats, FactoryItem.GLAND_SEED),
+      systems: countStat(deliveredStats, FactoryItem.BODY_SYSTEM),
+      neural: countStat(deliveredStats, FactoryItem.NEURAL_WEAVE),
+      frames: countStat(deliveredStats, FactoryItem.SKELETAL_FRAME),
+      endocrine: countStat(deliveredStats, FactoryItem.GLANDULAR_NETWORK),
+      humans: countStat(deliveredStats, FactoryItem.HUMAN_SHELL),
+      caretakers: countStat(deliveredStats, FactoryItem.CARETAKER_DRONE),
+      emissaries: countStat(deliveredStats, FactoryItem.EMISSARY_AVATAR),
     },
     nodes: factory.nodes.size,
     structures: factory.structures.size,
-    constructorComplete: factory.stats.constructorComplete ?? (stored[FactoryItem.PLATE] ?? 0),
+    constructorComplete: factory.stats.constructorComplete ?? (stored[FactoryItem.HUMAN_SHELL] ?? 0),
     jobsCompleted: factory.stats.jobsCompleted ?? 0,
+    extended: {
+      harvest: FACTORY_CATALOG.harvestables.map(({ item, label }) => ({
+        item,
+        label,
+        produced: countStat(produced, item),
+        stored: countStat(stored, item),
+        delivered: countStat(deliveredStats, item),
+      })),
+      bioforge: FACTORY_CATALOG.bioforge.map((recipe) => ({
+        key: recipe.key,
+        label: recipe.label,
+        output: recipe.output,
+        produced: countStat(produced, recipe.output),
+        stored: countStat(stored, recipe.output),
+        delivered: countStat(deliveredStats, recipe.output),
+      })),
+      constructs: FACTORY_CATALOG.constructs.map((recipe) => ({
+        key: recipe.key,
+        label: recipe.label,
+        output: recipe.output,
+        produced: countStat(produced, recipe.output),
+        stored: countStat(stored, recipe.output),
+        delivered: countStat(deliveredStats, recipe.output),
+      })),
+    },
   };
 }
 
@@ -1087,8 +1582,11 @@ function handleWorkerJobEffect(worker, factory){
   if(!job) return;
   switch(job.kind){
     case 'mine': {
-      worker.carriedItem = FactoryItem.IRON_ORE;
-      incrementCounter(factory.stats.produced, FactoryItem.IRON_ORE, 1);
+      const nodeTile = job.tileIdx;
+      const node = typeof nodeTile === 'number' ? factory.nodes.get(nodeTile) : null;
+      const resource = node?.resource ?? FactoryItem.SKIN_PATCH;
+      worker.carriedItem = resource;
+      incrementCounter(factory.stats.produced, resource, 1);
       const source = job.payload?.sourceStructure;
       if(typeof source === 'number'){
         const miner = factory.structures.get(source);
@@ -1096,21 +1594,19 @@ function handleWorkerJobEffect(worker, factory){
           miner.jobAssigned = false;
           const minerTelemetry = ensureStructureTelemetry(miner);
           if(minerTelemetry){
-            minerTelemetry.oreExtracted = (minerTelemetry.oreExtracted ?? 0) + 1;
+            minerTelemetry.essenceExtracted = (minerTelemetry.essenceExtracted ?? 0) + 1;
             minerTelemetry.lastOutputTick = factory.ticks ?? 0;
+            minerTelemetry.lastOutputItem = resource;
           }
         }
       }
-      const nodeTile = job.tileIdx;
-      if(typeof nodeTile === 'number'){
-        const node = factory.nodes.get(nodeTile);
-        if(node){
-          if(!node.telemetry){
-            node.telemetry = createNodeTelemetry();
-          }
-          node.telemetry.mined = (node.telemetry.mined ?? 0) + 1;
-          node.telemetry.lastMinedTick = factory.ticks ?? 0;
+      if(node){
+        if(!node.telemetry){
+          node.telemetry = createNodeTelemetry();
         }
+        node.telemetry.mined = (node.telemetry.mined ?? 0) + 1;
+        node.telemetry.lastMinedTick = factory.ticks ?? 0;
+        node.telemetry.lastOutputItem = resource;
       }
       const targetTile = job.payload?.targetStructure;
       if(targetTile != null){
@@ -1118,7 +1614,7 @@ function handleWorkerJobEffect(worker, factory){
           kind: 'deliver',
           tileIdx: targetTile,
           payload: {
-            item: FactoryItem.IRON_ORE,
+            item: resource,
             duration: 1,
             targetStructure: targetTile,
           },
@@ -1133,7 +1629,7 @@ function handleWorkerJobEffect(worker, factory){
       const sourceStructure = factory.structures.get(sourceIdx ?? -1);
       if(!sourceStructure){
         const targetStructure = factory.structures.get(targetIdx ?? -1);
-        if(targetStructure) targetStructure.pendingInputJob = false;
+        if(targetStructure) clearPendingInput(targetStructure, requiredItem);
         return;
       }
       let itemTaken = null;
@@ -1163,8 +1659,6 @@ function handleWorkerJobEffect(worker, factory){
           },
         });
       } else {
-        const targetStructure = factory.structures.get(targetIdx ?? -1);
-        if(targetStructure) targetStructure.pendingInputJob = false;
         enqueueFactoryJob(job);
       }
       break;
@@ -1183,7 +1677,7 @@ function handleWorkerJobEffect(worker, factory){
         telemetry.outputBuffer = structure.outputBuffer ?? 0;
         telemetry.outputsPicked = (telemetry.outputsPicked ?? 0) + 1;
       }
-      const carryItem = outputItem ?? FactoryItem.IRON_INGOT;
+      const carryItem = outputItem ?? FactoryItem.BODY_SYSTEM;
       worker.carriedItem = carryItem;
       const targetIdx = job.payload?.target;
       if(targetIdx != null){
@@ -1207,9 +1701,7 @@ function handleWorkerJobEffect(worker, factory){
           const accepted = acceptItem(target, job.tileIdx, delivered, factory);
           if(accepted){
             worker.carriedItem = null;
-            if('pendingInputJob' in target){
-              target.pendingInputJob = false;
-            }
+            clearPendingInput(target, delivered);
           } else {
             enqueueFactoryJob(job);
             return;
