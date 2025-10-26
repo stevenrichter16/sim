@@ -93,8 +93,14 @@
               <button class="btn" data-brush="factory-storage">📦 Storage</button>
             </div>
             <div class="small factory-status" id="factoryStatus">Ore 0 • Ingots 0 • Plates 0 • Stored Plates 0</div>
-            <div class="small factory-status" id="factoryJobs">Jobs: 0</div>
-            <div class="small factory-status" id="factoryWorkers">Workers: —</div>
+            <div class="small factory-status" id="factoryJobs">
+              <strong>Jobs</strong>
+              <ul id="factoryJobsList" class="factory-list"></ul>
+            </div>
+            <div class="small factory-status" id="factoryWorkers">
+              <strong>Workers</strong>
+              <ul id="factoryWorkersList" class="factory-list"></ul>
+            </div>
             <div class="small factory-hint">Use ⟲/⟳ or [ / ] keys to rotate placement direction. Hold Alt while erasing to remove ore nodes.</div>
           </div>
 

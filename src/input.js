@@ -56,8 +56,10 @@ export function initInput({ canvas, draw }){
   const factoryRotateRightBtn = document.getElementById('factoryRotateRight');
   const factoryOrientationLabel = document.getElementById('factoryOrientation');
   const factoryStatusNode = document.getElementById('factoryStatus');
-  const factoryJobsNode = document.getElementById('factoryJobs');
-  const factoryWorkersNode = document.getElementById('factoryWorkers');
+  const factoryJobsContainer = document.getElementById('factoryJobs');
+  const factoryWorkersContainer = document.getElementById('factoryWorkers');
+  const factoryJobsList = document.getElementById('factoryJobsList');
+  const factoryWorkersList = document.getElementById('factoryWorkersList');
   const toggleDrawBtn = document.getElementById('toggleDraw');
   const spawnCalmABtn = document.getElementById('spawnCalmA');
   const spawnCalmBBtn = document.getElementById('spawnCalmB');
@@ -653,23 +655,52 @@ function toggleScenarioDiagPanel(force){
     const stored = status.stored || {};
     factoryStatusNode.textContent = `Ore ${produced.ore ?? 0} • Ingots ${produced.ingot ?? 0} • Plates ${produced.plate ?? 0} • Stored Plates ${stored.plate ?? 0}`;
     const diagnostics = getFactoryDiagnostics();
-    if(factoryJobsNode){
-      const queuePreview = diagnostics.queue
-        .map((job) => `${job.kind}${job.item ? `(${job.item})` : ''}`)
-        .join(', ');
-      factoryJobsNode.textContent = diagnostics.queueLength
-        ? `Jobs: ${diagnostics.queueLength} [${queuePreview}]`
-        : 'Jobs: 0';
+    if(factoryJobsContainer){
+      const header = factoryJobsContainer.querySelector('strong');
+      if(header){
+        header.textContent = diagnostics.queueLength ? `Jobs (${diagnostics.queueLength})` : 'Jobs';
+      }
     }
-    if(factoryWorkersNode){
-      const workerText = diagnostics.workers
-        .map((w) => {
-          const carrying = w.carrying ? ` carrying ${w.carrying}` : '';
-          const job = w.jobKind ? ` → ${w.jobKind}` : '';
-          return `#${w.id} ${w.state}${job}${carrying}`;
-        })
-        .join(' | ');
-      factoryWorkersNode.textContent = workerText || 'Workers: —';
+    if(factoryJobsList){
+      factoryJobsList.innerHTML = '';
+      if(diagnostics.queueLength === 0){
+        const li = document.createElement('li');
+        li.textContent = 'No pending jobs';
+        li.style.opacity = '0.6';
+        factoryJobsList.appendChild(li);
+      } else {
+        diagnostics.queue.forEach((job) => {
+          const li = document.createElement('li');
+          const itemLabel = job.item ? ` • ${job.item}` : '';
+          li.textContent = `${job.kind}${itemLabel}`;
+          factoryJobsList.appendChild(li);
+        });
+      }
+    }
+    if(factoryWorkersContainer){
+      const header = factoryWorkersContainer.querySelector('strong');
+      if(header){
+        header.textContent = diagnostics.workers.length
+          ? `Workers (${diagnostics.workers.length})`
+          : 'Workers';
+      }
+    }
+    if(factoryWorkersList){
+      factoryWorkersList.innerHTML = '';
+      if(diagnostics.workers.length === 0){
+        const li = document.createElement('li');
+        li.textContent = 'No workers';
+        li.style.opacity = '0.6';
+        factoryWorkersList.appendChild(li);
+      } else {
+        diagnostics.workers.forEach((worker) => {
+          const li = document.createElement('li');
+          const jobPart = worker.jobKind ? ` → ${worker.jobKind}` : '';
+          const carrying = worker.carrying ? ` carrying ${worker.carrying}` : '';
+          li.textContent = `#${worker.id} ${worker.state}${jobPart}${carrying}`;
+          factoryWorkersList.appendChild(li);
+        });
+      }
     }
     syncFactoryOrientation();
   };
