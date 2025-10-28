@@ -30,6 +30,18 @@ import { FACTIONS, DEFAULT_FACTION_ID, factionByKey } from './factions.js';
 import { Agent } from './simulation.js';
 import { fetchScenarioManifest, fetchScenarioAsset } from './scenarioRegistry.js';
 import { createScenarioDiagnosticsStore } from './scenarioDiagnosticsStore.js';
+import {
+  isFactoryBrush,
+  placeFactoryStructure,
+  removeFactoryStructure,
+  getActiveOrientation,
+  rotateActiveOrientation,
+  getFactoryStatus,
+  getOrientationLabelText,
+  isFactoryMode,
+  getFactoryDiagnostics,
+  getFactoryTelemetry,
+} from './factory.js';
 
 const MODE_LABEL = Object.fromEntries(
   Object.entries(Mode).map(([name, value])=>{
@@ -40,6 +52,13 @@ const MODE_LABEL = Object.fromEntries(
 
 export function initInput({ canvas, draw }){
   const brushGrid = document.getElementById('brushGrid');
+  const factoryBrushGrid = document.getElementById('factoryBrushGrid');
+  const factoryRotateLeftBtn = document.getElementById('factoryRotateLeft');
+  const factoryRotateRightBtn = document.getElementById('factoryRotateRight');
+  const factoryOrientationLabel = document.getElementById('factoryOrientation');
+  const factoryStatusNode = document.getElementById('factoryStatus');
+  const factoryJobsNode = document.getElementById('factoryJobs');
+  const factoryWorkersNode = document.getElementById('factoryWorkers');
   const toggleDrawBtn = document.getElementById('toggleDraw');
   const spawnCalmABtn = document.getElementById('spawnCalmA');
   const spawnCalmBBtn = document.getElementById('spawnCalmB');
@@ -47,6 +66,7 @@ export function initInput({ canvas, draw }){
   const spawnPanicABtn = document.getElementById('spawnPanicA');
   const spawnPanicBBtn = document.getElementById('spawnPanicB');
   const spawnMedicBtn = document.getElementById('spawnMedic');
+  const spawnWorkerBtn = document.getElementById('spawnWorker');
   const sparkBtn = document.getElementById('spark');
   const clearBtn = document.getElementById('clear');
   const dHeat = document.getElementById('dHeat');
@@ -98,6 +118,8 @@ export function initInput({ canvas, draw }){
   const historyScrubber = document.getElementById('historyScrubber');
   const historySlider = document.getElementById('historyIndex');
   const historyLabel = document.getElementById('historyLabel');
+  const telemetryFactorySection = document.getElementById('telemetryFactory');
+  const telemetryFactoryList = document.getElementById('telemetryFactoryList');
   const overlayToggleKeys = {
     Digit1: 'help',
     Digit2: 'panic',
@@ -620,12 +642,80 @@ function toggleScenarioDiagPanel(force){
     updateSettingDisplay(el,key,fmt);
   });
 
+  const syncFactoryOrientation = () => {
+    if(factoryOrientationLabel){
+      factoryOrientationLabel.textContent = getOrientationLabelText();
+    }
+  };
+
+  const updateFactoryStatusUI = () => {
+    if(!factoryStatusNode) return;
+    const status = getFactoryStatus();
+    if(!status) return;
+    const produced = status.produced || {};
+    const stored = status.stored || {};
+    const delivered = status.delivered || {};
+    const stageSummary = (title, entries) => {
+      if(!entries || !entries.length) return `${title} —`;
+      const parts = entries.map((entry) => `${entry.label} ${entry.produced ?? 0}`);
+      return `${title} ${parts.join(' • ')}`;
+    };
+    const harvestSummary = stageSummary('Harvest', status.extended?.harvest ?? []);
+    const forgeSummary = stageSummary('Forge', status.extended?.bioforge ?? []);
+    const constructSummary = stageSummary('Construct', status.extended?.constructs ?? []);
+    const stockLine = `Stock Humans ${stored.humans ?? 0} • Caretakers ${stored.caretakers ?? 0} • Emissaries ${stored.emissaries ?? 0}`;
+    const deliveryLine = `Delivered Humans ${delivered.humans ?? 0} • Caretakers ${delivered.caretakers ?? 0} • Emissaries ${delivered.emissaries ?? 0}`;
+    factoryStatusNode.textContent = `${harvestSummary}\n${forgeSummary}\n${constructSummary}\n${stockLine} (${deliveryLine})`;
+    const diagnostics = getFactoryDiagnostics();
+    if(factoryJobsNode){
+      const queuePreview = diagnostics.queue
+        .map((job) => `${job.kind}${job.item ? `(${job.item})` : ''}`)
+        .join(', ');
+      factoryJobsNode.textContent = diagnostics.queueLength
+        ? `Jobs: ${diagnostics.queueLength} [${queuePreview}]`
+        : 'Jobs: 0';
+    }
+    if(factoryWorkersNode){
+      const workerText = diagnostics.workers
+        .map((w) => {
+          const carrying = w.carrying ? ` carrying ${w.carrying}` : '';
+          const job = w.jobKind ? ` → ${w.jobKind}` : '';
+          return `#${w.id} ${w.state}${job}${carrying}`;
+        })
+        .join(' | ');
+      factoryWorkersNode.textContent = workerText || 'Workers: —';
+    }
+    syncFactoryOrientation();
+  };
+
+  syncFactoryOrientation();
+  updateFactoryStatusUI();
+
+  if(factoryRotateLeftBtn){
+    factoryRotateLeftBtn.addEventListener('click', ()=>{
+      rotateActiveOrientation(-1);
+      syncFactoryOrientation();
+    });
+  }
+  if(factoryRotateRightBtn){
+    factoryRotateRightBtn.addEventListener('click', ()=>{
+      rotateActiveOrientation(1);
+      syncFactoryOrientation();
+    });
+  }
+
   function selectBrush(val){
     setBrush(val);
-    if(!brushGrid) return;
-    [...brushGrid.querySelectorAll('button[data-brush]')].forEach(btn=>{
-      btn.classList.toggle('active', btn.getAttribute('data-brush')===val);
-    });
+    if(brushGrid){
+      [...brushGrid.querySelectorAll('button[data-brush]')].forEach(btn=>{
+        btn.classList.toggle('active', btn.getAttribute('data-brush')===val);
+      });
+    }
+    if(factoryBrushGrid){
+      [...factoryBrushGrid.querySelectorAll('button[data-brush]')].forEach(btn=>{
+        btn.classList.toggle('active', btn.getAttribute('data-brush')===val);
+      });
+    }
     if(toggleDrawBtn){
       toggleDrawBtn.classList.remove('active');
       toggleDrawBtn.textContent = '✏️ Draw';
@@ -647,6 +737,77 @@ function toggleScenarioDiagPanel(force){
     return false;
   }
 
+  function renderFactoryTelemetry(tileIdx = getInspectedTile()){
+    if(!telemetryFactorySection || !telemetryFactoryList){
+      return;
+    }
+    if(!isTelemetryEnabled()){
+      telemetryFactorySection.style.display = 'none';
+      telemetryFactoryList.innerHTML = '';
+      return;
+    }
+    const telemetry = getFactoryTelemetry();
+    const entries = telemetry?.entries ?? [];
+    if(!entries.length){
+      telemetryFactorySection.style.display = 'none';
+      telemetryFactoryList.innerHTML = '';
+      return;
+    }
+    telemetryFactorySection.style.display = 'flex';
+    telemetryFactoryList.innerHTML = '';
+    const inspected = tileIdx ?? getInspectedTile();
+    for(const entry of entries){
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'telemetry-factory-card';
+      card.setAttribute('data-tile', String(entry.tileIdx));
+      const coords = entry.coords || { x: entry.tileIdx % world.W, y: Math.floor(entry.tileIdx / world.W) };
+      const header = document.createElement('div');
+      header.className = 'telemetry-factory-card-header';
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'telemetry-factory-title';
+      titleSpan.textContent = entry.title || `Tile ${entry.tileIdx}`;
+      const coordSpan = document.createElement('span');
+      coordSpan.className = 'telemetry-factory-coords';
+      coordSpan.textContent = `(${coords.x}, ${coords.y})`;
+      header.append(titleSpan, coordSpan);
+      card.append(header);
+      if(entry.summary){
+        const summary = document.createElement('div');
+        summary.className = 'telemetry-factory-summary';
+        summary.textContent = entry.summary;
+        card.append(summary);
+      }
+      if(Array.isArray(entry.stats) && entry.stats.length){
+        const statsList = document.createElement('div');
+        statsList.className = 'telemetry-factory-stats';
+        for(const stat of entry.stats){
+          const row = document.createElement('div');
+          row.className = 'telemetry-factory-stat';
+          const labelSpan = document.createElement('span');
+          labelSpan.className = 'telemetry-factory-stat-label';
+          labelSpan.textContent = stat?.label ?? '';
+          const valueSpan = document.createElement('span');
+          valueSpan.className = 'telemetry-factory-stat-value';
+          valueSpan.textContent = stat?.value ?? '—';
+          row.append(labelSpan, valueSpan);
+          statsList.append(row);
+        }
+        card.append(statsList);
+      }
+      if(entry.tileIdx === inspected){
+        card.classList.add('active');
+      }
+      card.addEventListener('click', ()=>{
+        setInspectActive(true);
+        setInspectedTile(entry.tileIdx);
+        updateTelemetryInspector(entry.tileIdx);
+        draw();
+      });
+      telemetryFactoryList.append(card);
+    }
+  }
+
   function updateTelemetryInspector(tileIdx = getInspectedTile()){
     if(!telemetryPanel) return;
     if(!isTelemetryEnabled()){
@@ -662,12 +823,15 @@ function toggleScenarioDiagPanel(force){
       if(tHeatBar) tHeatBar.style.width = '0%';
       if(historyScrubber) historyScrubber.style.display = 'none';
       if(historyLabel) historyLabel.title = '(no threshold change)';
+      if(telemetryFactorySection) telemetryFactorySection.style.display = 'none';
+      if(telemetryFactoryList) telemetryFactoryList.innerHTML = '';
       lastInspectState = null;
       updateLegendHighlights(null);
       return;
     }
     telemetryPanel.style.display = 'flex';
     updateHistoryUI();
+    renderFactoryTelemetry(tileIdx);
 
     if(tileIdx == null){
       if(tMode) tMode.textContent = '—';
@@ -887,6 +1051,14 @@ function toggleScenarioDiagPanel(force){
       setDebugFlag('overlay.tension', !debugConfig.overlay.tension);
       draw();
       ev.preventDefault();
+    } else if(ev.code === 'BracketLeft' && !ev.repeat){
+      rotateActiveOrientation(-1);
+      syncFactoryOrientation();
+      ev.preventDefault();
+    } else if(ev.code === 'BracketRight' && !ev.repeat){
+      rotateActiveOrientation(1);
+      syncFactoryOrientation();
+      ev.preventDefault();
     } else if(overlayToggleKeys[ev.code] && !ev.repeat){
       toggleOverlaySlice(overlayToggleKeys[ev.code]);
       ev.preventDefault();
@@ -928,6 +1100,15 @@ function toggleScenarioDiagPanel(force){
         b.classList.toggle('active', !current);
         return;
       }
+      selectBrush(val);
+    });
+  }
+
+  if(factoryBrushGrid){
+    factoryBrushGrid.addEventListener('click',(e)=>{
+      const b = e.target.closest('button'); if(!b) return;
+      const val = b.getAttribute('data-brush');
+      if(!val) return;
       selectBrush(val);
     });
   }
@@ -1014,8 +1195,23 @@ function toggleScenarioDiagPanel(force){
       dragBrush = null;
       dragFactionKey = DEFAULT_FACTION_KEY;
     }
+    if(isFactoryBrush(brush)){
+      const orientation = getActiveOrientation();
+      const result = placeFactoryStructure(i, brush, { orientation });
+      if(!result.ok){
+        if(result.message) showSpawnStatus(result.message);
+      } else {
+        updateFactoryStatusUI();
+      }
+      draw();
+      return;
+    }
     if(brush==='eraser'){
-      world.strings[i]=undefined;
+      const removeNode = !!ev?.altKey;
+      const factoryResult = removeFactoryStructure(i, { removeNode });
+      if(!factoryResult.handled){
+        world.strings[i]=undefined;
+      }
       if(world.fire.delete(i)){
         unmarkScenarioFire(i);
       }
@@ -1026,6 +1222,7 @@ function toggleScenarioDiagPanel(force){
         if(world.doorField) world.doorField[i] = 0;
       }
       clearPheromones(i);
+      updateFactoryStatusUI();
       draw();
       return;
     }
@@ -1335,6 +1532,7 @@ function toggleScenarioDiagPanel(force){
     for(let i=0;i<world.strings.length;i++){
       const S = world.strings[i];
       if(!S) continue;
+      if(isFactoryMode(S.mode)) continue;
       sampleCount++;
       ampSum += S.amplitude;
       tensionSum += S.tension;
@@ -1390,6 +1588,7 @@ function toggleScenarioDiagPanel(force){
       }
     }
     updateHistoryUI();
+    updateFactoryStatusUI();
   }
 
   const heatThresholdHints = {
@@ -1510,6 +1709,16 @@ function toggleScenarioDiagPanel(force){
     if(spawnMedicBtn){
       spawnMedicBtn.onclick = ()=>{
         handleSpawnResult(simulation.spawnNPC(Mode.MEDIC), { mode: Mode.MEDIC });
+      };
+    }
+    if(spawnWorkerBtn){
+      spawnWorkerBtn.onclick = () => {
+        const workerSpawn = simulation.spawnFactoryWorker?.(idx(world.W / 2 | 0, world.H / 2 | 0));
+        if(workerSpawn?.ok){
+          clearSpawnStatus();
+        } else {
+          showSpawnStatus('Unable to spawn worker.');
+        }
       };
     }
     if(sparkBtn){

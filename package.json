@@ -4,13 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest",
-    "test:ci": "vitest run",
+    "test": "node ./node_modules/vitest/vitest.mjs",
+    "test:ci": "node ./node_modules/vitest/vitest.mjs run",
     "compile-scripts": "node scripts/compile-scripts.mjs",
-    "compile-scripts:watch": "watchfiles \"npm run compile-scripts\" scenarios"
+    "compile-scripts:watch": "node --watch --watch-path=scenarios scripts/compile-scripts.mjs"
   },
   "devDependencies": {
-    "vitest": "^1.6.0",
-    "watchfiles": "^0.19.0"
+    "vitest": "^1.6.0"
   }
 }

@@ -164,6 +164,84 @@ export const materialLegend = {
     },
     interactions: [],
   },
+  [Mode.FACTORY_NODE]: {
+    label: 'Biological Node',
+    color: '#43262f',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Harvest Surgeon', effect: 'Provides dermal, blood, organ, synapse, osteo, or endocrine samples depending on node strain' },
+    ],
+  },
+  [Mode.FACTORY_MINER]: {
+    label: 'Harvest Surgeon',
+    color: '#2f3747',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Vein Conveyor', effect: 'Drops extracted skin, blood, or organ bundles onto connected belts' },
+    ],
+  },
+  [Mode.FACTORY_BELT]: {
+    label: 'Vein Conveyor',
+    color: '#201429',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Smelter', effect: 'Delivers items into smelter or constructor inputs' },
+    ],
+  },
+  [Mode.FACTORY_SMELTER]: {
+    label: 'Bioforge Vat',
+    color: '#4b1e2b',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Vein Conveyor', effect: 'Outputs body systems, neural weaves, skeletal frames, or endocrine blooms as recipes complete' },
+    ],
+  },
+  [Mode.FACTORY_CONSTRUCTOR]: {
+    label: 'Synth Constructor',
+    color: '#2b334e',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Cradle Vault', effect: 'Sends grown humans, caretaker drones, or emissary avatars forward once assembled' },
+    ],
+  },
+  [Mode.FACTORY_STORAGE]: {
+    label: 'Cradle Vault',
+    color: '#453524',
+    attributes: {
+      heat: [],
+      amplitude: [],
+      tension: [],
+      phase: [],
+    },
+    interactions: [
+      { target: 'Vein Conveyor', effect: 'Collects resting humans, drones, and emissaries for faction deployment' },
+    ],
+  },
 };
 
 export function getMaterialLegend(mode){

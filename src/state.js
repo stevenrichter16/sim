@@ -1,5 +1,6 @@
 import { FACTIONS } from './factions.js';
 import { setSeed, getSeed } from './rng.js';
+import { resetFactoryState } from './factory.js';
 
 const GRID_WIDTH = 80;
 const GRID_HEIGHT = 45;
@@ -45,6 +46,7 @@ export const world = {
     lastAttempt: null,
   },
   rngSeed: 0x1f123bb5,
+  factory: null,
 };
 
 export const simControl = {
@@ -141,6 +143,7 @@ export function resetWorld(o2BaseValue, options = {}){
   world.scenarioFires = new Set();
   world.spawnDiagnostics = { lastAttempt: null };
   world.spawnDiagnostics = { lastAttempt: null };
+  resetFactoryState();
   world.o2.fill(o2BaseValue);
   world.helpField.fill(0);
   world.routeField.fill(0);
