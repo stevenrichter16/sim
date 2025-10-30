@@ -1,12 +1,16 @@
 import { ensureRegistry } from './registry.js';
 import { hydrateRegistryFromPayload, serialiseCloudClusters } from './serialization.js';
+import { setCloudClusterRegistry } from './state/index.js';
 
 export function getFactoryCloudRegistry(factoryState){
   if(!factoryState || typeof factoryState !== 'object'){
-    return ensureRegistry();
+    const registry = ensureRegistry();
+    setCloudClusterRegistry(registry);
+    return registry;
   }
   const registry = ensureRegistry(factoryState.cloudClusters);
   factoryState.cloudClusters = registry;
+  setCloudClusterRegistry(registry);
   return registry;
 }
 

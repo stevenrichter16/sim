@@ -2,6 +2,7 @@ import { Mode, DIRS4, clamp01 } from './constants.js';
 import { world, idx, inBounds } from './state.js';
 import { baseStringFor } from './materials.js';
 import { createCloudClusterRegistry } from './cloudCluster/registry.js';
+import { stepCloudClusterSimulation } from './cloudCluster/sim/index.js';
 
 export const FactoryKind = Object.freeze({
   NODE: 'node',
@@ -291,6 +292,24 @@ function describeRecipe(recipe){
     description: recipe.description ?? '',
     output: recipe.output,
     outputLabel: factoryItemLabel(recipe.output),
+    stage: recipe.stage ?? null,
+    inputs: [...(recipe.inputs ?? new Map()).entries()].map(([item, amount]) => ({
+      item,
+      amount,
+      label: factoryItemLabel(item),
+    })),
+  };
+}
+
+function snapshotRecipeDefinition(recipe){
+  if(!recipe) return null;
+  return {
+    key: recipe.key,
+    label: recipe.label ?? factoryItemLabel(recipe.output),
+    description: recipe.description ?? '',
+    output: recipe.output,
+    outputLabel: factoryItemLabel(recipe.output),
+    speed: recipe.speed ?? 0,
     stage: recipe.stage ?? null,
     inputs: [...(recipe.inputs ?? new Map()).entries()].map(([item, amount]) => ({
       item,
@@ -1005,6 +1024,7 @@ export function stepFactory(){
     }
   }
   stepFactoryWorkers();
+  stepCloudClusterSimulation({ tick: factory.ticks ?? 0 });
 }
 
 export function isFactoryBrush(brush){
@@ -1769,4 +1789,36 @@ function findFactoryPath(startIdx, targetIdx){
     }
   }
   return null;
+}
+
+export function getBioforgeRecipeDefinition(key){
+  return snapshotRecipeDefinition(getBioforgeRecipe(key));
+}
+
+export function getConstructorBlueprintDefinition(key){
+  return snapshotRecipeDefinition(getConstructorBlueprint(key));
+}
+
+export function getDefaultBioforgeRecipeDefinition(){
+  return getBioforgeRecipeDefinition(DEFAULT_BIOFORGE_RECIPE.key);
+}
+
+export function getDefaultConstructorBlueprintDefinition(){
+  return getConstructorBlueprintDefinition(DEFAULT_CONSTRUCTOR_BLUEPRINT.key);
+}
+
+export function getMinerExtractionRate(){
+  return MINER_RATE;
+}
+
+export function getBeltBaseSpeed(){
+  return BELT_SPEED;
+}
+
+export function getSmelterCycleTime(){
+  return SMELTER_TIME;
+}
+
+export function getConstructorCycleTime(){
+  return CONSTRUCTOR_TIME;
 }

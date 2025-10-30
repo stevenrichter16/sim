@@ -10,7 +10,9 @@ export function deserialiseCloudClusters(payload){
     try {
       const cluster = createCluster(entry);
       registry.byId.set(cluster.id, cluster);
-      registry.order.push(cluster.id);
+      if(!registry.order.includes(cluster.id)){
+        registry.order.push(cluster.id);
+      }
     } catch (error){
       // Ignore invalid payload entries.
     }
@@ -22,7 +24,12 @@ export function serialiseCloudClusters(registry){
   const source = ensureRegistry(registry);
   const output = [];
   if(source.order.length > 0){
+    const seen = new Set();
     for(const id of source.order){
+      if(seen.has(id)){
+        continue;
+      }
+      seen.add(id);
       const cluster = source.byId.get(id);
       if(cluster && isCluster(cluster)){
         output.push(serialiseCluster(cluster));
@@ -47,7 +54,9 @@ export function hydrateRegistryFromPayload(registry, payload){
     try {
       const cluster = createCluster(entry);
       target.byId.set(cluster.id, cluster);
-      target.order.push(cluster.id);
+      if(!target.order.includes(cluster.id)){
+        target.order.push(cluster.id);
+      }
     } catch (error){
       // Ignore invalid payload entries.
     }
