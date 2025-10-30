@@ -20,3 +20,20 @@ export {
   loadCloudClustersIntoFactory,
   exportCloudClustersFromFactory,
 } from './factoryAdapter.js';
+export {
+  createCloudClusterState,
+  getCloudClusterState,
+  resetCloudClusterState,
+  getCloudClusterRegistry,
+  setCloudClusterRegistry,
+  clearCloudClusterDiagnostics,
+} from './state/index.js';
+export {
+  validateClusterRouting,
+  calculateClusterThroughput,
+  createClusterTelemetry,
+  stepCloudClusterSimulation,
+  getCloudClusterTelemetry,
+  getClusterValidationReport,
+  getClusterThroughput,
+} from './sim/index.js';
