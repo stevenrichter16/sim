@@ -2,6 +2,7 @@ import { Mode, DIRS4, clamp01 } from './constants.js';
 import { world, idx, inBounds } from './state.js';
 import { baseStringFor } from './materials.js';
 import { createCloudClusterRegistry } from './cloudCluster/registry.js';
+import { stepCloudClusterSimulation } from './cloudCluster/sim/index.js';
 
 export const FactoryKind = Object.freeze({
   NODE: 'node',
@@ -1023,6 +1024,7 @@ export function stepFactory(){
     }
   }
   stepFactoryWorkers();
+  stepCloudClusterSimulation({ tick: factory.ticks ?? 0 });
 }
 
 export function isFactoryBrush(brush){

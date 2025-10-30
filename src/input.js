@@ -42,6 +42,7 @@ import {
   getFactoryDiagnostics,
   getFactoryTelemetry,
 } from './factory.js';
+import { createCloudClusterEditor } from './cloudCluster/ui/index.js';
 
 const MODE_LABEL = Object.fromEntries(
   Object.entries(Mode).map(([name, value])=>{
@@ -120,6 +121,14 @@ export function initInput({ canvas, draw }){
   const historyLabel = document.getElementById('historyLabel');
   const telemetryFactorySection = document.getElementById('telemetryFactory');
   const telemetryFactoryList = document.getElementById('telemetryFactoryList');
+  const telemetryCloudSection = document.getElementById('telemetryCloud');
+  const telemetryCloudList = document.getElementById('telemetryCloudList');
+  const cloudClusterPanel = document.getElementById('cloudClusterPanel');
+  const cloudClusterSelect = document.getElementById('cloudClusterSelect');
+  const cloudClusterCreateBtn = document.getElementById('cloudClusterCreate');
+  const cloudClusterPalette = document.getElementById('cloudClusterPalette');
+  const cloudClusterGraph = document.getElementById('cloudClusterGraph');
+  const cloudClusterInspector = document.getElementById('cloudClusterInspector');
   const overlayToggleKeys = {
     Digit1: 'help',
     Digit2: 'panic',
@@ -140,6 +149,8 @@ export function initInput({ canvas, draw }){
   if(FACTIONS[0]) overlayToggleKeys.KeyA = `safeFaction${FACTIONS[0].id}`;
   if(FACTIONS[1]) overlayToggleKeys.KeyB = `safeFaction${FACTIONS[1].id}`;
   overlayToggleKeys.KeyC = 'control';
+
+  const cloudEditor = createCloudClusterEditor();
 
   const spawnErrorMessages = {
     'tile-occupied': 'Spawn failed: tile is occupied or blocked.',
@@ -233,6 +244,277 @@ export function initInput({ canvas, draw }){
     console.warn('[spawn]', message, { result, context });
     showSpawnStatus(message);
     return result;
+  }
+
+  function renderCloudClusterSelect(){
+    if(!cloudClusterSelect) return;
+    const clusters = cloudEditor.getClusters();
+    const { selectedClusterId } = cloudEditor.getState();
+    cloudClusterSelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = clusters.length ? '(Select cluster)' : '(No cluster)';
+    placeholder.disabled = !!clusters.length;
+    if(!selectedClusterId){
+      placeholder.selected = true;
+    }
+    cloudClusterSelect.append(placeholder);
+    for(const cluster of clusters){
+      const option = document.createElement('option');
+      option.value = cluster.id;
+      option.textContent = `${cluster.name ?? cluster.id} (${cluster.objectCount} objs)`;
+      option.selected = cluster.id === selectedClusterId;
+      cloudClusterSelect.append(option);
+    }
+  }
+
+  function renderCloudClusterPalette(){
+    if(!cloudClusterPalette) return;
+    const paletteEntries = cloudEditor.getPaletteEntries();
+    cloudClusterPalette.innerHTML = '';
+    if(!paletteEntries.length){
+      const empty = document.createElement('div');
+      empty.className = 'cloud-cluster-graph-empty';
+      empty.textContent = 'No palette entries available.';
+      cloudClusterPalette.append(empty);
+      return;
+    }
+    for(const entry of paletteEntries){
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn';
+      button.textContent = `${entry.icon ?? '⬚'} ${entry.label}`;
+      if(entry.description){
+        button.title = entry.description;
+      }
+      button.addEventListener('click', () => {
+        try {
+          cloudEditor.addObjectFromPalette(entry.kind);
+        } catch (error){
+          console.error('Failed to add cloud cluster object', error);
+        }
+        refreshCloudClusterUI();
+      });
+      cloudClusterPalette.append(button);
+    }
+  }
+
+  function renderCloudClusterGraph(){
+    if(!cloudClusterGraph) return;
+    const graph = cloudEditor.getGraph();
+    cloudClusterGraph.innerHTML = '';
+    if(!graph){
+      const empty = document.createElement('div');
+      empty.className = 'cloud-cluster-graph-empty';
+      empty.textContent = 'Select or create a cloud cluster to edit.';
+      cloudClusterGraph.append(empty);
+      return;
+    }
+    if(graph.pendingLink){
+      const pending = document.createElement('div');
+      pending.className = 'cloud-cluster-pending';
+      pending.textContent = `Linking from ${graph.pendingLink.objectId} · ${graph.pendingLink.portId}`;
+      cloudClusterGraph.append(pending);
+    }
+    if(!graph.nodes.length){
+      const emptyNodes = document.createElement('div');
+      emptyNodes.className = 'cloud-cluster-graph-empty';
+      emptyNodes.textContent = 'No factory objects in this cluster yet. Use the palette to add nodes.';
+      cloudClusterGraph.append(emptyNodes);
+    }
+    for(const node of graph.nodes){
+      const nodeEl = document.createElement('div');
+      nodeEl.className = 'cloud-cluster-node';
+      if(node.selected){
+        nodeEl.classList.add('selected');
+      }
+      const header = document.createElement('div');
+      header.className = 'cloud-cluster-node-header';
+      const title = document.createElement('span');
+      title.className = 'cloud-cluster-node-title';
+      title.textContent = node.label ?? node.id;
+      title.tabIndex = 0;
+      title.addEventListener('click', () => {
+        cloudEditor.selectObject(node.id);
+        refreshCloudClusterUI();
+      });
+      title.addEventListener('keydown', (evt) => {
+        if(evt.key === 'Enter' || evt.key === ' '){
+          evt.preventDefault();
+          cloudEditor.selectObject(node.id);
+          refreshCloudClusterUI();
+        }
+      });
+      header.append(title);
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => {
+        try {
+          cloudEditor.removeObject(node.id);
+        } catch (error){
+          console.error('Failed to remove cloud object', error);
+        }
+        refreshCloudClusterUI();
+      });
+      header.append(removeBtn);
+      nodeEl.append(header);
+      if(node.description){
+        const meta = document.createElement('div');
+        meta.className = 'cloud-cluster-node-meta';
+        meta.textContent = node.description;
+        nodeEl.append(meta);
+      }
+      if(Array.isArray(node.ports) && node.ports.length){
+        const portsList = document.createElement('div');
+        portsList.className = 'cloud-cluster-ports';
+        for(const port of node.ports){
+          const row = document.createElement('div');
+          row.className = 'cloud-cluster-port';
+          const label = document.createElement('span');
+          const dirIcon = port.direction === 'input' ? '⬅' : '➡';
+          label.textContent = `${dirIcon} ${port.label ?? port.id}`;
+          row.append(label);
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn';
+          if(port.direction === 'output'){
+            btn.textContent = 'Link →';
+            btn.title = 'Start link from this output port';
+            btn.addEventListener('click', () => {
+              try {
+                cloudEditor.beginLink(node.id, port.id);
+              } catch (error){
+                console.error('Failed to start link', error);
+              }
+              refreshCloudClusterUI();
+            });
+          } else {
+            btn.textContent = graph.pendingLink ? 'Complete link' : '← Link';
+            btn.title = graph.pendingLink
+              ? 'Complete link to this input port'
+              : 'Select an output port before linking';
+            btn.disabled = !graph.pendingLink;
+            btn.addEventListener('click', () => {
+              if(btn.disabled) return;
+              try {
+                cloudEditor.completeLink(node.id, port.id);
+              } catch (error){
+                console.error('Failed to complete link', error);
+              }
+              refreshCloudClusterUI();
+            });
+          }
+          row.append(btn);
+          portsList.append(row);
+        }
+        nodeEl.append(portsList);
+      }
+      cloudClusterGraph.append(nodeEl);
+    }
+    if(Array.isArray(graph.links) && graph.links.length){
+      const linksContainer = document.createElement('div');
+      linksContainer.className = 'cloud-cluster-links';
+      for(const link of graph.links){
+        const linkRow = document.createElement('div');
+        linkRow.className = 'cloud-cluster-link';
+        const label = document.createElement('span');
+        label.textContent = `${link.source.objectId}:${link.source.portId} → ${link.target.objectId}:${link.target.portId}`;
+        linkRow.append(label);
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', () => {
+          try {
+            cloudEditor.removeLink(link.id);
+          } catch (error){
+            console.error('Failed to remove link', error);
+          }
+          refreshCloudClusterUI();
+        });
+        linkRow.append(removeBtn);
+        linksContainer.append(linkRow);
+      }
+      cloudClusterGraph.append(linksContainer);
+    }
+  }
+
+  function renderCloudClusterInspector(){
+    if(!cloudClusterInspector) return;
+    const inspector = cloudEditor.getInspector();
+    cloudClusterInspector.innerHTML = '';
+    if(!inspector){
+      const empty = document.createElement('div');
+      empty.className = 'cloud-cluster-inspector-empty';
+      empty.textContent = 'Select a cloud cluster to view diagnostics.';
+      cloudClusterInspector.append(empty);
+      return;
+    }
+    const header = document.createElement('div');
+    header.className = 'cloud-cluster-node-header';
+    const title = document.createElement('span');
+    title.className = 'cloud-cluster-node-title';
+    title.textContent = inspector.name ?? inspector.id;
+    header.append(title);
+    const status = document.createElement('span');
+    status.className = 'cloud-cluster-status';
+    status.dataset.status = inspector.status ?? 'unknown';
+    status.textContent = (inspector.status ?? 'unknown').toUpperCase();
+    header.append(status);
+    cloudClusterInspector.append(header);
+    if(inspector.description){
+      const desc = document.createElement('div');
+      desc.className = 'cloud-cluster-node-meta';
+      desc.textContent = inspector.description;
+      cloudClusterInspector.append(desc);
+    }
+    if(Array.isArray(inspector.issues) && inspector.issues.length){
+      const issues = document.createElement('div');
+      issues.className = 'cloud-cluster-issues';
+      for(const issue of inspector.issues){
+        const item = document.createElement('div');
+        item.textContent = `${issue.severity ?? 'info'} — ${issue.message ?? issue.code ?? 'Unknown issue'}`;
+        issues.append(item);
+      }
+      cloudClusterInspector.append(issues);
+    }
+    const totals = Array.isArray(inspector.totals) ? inspector.totals : [];
+    if(totals.length){
+      const totalsList = document.createElement('div');
+      totalsList.className = 'cloud-cluster-totals';
+      for(const total of totals){
+        const row = document.createElement('span');
+        const producedValue = Number(total.produced ?? 0);
+        const consumedValue = Number(total.consumed ?? 0);
+        const netValue = Number(total.net ?? (producedValue - consumedValue));
+        const producedLabel = Number.isFinite(producedValue) ? producedValue.toFixed(2) : '0.00';
+        const consumedLabel = Number.isFinite(consumedValue) ? consumedValue.toFixed(2) : '0.00';
+        const netLabel = Number.isFinite(netValue) ? `${netValue >= 0 ? '+' : ''}${netValue.toFixed(2)}` : '+0.00';
+        row.textContent = `${total.item ?? 'item'} · +${producedLabel} / -${consumedLabel} (net ${netLabel})`;
+        totalsList.append(row);
+      }
+      cloudClusterInspector.append(totalsList);
+    }
+    const objects = Array.isArray(inspector.objects) ? inspector.objects : [];
+    if(objects.length){
+      const objectList = document.createElement('div');
+      objectList.className = 'cloud-cluster-links';
+      for(const obj of objects){
+        const row = document.createElement('div');
+        row.className = 'cloud-cluster-link';
+        const label = document.createElement('span');
+        const outValue = Number(obj.totalOutput ?? 0);
+        const inValue = Number(obj.totalInput ?? 0);
+        const outLabel = Number.isFinite(outValue) ? outValue.toFixed(2) : '0.00';
+        const inLabel = Number.isFinite(inValue) ? inValue.toFixed(2) : '0.00';
+        label.textContent = `${obj.label ?? obj.id} · out ${outLabel} / in ${inLabel}`;
+        row.append(label);
+        objectList.append(row);
+      }
+      cloudClusterInspector.append(objectList);
+    }
   }
 
 let scenarioManifestEntries = [];
@@ -704,6 +986,32 @@ function toggleScenarioDiagPanel(force){
     });
   }
 
+  if(cloudClusterSelect){
+    cloudClusterSelect.addEventListener('change', (event) => {
+      const value = event.target.value;
+      try {
+        cloudEditor.selectCluster(value || null);
+      } catch (error){
+        console.error('Failed to select cloud cluster', error);
+      }
+      refreshCloudClusterUI();
+    });
+  }
+
+  if(cloudClusterCreateBtn){
+    cloudClusterCreateBtn.addEventListener('click', () => {
+      try {
+        const created = cloudEditor.createCluster();
+        refreshCloudClusterUI();
+        if(created && cloudClusterSelect){
+          cloudClusterSelect.value = created.id;
+        }
+      } catch (error){
+        console.error('Failed to create cloud cluster', error);
+      }
+    });
+  }
+
   function selectBrush(val){
     setBrush(val);
     if(brushGrid){
@@ -735,6 +1043,83 @@ function toggleScenarioDiagPanel(force){
     const tag = el.tagName;
     if(tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || el.isContentEditable) return true;
     return false;
+  }
+
+  function renderCloudClusterTelemetry(){
+    if(!telemetryCloudSection || !telemetryCloudList){
+      return;
+    }
+    if(!isTelemetryEnabled()){
+      telemetryCloudSection.style.display = 'none';
+      telemetryCloudList.innerHTML = '';
+      return;
+    }
+    const overlay = cloudEditor.getOverlay();
+    const clusters = overlay?.clusters ?? [];
+    if(!clusters.length){
+      telemetryCloudSection.style.display = 'none';
+      telemetryCloudList.innerHTML = '';
+      return;
+    }
+    const formatRate = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+    };
+    telemetryCloudSection.style.display = 'flex';
+    telemetryCloudList.innerHTML = '';
+    for(const cluster of clusters){
+      const card = document.createElement('div');
+      card.className = 'telemetry-cloud-card';
+      card.setAttribute('data-status', cluster.status ?? 'unknown');
+      const header = document.createElement('div');
+      header.className = 'telemetry-cloud-card-header';
+      const title = document.createElement('span');
+      title.textContent = cluster.name ?? cluster.id;
+      header.append(title);
+      const status = document.createElement('span');
+      status.className = 'telemetry-cloud-card-status';
+      status.dataset.status = cluster.status ?? 'unknown';
+      status.textContent = (cluster.status ?? 'unknown').toUpperCase();
+      header.append(status);
+      card.append(header);
+      const issueCount = cluster.issueCount ?? (cluster.issues?.length ?? 0);
+      if(issueCount > 0){
+        const issues = document.createElement('div');
+        issues.className = 'telemetry-cloud-issues';
+        issues.textContent = `${issueCount} issue${issueCount === 1 ? '' : 's'} detected`;
+        card.append(issues);
+      }
+      if(Array.isArray(cluster.totals) && cluster.totals.length){
+        const totals = document.createElement('div');
+        totals.className = 'telemetry-cloud-totals';
+        for(const total of cluster.totals){
+          const row = document.createElement('span');
+          const produced = formatRate(total.produced ?? 0);
+          const consumed = formatRate(total.consumed ?? 0);
+          const net = formatRate(total.net ?? ((total.produced ?? 0) - (total.consumed ?? 0)));
+          row.textContent = `${total.item ?? 'item'} · +${produced} / -${consumed} (net ${net})`;
+          totals.append(row);
+        }
+        card.append(totals);
+      }
+      card.addEventListener('click', () => {
+        cloudEditor.selectCluster(cluster.id);
+        refreshCloudClusterUI();
+        if(cloudClusterSelect){
+          cloudClusterSelect.value = cluster.id;
+        }
+      });
+      telemetryCloudList.append(card);
+    }
+  }
+
+  function refreshCloudClusterUI(){
+    if(!cloudClusterPanel) return;
+    renderCloudClusterSelect();
+    renderCloudClusterPalette();
+    renderCloudClusterGraph();
+    renderCloudClusterInspector();
+    renderCloudClusterTelemetry();
   }
 
   function renderFactoryTelemetry(tileIdx = getInspectedTile()){
@@ -832,6 +1217,7 @@ function toggleScenarioDiagPanel(force){
     telemetryPanel.style.display = 'flex';
     updateHistoryUI();
     renderFactoryTelemetry(tileIdx);
+    renderCloudClusterTelemetry();
 
     if(tileIdx == null){
       if(tMode) tMode.textContent = '—';
@@ -1811,6 +2197,7 @@ function toggleScenarioDiagPanel(force){
   if(metricsSummary){
     metricsSummary.hidden = true;
   }
+  refreshCloudClusterUI();
   updateTelemetryInspector(null);
   refreshScenarioManifest(false);
 

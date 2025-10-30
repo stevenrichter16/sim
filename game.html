@@ -111,6 +111,23 @@ Stock Humans 0 • Caretakers 0 • Emissaries 0 (Delivered Humans 0 • Caretak
             <div class="small factory-hint">Use ⟲/⟳ or [ / ] keys to rotate placement direction. Hold Alt while erasing to remove biological nodes.</div>
           </div>
 
+          <div class="cloud-cluster-panel" id="cloudClusterPanel">
+            <div class="cloud-cluster-header">
+              <h4>Cloud Cluster Editor</h4>
+              <div class="cloud-cluster-controls">
+                <select class="select-input cloud-cluster-select" id="cloudClusterSelect" aria-label="Select cloud cluster">
+                  <option value="">(No cluster)</option>
+                </select>
+                <button class="btn" id="cloudClusterCreate" type="button">➕ New Cluster</button>
+              </div>
+            </div>
+            <div class="cloud-cluster-body">
+              <div class="cloud-cluster-palette" id="cloudClusterPalette" aria-label="Cloud cluster palette"></div>
+              <div class="cloud-cluster-graph" id="cloudClusterGraph" aria-live="polite"></div>
+              <div class="cloud-cluster-inspector" id="cloudClusterInspector" aria-live="polite"></div>
+            </div>
+          </div>
+
           <!-- Actions -->
           <div class="grid actions-grid">
             <button class="btn" id="spawnCalmA">🙂 NPC Calm A</button>
@@ -224,6 +241,10 @@ Stock Humans 0 • Caretakers 0 • Emissaries 0 (Delivered Humans 0 • Caretak
       <div id="telemetryFactory" class="telemetry-factory" aria-live="polite">
         <div class="telemetry-factory-heading small">Factory Telemetry</div>
         <div id="telemetryFactoryList" class="telemetry-factory-list"></div>
+      </div>
+      <div id="telemetryCloud" class="telemetry-cloud" aria-live="polite">
+        <div class="telemetry-cloud-heading small">Cloud Clusters</div>
+        <div id="telemetryCloudList" class="telemetry-cloud-list"></div>
       </div>
     </div>
     </div>
