@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cloud Cluster",
+  "type": "object",
+  "required": ["id", "objects", "links"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "metadata": { "$ref": "#/definitions/metadata" },
+    "objects": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/factoryObject" },
+      "default": []
+    },
+    "links": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/link" },
+      "default": []
+    }
+  },
+  "definitions": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "default": {}
+    },
+    "factoryObject": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "node",
+            "miner",
+            "belt",
+            "smelter",
+            "constructor",
+            "storage"
+          ]
+        },
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "metadata": { "$ref": "#/definitions/metadata" },
+        "ports": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/port" },
+          "default": []
+        }
+      }
+    },
+    "port": {
+      "type": "object",
+      "required": ["id", "direction"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string" },
+        "direction": { "type": "string", "enum": ["input", "output"] },
+        "itemKeys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "capacity": { "type": ["number", "null"] },
+        "metadata": { "$ref": "#/definitions/metadata" }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["id", "source", "target"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "metadata": { "$ref": "#/definitions/metadata" },
+        "source": { "$ref": "#/definitions/endpoint" },
+        "target": { "$ref": "#/definitions/endpoint" }
+      }
+    },
+    "endpoint": {
+      "type": "object",
+      "required": ["objectId", "portId"],
+      "properties": {
+        "objectId": { "type": "string", "minLength": 1 },
+        "portId": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
