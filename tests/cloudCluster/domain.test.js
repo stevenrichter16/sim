@@ -95,6 +95,18 @@ describe('cloud cluster registry and factory integration', () => {
     expect(registry.byId.has('alpha')).toBe(true);
   });
 
+  it('prevents duplicate clusters when hydrating and serialising', () => {
+    const duplicatePayload = [
+      sampleClusterPayload(),
+      { ...sampleClusterPayload(), name: 'Alpha Cluster Updated' },
+    ];
+    const registry = deserialiseCloudClusters(duplicatePayload);
+    expect(registry.order).toEqual(['alpha']);
+    const serialised = serialiseCloudClusters(registry);
+    expect(serialised).toHaveLength(1);
+    expect(serialised[0].name).toBe('Alpha Cluster Updated');
+  });
+
   it('loads and exports clusters via factory adapter', () => {
     const factoryState = { cloudClusters: createCloudClusterRegistry() };
     loadCloudClustersIntoFactory(factoryState, [sampleClusterPayload()]);
