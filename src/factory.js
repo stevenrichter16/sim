@@ -1,6 +1,7 @@
 import { Mode, DIRS4, clamp01 } from './constants.js';
 import { world, idx, inBounds } from './state.js';
 import { baseStringFor } from './materials.js';
+import { createCloudClusterRegistry } from './cloudCluster/registry.js';
 
 export const FactoryKind = Object.freeze({
   NODE: 'node',
@@ -531,6 +532,7 @@ function createFactoryState(){
       constructorComplete: 0,
       jobsCompleted: 0,
     },
+    cloudClusters: createCloudClusterRegistry(),
   };
 }
 
