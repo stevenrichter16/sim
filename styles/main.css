@@ -126,8 +126,11 @@ h3{margin:4px 0 6px;}
 .cloud-cluster-port{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;}
 .cloud-cluster-port button{flex:0 0 auto;font-size:10px;padding:3px 6px;border-radius:6px;}
 .cloud-cluster-links{display:flex;flex-direction:column;gap:4px;font-size:11px;}
-.cloud-cluster-link{display:flex;justify-content:space-between;align-items:center;gap:6px;background:#0d1526;border:1px solid #1d2a4a;border-radius:6px;padding:4px 6px;}
+.cloud-cluster-link{display:flex;flex-direction:column;align-items:flex-start;background:#0d1526;border:1px solid #1d2a4a;border-radius:6px;padding:6px 8px;gap:4px;}
 .cloud-cluster-link button{flex:0 0 auto;font-size:10px;padding:2px 6px;border-radius:6px;}
+.cloud-cluster-rate-row{display:flex;flex-wrap:wrap;gap:6px;font-size:11px;color:#9eaad1;}
+.cloud-cluster-rate-label{font-weight:600;color:#c5d3ff;}
+.cloud-cluster-rate-value{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;background:#131f36;padding:2px 6px;border-radius:4px;color:#e6edf7;}
 .cloud-cluster-inspector{display:flex;flex-direction:column;gap:8px;background:#10182a;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;}
 .cloud-cluster-inspector-empty{color:#9eaad1;font-style:italic;}
 .cloud-cluster-status{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;}

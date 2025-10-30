@@ -535,7 +535,7 @@ const BRUSH_SPEC = Object.freeze({
 });
 
 function createFactoryState(){
-  return {
+  const state = {
     orientation: 'east',
     nodes: new Map(),
     structures: new Map(),
@@ -553,6 +553,7 @@ function createFactoryState(){
     },
     cloudClusters: createCloudClusterRegistry(),
   };
+  return state;
 }
 
 export function resetFactoryState(){

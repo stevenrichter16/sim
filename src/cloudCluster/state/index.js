@@ -8,6 +8,7 @@ export function createCloudClusterState(){
     validation: new Map(),
     throughput: new Map(),
     telemetry: { tick: 0, clusters: [] },
+    accumulators: new Map(),
   };
 }
 

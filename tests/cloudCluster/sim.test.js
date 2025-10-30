@@ -106,6 +106,75 @@ function createThroughputCluster(){
   });
 }
 
+function createNodeProducerCluster(){
+  return createCluster({
+    id: 'node-producer',
+    name: 'Node Producer',
+    objects: [
+      {
+        id: 'node-skin',
+        kind: FactoryKind.NODE,
+        metadata: { outputRate: 0.2, outputItems: [FactoryItem.SKIN_PATCH] },
+        ports: [
+          { id: 'skin-out', direction: 'output', label: 'Skin Output', itemKeys: [FactoryItem.SKIN_PATCH] },
+        ],
+      },
+      {
+        id: 'node-blood',
+        kind: FactoryKind.NODE,
+        metadata: { outputRate: 0.2, outputItems: [FactoryItem.BLOOD_VIAL] },
+        ports: [
+          { id: 'blood-out', direction: 'output', label: 'Blood Output', itemKeys: [FactoryItem.BLOOD_VIAL] },
+        ],
+      },
+      {
+        id: 'node-organ',
+        kind: FactoryKind.NODE,
+        metadata: { outputRate: 0.2, outputItems: [FactoryItem.ORGAN_MASS] },
+        ports: [
+          { id: 'organ-out', direction: 'output', label: 'Organ Output', itemKeys: [FactoryItem.ORGAN_MASS] },
+        ],
+      },
+      {
+        id: 'vat-body',
+        kind: FactoryKind.SMELTER,
+        metadata: { recipeKey: 'body_system' },
+        ports: [
+          {
+            id: 'body-in',
+            direction: 'input',
+            label: 'Body Intake',
+            itemKeys: [FactoryItem.SKIN_PATCH, FactoryItem.BLOOD_VIAL, FactoryItem.ORGAN_MASS],
+          },
+          {
+            id: 'body-out',
+            direction: 'output',
+            label: 'Body Output',
+            itemKeys: [FactoryItem.BODY_SYSTEM],
+          },
+        ],
+      },
+    ],
+    links: [
+      {
+        id: 'skin-to-body',
+        source: { objectId: 'node-skin', portId: 'skin-out' },
+        target: { objectId: 'vat-body', portId: 'body-in' },
+      },
+      {
+        id: 'blood-to-body',
+        source: { objectId: 'node-blood', portId: 'blood-out' },
+        target: { objectId: 'vat-body', portId: 'body-in' },
+      },
+      {
+        id: 'organ-to-body',
+        source: { objectId: 'node-organ', portId: 'organ-out' },
+        target: { objectId: 'vat-body', portId: 'body-in' },
+      },
+    ],
+  });
+}
+
 describe('cloud cluster simulation services', () => {
   beforeEach(() => {
     resetCloudClusterState();
@@ -164,5 +233,22 @@ describe('cloud cluster simulation services', () => {
       tick: snapshot.tick,
     });
     expect(telemetryEntry.totals).toEqual(snapshot.clusters[0].totals);
+  });
+
+  it('treats nodes as passive producers feeding smelters', () => {
+    const cluster = createNodeProducerCluster();
+    const throughput = calculateClusterThroughput(cluster);
+    const skinNode = throughput.objects.find((entry) => entry.id === 'node-skin');
+    expect(skinNode.totalOutput).toBeCloseTo(0.2, 6);
+    expect(skinNode.outputs).toEqual([{ item: FactoryItem.SKIN_PATCH, rate: 0.2 }]);
+
+    const totalsByItem = Object.fromEntries(throughput.totals.map((entry) => [entry.item, entry]));
+    expect(totalsByItem[FactoryItem.SKIN_PATCH].produced).toBeCloseTo(0.2, 6);
+    expect(totalsByItem[FactoryItem.SKIN_PATCH].consumed).toBeGreaterThan(0);
+
+    const smelter = throughput.objects.find((entry) => entry.id === 'vat-body');
+    expect(smelter.inputs.some((input) => input.item === FactoryItem.SKIN_PATCH)).toBe(true);
+    expect(smelter.inputs.some((input) => input.item === FactoryItem.BLOOD_VIAL)).toBe(true);
+    expect(smelter.inputs.some((input) => input.item === FactoryItem.ORGAN_MASS)).toBe(true);
   });
 });

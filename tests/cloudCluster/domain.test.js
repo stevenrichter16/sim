@@ -11,7 +11,12 @@ import {
   createCloudClusterRegistry,
   loadCloudClustersIntoFactory,
   exportCloudClustersFromFactory,
+  createPresetCloudClusterRegistry,
+  seedFactoryCloudClusters,
+  getCloudClusterPresets,
+  resetCloudClusterState,
 } from '../../src/cloudCluster/index.js';
+import CLOUD_CLUSTER_PRESETS from '../../data/cloudClusters/index.js';
 
 function sampleClusterPayload(){
   return {
@@ -114,5 +119,22 @@ describe('cloud cluster registry and factory integration', () => {
     const serialised = exportCloudClustersFromFactory(factoryState);
     expect(serialised).toHaveLength(1);
     expect(serialised[0].id).toBe('alpha');
+  });
+
+  it('seeds registries from bundled presets', () => {
+    const presetRegistry = createPresetCloudClusterRegistry();
+    expect(presetRegistry.byId.size).toBeGreaterThan(0);
+    expect(presetRegistry.order).toHaveLength(CLOUD_CLUSTER_PRESETS.length);
+
+    const factoryState = {};
+    const seeded = seedFactoryCloudClusters(factoryState);
+    expect(factoryState.cloudClusters).toBe(seeded);
+    expect(seeded.byId.size).toBeGreaterThan(0);
+
+    const serialisedPresets = getCloudClusterPresets();
+    expect(serialisedPresets).toHaveLength(CLOUD_CLUSTER_PRESETS.length);
+    expect(serialisedPresets[0]).toHaveProperty('objects');
+
+    resetCloudClusterState();
   });
 });

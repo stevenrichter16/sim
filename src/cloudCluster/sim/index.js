@@ -20,6 +20,104 @@ function toArray(value){
   return Array.from(value);
 }
 
+function incrementMapValue(map, key, amount){
+  if(!Number.isFinite(amount) || Math.abs(amount) <= RATE_EPSILON){
+    return;
+  }
+  const previous = map.get(key) ?? 0;
+  map.set(key, previous + amount);
+}
+
+function ensureClusterAccumulatorRecord(clusterId){
+  const state = getCloudClusterState();
+  if(!state.accumulators){
+    state.accumulators = new Map();
+  }
+  let record = state.accumulators.get(clusterId);
+  if(!record){
+    record = {
+      lastTick: null,
+      itemTotals: new Map(),
+      objectTotals: new Map(),
+    };
+    state.accumulators.set(clusterId, record);
+  }
+  return record;
+}
+
+function ensureObjectTotals(record, objectId){
+  let objectTotals = record.objectTotals.get(objectId);
+  if(!objectTotals){
+    objectTotals = {
+      outputs: new Map(),
+      inputs: new Map(),
+      net: new Map(),
+      produced: 0,
+      consumed: 0,
+    };
+    record.objectTotals.set(objectId, objectTotals);
+  }
+  return objectTotals;
+}
+
+function accumulateItemTotals(record, item, producedDelta = 0, consumedDelta = 0){
+  if(!item) return;
+  let entry = record.itemTotals.get(item);
+  if(!entry){
+    entry = { produced: 0, consumed: 0 };
+    record.itemTotals.set(item, entry);
+  }
+  if(Number.isFinite(producedDelta) && producedDelta > 0){
+    entry.produced += producedDelta;
+  }
+  if(Number.isFinite(consumedDelta) && consumedDelta > 0){
+    entry.consumed += consumedDelta;
+  }
+}
+
+function updateClusterAccumulator(clusterId, throughput, tick){
+  if(!throughput || !Array.isArray(throughput.objects)){
+    return;
+  }
+  const record = ensureClusterAccumulatorRecord(clusterId);
+  const delta = record.lastTick == null ? 1 : Math.max(0, tick - record.lastTick);
+  record.lastTick = tick;
+  if(delta <= 0){
+    return;
+  }
+  for(const object of throughput.objects){
+    const objectTotals = ensureObjectTotals(record, object.id);
+    for(const entry of (object.outputs ?? [])){
+      const amount = Number.isFinite(entry.rate) ? entry.rate * delta : 0;
+      if(amount <= RATE_EPSILON) continue;
+      incrementMapValue(objectTotals.outputs, entry.item, amount);
+      incrementMapValue(objectTotals.net, entry.item, amount);
+      objectTotals.produced += amount;
+      accumulateItemTotals(record, entry.item, amount, 0);
+    }
+    for(const entry of (object.inputs ?? [])){
+      const amount = Number.isFinite(entry.rate) ? entry.rate * delta : 0;
+      if(amount <= RATE_EPSILON) continue;
+      incrementMapValue(objectTotals.inputs, entry.item, amount);
+      incrementMapValue(objectTotals.net, entry.item, -amount);
+      objectTotals.consumed += amount;
+      accumulateItemTotals(record, entry.item, 0, amount);
+    }
+  }
+}
+ 
+export function clearClusterAccumulator(clusterId){
+  const state = getCloudClusterState();
+  if(!state.accumulators){
+    state.accumulators = new Map();
+  }
+  if(clusterId == null){
+    state.accumulators.clear();
+    return;
+  }
+  state.accumulators.delete(clusterId);
+}
+
 function buildAdjacency(cluster){
   const adjacency = new Map();
   for(const object of cluster.objects.values()){
@@ -143,6 +241,87 @@ function resolveMinerOutputItem(object){
   return FactoryItem.SKIN_PATCH;
 }
 
+function resolveNodeOutputs(object){
+  if(!object){
+    return [];
+  }
+  const meta = object.metadata ?? {};
+  if(meta.autoExtract === false){
+    return [];
+  }
+  const outputs = [];
+  if(meta.outputRates && typeof meta.outputRates === 'object'){
+    for(const [item, rate] of Object.entries(meta.outputRates)){
+      const key = typeof item === 'string' ? item : null;
+      if(!key) continue;
+      if(!Number.isFinite(rate) || rate <= RATE_EPSILON) continue;
+      outputs.push({ item: key, rate });
+    }
+    if(outputs.length){
+      return outputs;
+    }
+  }
+  const itemSet = new Set();
+  if(Array.isArray(meta.outputItems)){
+    for(const entry of meta.outputItems){
+      if(typeof entry === 'string' && entry){
+        itemSet.add(entry);
+      }
+    }
+  }
+  if(typeof meta.outputItem === 'string' && meta.outputItem){
+    itemSet.add(meta.outputItem);
+  }
+  if(typeof meta.resource === 'string' && meta.resource){
+    itemSet.add(meta.resource);
+  }
+  if(!itemSet.size){
+    for(const portItem of inferPortItems(object, CloudFactoryPortDirection.OUTPUT)){
+      if(typeof portItem === 'string' && portItem){
+        itemSet.add(portItem);
+      }
+    }
+  }
+  if(!itemSet.size){
+    const hints = [];
+    if(typeof meta.type === 'string') hints.push(meta.type);
+    if(typeof meta.nodeType === 'string') hints.push(meta.nodeType);
+    if(typeof object.label === 'string') hints.push(object.label);
+    if(typeof object.description === 'string') hints.push(object.description);
+    if(typeof object.id === 'string') hints.push(object.id);
+    const mappings = [
+      { regex: /blood|serum|haem/i, item: FactoryItem.BLOOD_VIAL },
+      { regex: /organ|visc/i, item: FactoryItem.ORGAN_MASS },
+      { regex: /nerve|synapse/i, item: FactoryItem.NERVE_THREAD },
+      { regex: /bone|osteo/i, item: FactoryItem.BONE_FRAGMENT },
+      { regex: /gland|endocr/i, item: FactoryItem.GLAND_SEED },
+      { regex: /skin|derm|dermal/i, item: FactoryItem.SKIN_PATCH },
+    ];
+    for(const hint of hints){
+      if(!hint) continue;
+      for(const mapping of mappings){
+        if(mapping.regex.test(hint)){
+          itemSet.add(mapping.item);
+        }
+      }
+      if(itemSet.size){
+        break;
+      }
+    }
+  }
+  if(!itemSet.size){
+    itemSet.add(FactoryItem.SKIN_PATCH);
+  }
+  const rate = Number.isFinite(meta.outputRate) && meta.outputRate > RATE_EPSILON
+    ? meta.outputRate
+    : getMinerExtractionRate();
+  const entries = [];
+  for(const item of itemSet){
+    entries.push({ item, rate });
+  }
+  return entries;
+}
+
 function resolveSmelterRecipe(object){
   const meta = object?.metadata ?? {};
   const key = typeof meta.recipeKey === 'string'
@@ -206,6 +385,57 @@ function summariseNet(outputs, inputs){
     .map(([item, rate]) => ({ item, rate }));
 }
 
+function mergeRatesWithHistory(rates = [], historyMap){
+  const merged = [];
+  const seen = new Set();
+  for(const entry of rates){
+    const total = historyMap?.get(entry.item) ?? 0;
+    merged.push({
+      ...entry,
+      total,
+    });
+    seen.add(entry.item);
+  }
+  if(historyMap instanceof Map){
+    for(const [item, total] of historyMap.entries()){
+      if(seen.has(item)) continue;
+      merged.push({ item, rate: 0, total });
+    }
+  }
+  return merged;
+}
+
+function mergeTotalsWithHistory(rateTotals = [], historyMap){
+  const merged = [];
+  const seen = new Set();
+  for(const entry of rateTotals){
+    const history = historyMap instanceof Map ? historyMap.get(entry.item) : null;
+    merged.push({
+      ...entry,
+      cumulativeProduced: history?.produced ?? 0,
+      cumulativeConsumed: history?.consumed ?? 0,
+      cumulativeNet: history ? history.produced - history.consumed : entry.net,
+    });
+    seen.add(entry.item);
+  }
+  if(historyMap instanceof Map){
+    for(const [item, history] of historyMap.entries()){
+      if(seen.has(item)) continue;
+      merged.push({
+        item,
+        produced: 0,
+        consumed: 0,
+        net: 0,
+        cumulativeProduced: history.produced,
+        cumulativeConsumed: history.consumed,
+        cumulativeNet: history.produced - history.consumed,
+      });
+    }
+  }
+  merged.sort((a, b) => a.item.localeCompare(b.item));
+  return merged;
+}
+
 export function calculateClusterThroughput(cluster){
   if(!isCluster(cluster)){
     throw new TypeError('Expected a cloud cluster instance to calculate throughput.');
@@ -223,6 +453,16 @@ export function calculateClusterThroughput(cluster){
         const outputItem = resolveMinerOutputItem(object);
         pushRate(outputs, outputItem, rate);
         updateTotals(totals, outputItem, rate, 0);
+        break;
+      }
+      case FactoryKind.NODE: {
+        const nodeOutputs = resolveNodeOutputs(object);
+        for(const entry of nodeOutputs){
+          pushRate(outputs, entry.item, entry.rate);
+          if(entry.item){
+            updateTotals(totals, entry.item, entry.rate, 0);
+          }
+        }
         break;
       }
       case FactoryKind.SMELTER: {
@@ -308,11 +548,34 @@ export function createClusterTelemetry(cluster, { validation, throughput, tick =
   }
   const validationReport = validation ?? validateClusterRouting(cluster);
   const throughputReport = throughput ?? calculateClusterThroughput(cluster);
+  const state = getCloudClusterState();
+  const accumulator = state.accumulators?.get(cluster.id) ?? null;
   const status = validationReport.issues.some((issue) => issue.severity === 'error')
     ? 'error'
     : validationReport.issues.some((issue) => issue.severity === 'warning')
       ? 'warning'
       : 'ok';
+  const totalsWithHistory = accumulator
+    ? mergeTotalsWithHistory(throughputReport.totals, accumulator.itemTotals)
+    : throughputReport.totals;
+  const objectsWithHistory = throughputReport.objects.map((object) => {
+    const history = accumulator?.objectTotals?.get(object.id) ?? null;
+    const outputs = mergeRatesWithHistory(object.outputs ?? [], history?.outputs);
+    const inputs = mergeRatesWithHistory(object.inputs ?? [], history?.inputs);
+    const net = mergeRatesWithHistory(object.net ?? [], history?.net);
+    const cumulativeProduced = history?.produced ?? 0;
+    const cumulativeConsumed = history?.consumed ?? 0;
+    const cumulativeNet = cumulativeProduced - cumulativeConsumed;
+    return {
+      ...object,
+      outputs,
+      inputs,
+      net,
+      cumulativeProduced,
+      cumulativeConsumed,
+      cumulativeNet,
+    };
+  });
   return {
     id: cluster.id,
     clusterId: cluster.id,
@@ -321,8 +584,8 @@ export function createClusterTelemetry(cluster, { validation, throughput, tick =
     tick,
     status,
     issues: validationReport.issues,
-    totals: throughputReport.totals,
-    objects: throughputReport.objects,
+    totals: totalsWithHistory,
+    objects: objectsWithHistory,
   };
 }
 
@@ -345,6 +608,7 @@ export function stepCloudClusterSimulation({ tick = 0 } = {}){
     if(!cluster || !isCluster(cluster)) continue;
     const validation = validateClusterRouting(cluster);
     const throughput = calculateClusterThroughput(cluster);
+    updateClusterAccumulator(cluster.id, throughput, tick);
     state.validation.set(cluster.id, validation);
     state.throughput.set(cluster.id, throughput);
     snapshots.push(createClusterTelemetry(cluster, { validation, throughput, tick }));
@@ -355,6 +619,7 @@ export function stepCloudClusterSimulation({ tick = 0 } = {}){
     if(!isCluster(cluster)) continue;
     const validation = validateClusterRouting(cluster);
     const throughput = calculateClusterThroughput(cluster);
+    updateClusterAccumulator(cluster.id, throughput, tick);
     state.validation.set(cluster.id, validation);
     state.throughput.set(cluster.id, throughput);
     snapshots.push(createClusterTelemetry(cluster, { validation, throughput, tick }));

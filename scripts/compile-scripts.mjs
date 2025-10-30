@@ -7,6 +7,7 @@ import process from 'node:process';
 import { compileSource } from '../src/script/compiler.js';
 import { serialiseCompiledProgram } from '../src/script/bytecode.js';
 import { DEFAULT_CAPABILITIES } from '../src/script/runtime.js';
+import { getCloudClusterPresets } from '../src/cloudCluster/index.js';
 
 const workspaceRoot = path.dirname(fileURLToPath(new URL('../package.json', import.meta.url)));
 
@@ -14,6 +15,8 @@ function parseArgs(argv) {
   const options = {
     src: path.join(workspaceRoot, 'scenarios'),
     out: path.join(workspaceRoot, 'data', 'scenarios'),
+    cloudClustersExport: null,
+    cloudClustersPretty: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -23,6 +26,11 @@ function parseArgs(argv) {
     } else if (arg === '--out' || arg === '-o') {
       options.out = path.resolve(workspaceRoot, argv[i + 1]);
       i += 1;
+    } else if (arg === '--cloud-clusters') {
+      options.cloudClustersExport = path.resolve(workspaceRoot, argv[i + 1]);
+      i += 1;
+    } else if (arg === '--cloud-clusters-pretty') {
+      options.cloudClustersPretty = true;
     } else if (arg === '--help' || arg === '-h') {
       options.help = true;
     }
@@ -128,11 +136,23 @@ async function main() {
   const argv = process.argv.slice(2);
   const options = parseArgs(argv);
   if (options.help) {
-    console.log('Usage: compile-scripts [--src <dir>] [--out <dir>]');
+    console.log('Usage: compile-scripts [--src <dir>] [--out <dir>] [--cloud-clusters <file>] [--cloud-clusters-pretty]');
     process.exit(0);
     return;
   }
-
+  async function exportCloudClustersIfRequested(){
+    if(!options.cloudClustersExport){
+      return;
+    }
+    const presets = getCloudClusterPresets();
+    if(!presets.length){
+      return;
+    }
+    await ensureDir(path.dirname(options.cloudClustersExport));
+    const spacing = options.cloudClustersPretty ? 2 : 0;
+    await writeFile(options.cloudClustersExport, `${JSON.stringify(presets, null, spacing)}\n`, 'utf8');
+    console.log(`Exported ${presets.length} cloud cluster preset(s) → ${path.relative(workspaceRoot, options.cloudClustersExport)}`);
+  }
   try {
     const srcStat = await stat(options.src);
     if (!srcStat.isDirectory()) {
@@ -177,6 +197,8 @@ async function main() {
   if (failure) {
     process.exit(1);
   }
+
+  await exportCloudClustersIfRequested();
 }
 
 main().catch((error) => {

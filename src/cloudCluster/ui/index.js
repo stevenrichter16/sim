@@ -24,6 +24,8 @@ import {
   getCloudClusterTelemetry,
   getClusterValidationReport,
   getClusterThroughput,
+  stepCloudClusterSimulation,
+  clearClusterAccumulator,
 } from '../sim/index.js';
 
 const KIND_LABEL = Object.freeze({
@@ -67,38 +69,314 @@ const DEFAULT_PORT_TEMPLATES = Object.freeze({
   ],
 });
 
-const DEFAULT_PALETTE = Object.freeze([
+const PALETTE_ENTRIES = Object.freeze([
   {
+    key: 'node-dermal',
     kind: FactoryKind.NODE,
     icon: '🧬',
-    label: KIND_LABEL[FactoryKind.NODE],
-    description: 'Static dermal anchor that provides shared routing points.',
+    label: 'Dermal Node',
+    description: 'Static dermal anchor that emits skin patches.',
+    metadata: { outputItems: [FactoryItem.SKIN_PATCH] },
+    ports: [
+      {
+        id: 'out-dermal',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Skin Patch Output',
+        itemKeys: [FactoryItem.SKIN_PATCH],
+      },
+    ],
   },
   {
-    kind: FactoryKind.MINER,
-    icon: '🩺',
-    label: KIND_LABEL[FactoryKind.MINER],
-    description: 'Harvests faction resources and exports raw stock.',
+    key: 'node-blood',
+    kind: FactoryKind.NODE,
+    icon: '🩸',
+    label: 'Bloodwell Node',
+    description: 'Wells of suspended blood serum.',
+    metadata: { outputItems: [FactoryItem.BLOOD_VIAL] },
+    ports: [
+      {
+        id: 'out-blood',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Blood Vial Output',
+        itemKeys: [FactoryItem.BLOOD_VIAL],
+      },
+    ],
   },
   {
+    key: 'node-organ',
+    kind: FactoryKind.NODE,
+    icon: '🫀',
+    label: 'Organ Bloom Node',
+    description: 'Visceral fascias that emit organ mass.',
+    metadata: { outputItems: [FactoryItem.ORGAN_MASS] },
+    ports: [
+      {
+        id: 'out-organ',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Organ Mass Output',
+        itemKeys: [FactoryItem.ORGAN_MASS],
+      },
+    ],
+  },
+  {
+    key: 'node-nerve',
+    kind: FactoryKind.NODE,
+    icon: '🧠',
+    label: 'Synapse Node',
+    description: 'Neuronal bundles spun into nerve thread.',
+    metadata: { outputItems: [FactoryItem.NERVE_THREAD] },
+    ports: [
+      {
+        id: 'out-nerve',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Nerve Thread Output',
+        itemKeys: [FactoryItem.NERVE_THREAD],
+      },
+    ],
+  },
+  {
+    key: 'node-bone',
+    kind: FactoryKind.NODE,
+    icon: '🦴',
+    label: 'Osteo Node',
+    description: 'Calcified projections generating bone fragments.',
+    metadata: { outputItems: [FactoryItem.BONE_FRAGMENT] },
+    ports: [
+      {
+        id: 'out-bone',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Bone Fragment Output',
+        itemKeys: [FactoryItem.BONE_FRAGMENT],
+      },
+    ],
+  },
+  {
+    key: 'node-gland',
+    kind: FactoryKind.NODE,
+    icon: '🧪',
+    label: 'Endocrine Node',
+    description: 'Endocrine protrusions that emit gland seeds.',
+    metadata: { outputItems: [FactoryItem.GLAND_SEED] },
+    ports: [
+      {
+        id: 'out-gland',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Gland Seed Output',
+        itemKeys: [FactoryItem.GLAND_SEED],
+      },
+    ],
+  },
+  {
+    key: 'belt',
     kind: FactoryKind.BELT,
     icon: '🪢',
     label: KIND_LABEL[FactoryKind.BELT],
     description: 'Transfers materials between upstream and downstream objects.',
   },
   {
+    key: 'smelter-body',
     kind: FactoryKind.SMELTER,
     icon: '🧪',
-    label: KIND_LABEL[FactoryKind.SMELTER],
-    description: 'Processes raw stock via bioforge recipes.',
+    label: 'Body System Vat',
+    description: 'Bioforge that seals multi-organ capsules.',
+    metadata: { recipeKey: 'body_system' },
+    ports: [
+      {
+        id: 'in-skin',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Skin Patch Intake',
+        itemKeys: [FactoryItem.SKIN_PATCH],
+      },
+      {
+        id: 'in-blood',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Blood Vial Intake',
+        itemKeys: [FactoryItem.BLOOD_VIAL],
+      },
+      {
+        id: 'in-organ',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Organ Mass Intake',
+        itemKeys: [FactoryItem.ORGAN_MASS],
+      },
+      {
+        id: 'out-body',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Body System Output',
+        itemKeys: [FactoryItem.BODY_SYSTEM],
+      },
+    ],
   },
   {
+    key: 'smelter-neural',
+    kind: FactoryKind.SMELTER,
+    icon: '🧠',
+    label: 'Neural Weave Loom',
+    description: 'Spins neural weave from nerve thread and serum.',
+    metadata: { recipeKey: 'neural_weave' },
+    ports: [
+      {
+        id: 'in-nerve',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Nerve Thread Intake',
+        itemKeys: [FactoryItem.NERVE_THREAD],
+      },
+      {
+        id: 'in-blood',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Blood Vial Intake',
+        itemKeys: [FactoryItem.BLOOD_VIAL],
+      },
+      {
+        id: 'out-neural',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Neural Weave Output',
+        itemKeys: [FactoryItem.NEURAL_WEAVE],
+      },
+    ],
+  },
+  {
+    key: 'smelter-frame',
+    kind: FactoryKind.SMELTER,
+    icon: '🦾',
+    label: 'Frame Press',
+    description: 'Compresses osteo fragments and dermal binding into rigid frames.',
+    metadata: { recipeKey: 'skeletal_frame' },
+    ports: [
+      {
+        id: 'in-bone',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Bone Fragment Intake',
+        itemKeys: [FactoryItem.BONE_FRAGMENT],
+      },
+      {
+        id: 'in-skin',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Skin Patch Intake',
+        itemKeys: [FactoryItem.SKIN_PATCH],
+      },
+      {
+        id: 'out-frame',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Skeletal Frame Output',
+        itemKeys: [FactoryItem.SKELETAL_FRAME],
+      },
+    ],
+  },
+  {
+    key: 'smelter-gland',
+    kind: FactoryKind.SMELTER,
+    icon: '🌿',
+    label: 'Endocrine Bloom',
+    description: 'Coaxes gland seeds and organ mass into hormonal webs.',
+    metadata: { recipeKey: 'glandular_network' },
+    ports: [
+      {
+        id: 'in-gland',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Gland Seed Intake',
+        itemKeys: [FactoryItem.GLAND_SEED],
+      },
+      {
+        id: 'in-organ',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Organ Mass Intake',
+        itemKeys: [FactoryItem.ORGAN_MASS],
+      },
+      {
+        id: 'out-gland',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Glandular Network Output',
+        itemKeys: [FactoryItem.GLANDULAR_NETWORK],
+      },
+    ],
+  },
+  {
+    key: 'constructor-shell',
     kind: FactoryKind.CONSTRUCTOR,
     icon: '🧍',
-    label: KIND_LABEL[FactoryKind.CONSTRUCTOR],
-    description: 'Consumes refined stock to print final constructs.',
+    label: 'Recruit Constructor',
+    description: 'Prints baseline human shells from body systems.',
+    metadata: { blueprintKey: 'human_shell' },
+    ports: [
+      {
+        id: 'in-body',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Body System Intake',
+        itemKeys: [FactoryItem.BODY_SYSTEM],
+      },
+      {
+        id: 'out-shell',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Human Shell Output',
+        itemKeys: [FactoryItem.HUMAN_SHELL],
+      },
+    ],
   },
   {
+    key: 'constructor-caretaker',
+    kind: FactoryKind.CONSTRUCTOR,
+    icon: '🤖',
+    label: 'Caretaker Constructor',
+    description: 'Assembles caretaker drones from weave and frames.',
+    metadata: { blueprintKey: 'caretaker_drone' },
+    ports: [
+      {
+        id: 'in-neural',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Neural Weave Intake',
+        itemKeys: [FactoryItem.NEURAL_WEAVE],
+      },
+      {
+        id: 'in-frame',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Skeletal Frame Intake',
+        itemKeys: [FactoryItem.SKELETAL_FRAME],
+      },
+      {
+        id: 'out-caretaker',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Caretaker Drone Output',
+        itemKeys: [FactoryItem.CARETAKER_DRONE],
+      },
+    ],
+  },
+  {
+    key: 'constructor-emissary',
+    kind: FactoryKind.CONSTRUCTOR,
+    icon: '🕊️',
+    label: 'Emissary Constructor',
+    description: 'Combines systems, weaves, and glands into emissaries.',
+    metadata: { blueprintKey: 'emissary_avatar' },
+    ports: [
+      {
+        id: 'in-body',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Body System Intake',
+        itemKeys: [FactoryItem.BODY_SYSTEM],
+      },
+      {
+        id: 'in-neural',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Neural Weave Intake',
+        itemKeys: [FactoryItem.NEURAL_WEAVE],
+      },
+      {
+        id: 'in-gland',
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Glandular Network Intake',
+        itemKeys: [FactoryItem.GLANDULAR_NETWORK],
+      },
+      {
+        id: 'out-emissary',
+        direction: CloudFactoryPortDirection.OUTPUT,
+        label: 'Emissary Output',
+        itemKeys: [FactoryItem.EMISSARY_AVATAR],
+      },
+    ],
+  },
+  {
+    key: 'storage',
     kind: FactoryKind.STORAGE,
     icon: '🛏️',
     label: KIND_LABEL[FactoryKind.STORAGE],
@@ -116,14 +394,21 @@ function normaliseClusterId(rawId, fallback){
   return slug || 'cluster';
 }
 
-function cloneRegistry(registry){
-  const ensured = ensureRegistry(registry);
-  return {
-    version: ensured.version ?? 1,
-    byId: new Map(ensured.byId ?? []),
-    order: Array.isArray(ensured.order) ? ensured.order.slice() : [],
-  };
-}
+  function cloneRegistry(registry){
+    const ensured = ensureRegistry(registry);
+    return {
+      version: ensured.version ?? 1,
+      byId: new Map(ensured.byId ?? []),
+      order: Array.isArray(ensured.order) ? ensured.order.slice() : [],
+    };
+  }
+
+  function advanceSimulation(step = 1){
+    const telemetry = getCloudClusterTelemetry();
+    const currentTick = telemetry?.tick ?? 0;
+    const increment = Math.max(1, step | 0);
+    stepCloudClusterSimulation({ tick: currentTick + increment });
+  }
 
 function orderedClusterIds(registry){
   const ensured = ensureRegistry(registry);
@@ -176,7 +461,17 @@ function ensureCluster(instance){
 }
 
 export function getCloudClusterPalette(){
-  return DEFAULT_PALETTE.slice();
+  return PALETTE_ENTRIES.map((entry) => ({
+    ...entry,
+    metadata: entry.metadata ? { ...entry.metadata } : undefined,
+    ports: Array.isArray(entry.ports)
+      ? entry.ports.map((port) => ({
+          ...port,
+          itemKeys: Array.isArray(port.itemKeys) ? port.itemKeys.slice() : [],
+          metadata: port.metadata ? { ...port.metadata } : undefined,
+        }))
+      : undefined,
+  }));
 }
 
 export function createCloudClusterEditor(options = {}){
@@ -253,6 +548,7 @@ export function createCloudClusterEditor(options = {}){
       nextRegistry.order.push(clusterId);
     }
     commit(nextRegistry);
+    clearClusterAccumulator(clusterId);
     return result;
   }
 
@@ -330,6 +626,7 @@ export function createCloudClusterEditor(options = {}){
       nextRegistry.order.push(cluster.id);
     }
     commit(nextRegistry);
+    clearClusterAccumulator(cluster.id);
     state.selectedClusterId = cluster.id;
     state.selectedObjectId = null;
     state.pendingLink = null;
@@ -350,6 +647,7 @@ export function createCloudClusterEditor(options = {}){
         state.pendingLink = null;
         refreshSelection();
       }
+      clearClusterAccumulator(clusterId);
     }
     return removed;
   }
@@ -362,22 +660,29 @@ export function createCloudClusterEditor(options = {}){
     return updateCluster(cluster.id, (draft) => upsertFactoryObject(draft, def));
   }
 
-  function addObjectFromPalette(kind, options = {}){
+  function addObjectFromPalette(kindOrEntry, overrides = {}){
     const cluster = getSelectedCluster();
     if(!cluster){
       throw new Error('Cannot add object without selecting a cluster.');
     }
-    const label = options.label ?? KIND_LABEL[kind] ?? kind;
+    let paletteEntry = null;
+    let kind = kindOrEntry;
+    if(kindOrEntry && typeof kindOrEntry === 'object' && kindOrEntry.kind){
+      paletteEntry = kindOrEntry;
+      kind = paletteEntry.kind;
+    }
+    const labelBase = overrides.label ?? paletteEntry?.label ?? KIND_LABEL[kind] ?? kind;
     const ordinal = state.kindCounters.get(kind) ?? 1;
     let objectId;
-    if(options.id){
-      objectId = String(options.id);
+    if(overrides.id){
+      objectId = String(overrides.id);
       state.kindCounters.set(kind, ordinal + 1);
     } else {
       objectId = generateObjectId(cluster, kind);
     }
-    const ports = Array.isArray(options.ports)
-      ? options.ports.map((port) => ({
+    const portsSource = overrides.ports ?? paletteEntry?.ports ?? null;
+    const ports = Array.isArray(portsSource)
+      ? portsSource.map((port) => ({
           ...port,
           id: String(port.id ?? `${port.direction}-${ordinal}`),
           direction: port.direction === CloudFactoryPortDirection.OUTPUT
@@ -390,13 +695,14 @@ export function createCloudClusterEditor(options = {}){
       : createDefaultPorts(kind, ordinal);
     const metadata = {
       ...(DEFAULT_OBJECT_METADATA[kind] ?? {}),
-      ...(options.metadata ?? {}),
+      ...(paletteEntry?.metadata ?? {}),
+      ...(overrides.metadata ?? {}),
     };
     const object = {
       id: objectId,
       kind,
-      label: `${label} ${ordinal}`.trim(),
-      description: options.description ?? '',
+      label: `${labelBase} ${ordinal}`.trim(),
+      description: overrides.description ?? paletteEntry?.description ?? '',
       ports,
       metadata,
     };
@@ -531,6 +837,7 @@ export function createCloudClusterEditor(options = {}){
     if(!clusterId || !state.registry.byId.has(clusterId)) return null;
     const cluster = state.registry.byId.get(clusterId);
     ensureCluster(cluster);
+    advanceSimulation();
     const telemetryState = getCloudClusterTelemetry();
     const telemetryEntry = telemetryState?.clusters?.find((entry) => entry.id === clusterId) ?? null;
     const validation = getClusterValidationReport(clusterId) ?? validateClusterRouting(cluster);
@@ -554,6 +861,7 @@ export function createCloudClusterEditor(options = {}){
   }
 
   function getOverlay(){
+    advanceSimulation();
     const telemetryState = getCloudClusterTelemetry();
     const clusters = [];
     for(const id of orderedClusterIds(state.registry)){
@@ -608,6 +916,7 @@ export function createCloudClusterEditor(options = {}){
     getGraph,
     getInspector,
     getOverlay,
+    stepSimulation: advanceSimulation,
   };
 }
 

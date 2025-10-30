@@ -14,11 +14,15 @@ export {
   deserialiseCloudClusters,
   serialiseCloudClusters,
   hydrateRegistryFromPayload,
+  createPresetCloudClusterRegistry,
+  seedRegistryWithPresets,
+  getCloudClusterPresets,
 } from './serialization.js';
 export {
   getFactoryCloudRegistry,
   loadCloudClustersIntoFactory,
   exportCloudClustersFromFactory,
+  seedFactoryCloudClusters,
 } from './factoryAdapter.js';
 export {
   createCloudClusterState,
@@ -36,4 +40,6 @@ export {
   getCloudClusterTelemetry,
   getClusterValidationReport,
   getClusterThroughput,
+  clearClusterAccumulator,
 } from './sim/index.js';
+export { createCloudClusterEditor, getCloudClusterPalette } from './ui/index.js';

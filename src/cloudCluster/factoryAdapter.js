@@ -1,3 +1,4 @@
+import { CLOUD_CLUSTER_PRESETS } from '../../data/cloudClusters/index.js';
 import { ensureRegistry } from './registry.js';
 import { hydrateRegistryFromPayload, serialiseCloudClusters } from './serialization.js';
 import { setCloudClusterRegistry } from './state/index.js';
@@ -23,4 +24,13 @@ export function loadCloudClustersIntoFactory(factoryState, payload){
 export function exportCloudClustersFromFactory(factoryState){
   const registry = getFactoryCloudRegistry(factoryState);
   return serialiseCloudClusters(registry);
+}
+
+export function seedFactoryCloudClusters(factoryState, presets = CLOUD_CLUSTER_PRESETS){
+  const registry = getFactoryCloudRegistry(factoryState);
+  if((registry.byId?.size ?? 0) > 0 || (registry.order?.length ?? 0) > 0){
+    return registry;
+  }
+  hydrateRegistryFromPayload(registry, presets);
+  return registry;
 }

@@ -289,7 +289,7 @@ export function initInput({ canvas, draw }){
       }
       button.addEventListener('click', () => {
         try {
-          cloudEditor.addObjectFromPalette(entry.kind);
+          cloudEditor.addObjectFromPalette(entry);
         } catch (error){
           console.error('Failed to add cloud cluster object', error);
         }
@@ -492,7 +492,13 @@ export function initInput({ canvas, draw }){
         const producedLabel = Number.isFinite(producedValue) ? producedValue.toFixed(2) : '0.00';
         const consumedLabel = Number.isFinite(consumedValue) ? consumedValue.toFixed(2) : '0.00';
         const netLabel = Number.isFinite(netValue) ? `${netValue >= 0 ? '+' : ''}${netValue.toFixed(2)}` : '+0.00';
-        row.textContent = `${total.item ?? 'item'} · +${producedLabel} / -${consumedLabel} (net ${netLabel})`;
+        const cumulativeProduced = Number(total.cumulativeProduced ?? 0);
+        const cumulativeConsumed = Number(total.cumulativeConsumed ?? 0);
+        const cumulativeNet = Number(total.cumulativeNet ?? (cumulativeProduced - cumulativeConsumed));
+        const cumulativeProducedLabel = Number.isFinite(cumulativeProduced) ? cumulativeProduced.toFixed(2) : '0.00';
+        const cumulativeConsumedLabel = Number.isFinite(cumulativeConsumed) ? cumulativeConsumed.toFixed(2) : '0.00';
+        const cumulativeNetLabel = Number.isFinite(cumulativeNet) ? `${cumulativeNet >= 0 ? '+' : ''}${cumulativeNet.toFixed(2)}` : '+0.00';
+        row.textContent = `${total.item ?? 'item'} · rate +${producedLabel} / -${consumedLabel} (net ${netLabel}) · total +${cumulativeProducedLabel} / -${cumulativeConsumedLabel} (net ${cumulativeNetLabel})`;
         totalsList.append(row);
       }
       cloudClusterInspector.append(totalsList);
@@ -501,6 +507,41 @@ export function initInput({ canvas, draw }){
     if(objects.length){
       const objectList = document.createElement('div');
       objectList.className = 'cloud-cluster-links';
+      const formatRate = (value) => {
+        const num = Number(value ?? 0);
+        return Number.isFinite(num) ? num.toFixed(2) : '0.00';
+      };
+      const formatTotal = (value) => {
+        const num = Number(value ?? 0);
+        return Number.isFinite(num) ? num.toFixed(2) : '0.00';
+      };
+      function createRateRow(prefix, entries){
+        const container = document.createElement('div');
+        container.className = 'cloud-cluster-rate-row';
+        const title = document.createElement('span');
+        title.className = 'cloud-cluster-rate-label';
+        title.textContent = `${prefix}:`;
+        container.append(title);
+        if(!Array.isArray(entries) || entries.length === 0){
+          const value = document.createElement('span');
+          value.className = 'cloud-cluster-rate-value';
+          value.textContent = '—';
+          container.append(value);
+        } else {
+          for(const entry of entries){
+            const value = document.createElement('span');
+            value.className = 'cloud-cluster-rate-value';
+            const itemLabel = typeof entry.item === 'string' && entry.item.length ? entry.item : 'item';
+            const segments = [`rate ${formatRate(entry.rate)}`];
+            if(entry.total != null){
+              segments.push(`total ${formatTotal(entry.total)}`);
+            }
+            value.textContent = `${itemLabel} (${segments.join(', ')})`;
+            container.append(value);
+          }
+        }
+        return container;
+      }
       for(const obj of objects){
         const row = document.createElement('div');
         row.className = 'cloud-cluster-link';
@@ -509,8 +550,19 @@ export function initInput({ canvas, draw }){
         const inValue = Number(obj.totalInput ?? 0);
         const outLabel = Number.isFinite(outValue) ? outValue.toFixed(2) : '0.00';
         const inLabel = Number.isFinite(inValue) ? inValue.toFixed(2) : '0.00';
-        label.textContent = `${obj.label ?? obj.id} · out ${outLabel} / in ${inLabel}`;
+        const cumulativeProduced = Number(obj.cumulativeProduced ?? 0);
+        const cumulativeConsumed = Number(obj.cumulativeConsumed ?? 0);
+        const cumulativeNet = Number(obj.cumulativeNet ?? (cumulativeProduced - cumulativeConsumed));
+        const producedTotalLabel = formatTotal(cumulativeProduced);
+        const consumedTotalLabel = formatTotal(cumulativeConsumed);
+        const netTotalLabel = formatTotal(cumulativeNet);
+        label.textContent = `${obj.label ?? obj.id} · rate out ${outLabel} / in ${inLabel} · total +${producedTotalLabel} / -${consumedTotalLabel} (net ${netTotalLabel})`;
         row.append(label);
+        row.append(createRateRow('Outputs', obj.outputs));
+        row.append(createRateRow('Inputs', obj.inputs));
+        if(Array.isArray(obj.net) && obj.net.length){
+          row.append(createRateRow('Net', obj.net));
+        }
         objectList.append(row);
       }
       cloudClusterInspector.append(objectList);
@@ -1065,6 +1117,10 @@ function toggleScenarioDiagPanel(force){
       const n = Number(value);
       return Number.isFinite(n) ? n.toFixed(2) : '0.00';
     };
+    const formatTotal = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+    };
     telemetryCloudSection.style.display = 'flex';
     telemetryCloudList.innerHTML = '';
     for(const cluster of clusters){
@@ -1097,7 +1153,10 @@ function toggleScenarioDiagPanel(force){
           const produced = formatRate(total.produced ?? 0);
           const consumed = formatRate(total.consumed ?? 0);
           const net = formatRate(total.net ?? ((total.produced ?? 0) - (total.consumed ?? 0)));
-          row.textContent = `${total.item ?? 'item'} · +${produced} / -${consumed} (net ${net})`;
+          const cumulativeProduced = formatTotal(total.cumulativeProduced ?? 0);
+          const cumulativeConsumed = formatTotal(total.cumulativeConsumed ?? 0);
+          const cumulativeNet = formatTotal((total.cumulativeNet ?? ((total.cumulativeProduced ?? 0) - (total.cumulativeConsumed ?? 0))));
+          row.textContent = `${total.item ?? 'item'} · rate +${produced} / -${consumed} (net ${net}) · total +${cumulativeProduced} / -${cumulativeConsumed} (net ${cumulativeNet})`;
           totals.append(row);
         }
         card.append(totals);
@@ -1115,6 +1174,9 @@ function toggleScenarioDiagPanel(force){
 
   function refreshCloudClusterUI(){
     if(!cloudClusterPanel) return;
+    if(typeof cloudEditor.stepSimulation === 'function'){
+      cloudEditor.stepSimulation();
+    }
     renderCloudClusterSelect();
     renderCloudClusterPalette();
     renderCloudClusterGraph();

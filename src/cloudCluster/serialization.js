@@ -1,3 +1,4 @@
+import { CLOUD_CLUSTER_PRESETS } from '../../data/cloudClusters/index.js';
 import { createCluster, isCluster, serialiseCluster } from './domain/cluster.js';
 import { clearRegistry, createCloudClusterRegistry, ensureRegistry } from './registry.js';
 
@@ -62,4 +63,23 @@ export function hydrateRegistryFromPayload(registry, payload){
     }
   }
   return target;
+}
+
+export function createPresetCloudClusterRegistry(presets = CLOUD_CLUSTER_PRESETS){
+  const registry = createCloudClusterRegistry();
+  hydrateRegistryFromPayload(registry, presets);
+  return registry;
+}
+
+export function seedRegistryWithPresets(registry, presets = CLOUD_CLUSTER_PRESETS){
+  const target = ensureRegistry(registry);
+  if((target.byId?.size ?? 0) > 0 || (target.order?.length ?? 0) > 0){
+    return target;
+  }
+  hydrateRegistryFromPayload(target, presets);
+  return target;
+}
+
+export function getCloudClusterPresets(){
+  return CLOUD_CLUSTER_PRESETS.map((preset) => serialiseCluster(createCluster(preset)));
 }
