@@ -37,7 +37,3 @@ export {
   getClusterValidationReport,
   getClusterThroughput,
 } from './sim/index.js';
-export {
-  createCloudClusterEditor,
-  getCloudClusterPalette,
-} from './ui/index.js';
