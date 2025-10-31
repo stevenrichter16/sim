@@ -293,11 +293,7 @@ function describeRecipe(recipe){
     output: recipe.output,
     outputLabel: factoryItemLabel(recipe.output),
     stage: recipe.stage ?? null,
-    inputs: [...(recipe.inputs ?? new Map()).entries()].map(([item, amount]) => ({
-      item,
-      amount,
-      label: factoryItemLabel(item),
-    })),
+    inputs: normaliseRecipeInputs(recipe.inputs),
   };
 }
 
@@ -311,12 +307,62 @@ function snapshotRecipeDefinition(recipe){
     outputLabel: factoryItemLabel(recipe.output),
     speed: recipe.speed ?? 0,
     stage: recipe.stage ?? null,
-    inputs: [...(recipe.inputs ?? new Map()).entries()].map(([item, amount]) => ({
-      item,
-      amount,
-      label: factoryItemLabel(item),
-    })),
+    inputs: normaliseRecipeInputs(recipe.inputs),
   };
+}
+
+function normaliseRecipeInputs(inputs){
+  const result = [];
+  if(!inputs) return result;
+  if(inputs instanceof Map){
+    for(const [item, amount] of inputs.entries()){
+      result.push({ item, amount, label: factoryItemLabel(item) });
+    }
+    return result;
+  }
+  if(Array.isArray(inputs)){
+    for(const entry of inputs){
+      if(entry == null) continue;
+      const item = entry.item ?? entry[0] ?? null;
+      const amount = Number.isFinite(entry.amount) ? entry.amount : Number.isFinite(entry[1]) ? entry[1] : 1;
+      result.push({ item, amount, label: factoryItemLabel(entry.label ?? item) });
+    }
+    return result;
+  }
+  if(typeof inputs === 'object'){
+    for(const [item, amount] of Object.entries(inputs)){
+      result.push({ item, amount, label: factoryItemLabel(item) });
+    }
+  }
+  return result;
+}
+
+function getRecipeInputMap(recipe){
+  if(!recipe?.inputs) return new Map();
+  if(recipe.inputs instanceof Map) return recipe.inputs;
+  const map = new Map();
+  if(Array.isArray(recipe.inputs)){
+    for(const entry of recipe.inputs){
+      if(entry == null) continue;
+      const item = entry.item ?? entry[0];
+      if(item == null) continue;
+      const amount = Number.isFinite(entry.amount)
+        ? entry.amount
+        : Number.isFinite(entry[1])
+          ? entry[1]
+          : 1;
+      map.set(item, amount);
+    }
+    return map;
+  }
+  if(typeof recipe.inputs === 'object'){
+    for(const [item, value] of Object.entries(recipe.inputs)){
+      if(item == null) continue;
+      map.set(item, Number.isFinite(value) ? value : 1);
+    }
+    return map;
+  }
+  return map;
 }
 
 const FACTORY_CATALOG = Object.freeze({
@@ -493,6 +539,7 @@ const BRUSH_SPEC = Object.freeze({
     kind: FactoryKind.BELT,
     mode: Mode.FACTORY_BELT,
   },
+  /* Legacy smelter brushes retained for reference:
   'factory-smelter': {
     kind: FactoryKind.SMELTER,
     mode: Mode.FACTORY_SMELTER,
@@ -512,6 +559,13 @@ const BRUSH_SPEC = Object.freeze({
     kind: FactoryKind.SMELTER,
     mode: Mode.FACTORY_SMELTER,
     recipeKey: 'glandular_network',
+  },
+  */
+  'factory-smelter-omni': {
+    kind: FactoryKind.SMELTER,
+    mode: Mode.FACTORY_SMELTER,
+    recipeKey: 'body_system',
+    recipeKeys: ['body_system', 'neural_weave', 'skeletal_frame', 'glandular_network'],
   },
   'factory-constructor': {
     kind: FactoryKind.CONSTRUCTOR,
@@ -632,6 +686,9 @@ function createStructure(kind, orientation){
         currentCycle: null,
         recipe: DEFAULT_BIOFORGE_RECIPE,
         recipeKey: DEFAULT_BIOFORGE_RECIPE.key,
+        availableRecipeKeys: null,
+        activeRecipeIndex: 0,
+        allowedInputItems: null,
         telemetry,
       };
     case FactoryKind.CONSTRUCTOR:
@@ -692,7 +749,7 @@ function adjustInputBuffer(structure, item, delta){
 function hasRequiredInputs(structure){
   const recipe = structure?.recipe;
   if(!recipe) return false;
-  const requirements = recipe.inputs ?? new Map();
+  const requirements = getRecipeInputMap(recipe);
   const buffer = getStructureInputBuffer(structure);
   for(const [item, amount] of requirements.entries()){
     if((buffer.get(item) ?? 0) < (amount ?? 0)){
@@ -702,11 +759,86 @@ function hasRequiredInputs(structure){
   return true;
 }
 
+function hasInputsForRecipe(buffer, recipe){
+  if(!recipe) return false;
+  const requirements = getRecipeInputMap(recipe);
+  for(const [item, amount] of requirements.entries()){
+    if((buffer.get(item) ?? 0) < (amount ?? 0)){
+      return false;
+    }
+  }
+  return true;
+}
+
+function computeRecipeMatchScore(buffer, recipe){
+  const requirements = getRecipeInputMap(recipe);
+  if(!requirements.size) return 0;
+  let score = 0;
+  for(const [item, amount] of requirements.entries()){
+    const have = buffer.get(item) ?? 0;
+    if(have <= 0) continue;
+    score += Math.min(have / (amount || 1), 1);
+  }
+  return score / requirements.size;
+}
+
+function ensureActiveSmelterRecipe(structure){
+  if(!structure || structure.kind !== FactoryKind.SMELTER) return structure?.recipe ?? null;
+  const keys = Array.isArray(structure.availableRecipeKeys) ? structure.availableRecipeKeys : null;
+  if(!keys || !keys.length) return structure.recipe;
+  if(!structure.allowedInputItems){
+    structure.allowedInputItems = buildAllowedInputItemSet(keys);
+  }
+  const buffer = getStructureInputBuffer(structure);
+  const startIndex = typeof structure.activeRecipeIndex === 'number' ? structure.activeRecipeIndex : 0;
+  let bestRecipe = structure.recipe ?? null;
+  let bestScore = bestRecipe ? computeRecipeMatchScore(buffer, bestRecipe) : -1;
+  for(let offset = 0; offset < keys.length; offset += 1){
+    const index = (startIndex + offset) % keys.length;
+    const key = keys[index];
+    const candidate = getBioforgeRecipe(key);
+    if(!candidate) continue;
+    if(hasInputsForRecipe(buffer, candidate)){
+      structure.recipe = candidate;
+      structure.recipeKey = candidate.key;
+      structure.activeRecipeIndex = index;
+      return candidate;
+    }
+    const score = computeRecipeMatchScore(buffer, candidate);
+    if(score > bestScore || (!bestRecipe && score >= 0)){
+      bestRecipe = candidate;
+      bestScore = score;
+      structure.activeRecipeIndex = index;
+    }
+  }
+  if(!bestRecipe && keys.length){
+    bestRecipe = getBioforgeRecipe(keys[0]);
+    structure.activeRecipeIndex = 0;
+  }
+  if(bestRecipe){
+    structure.recipe = bestRecipe;
+    structure.recipeKey = bestRecipe.key;
+  }
+  return structure.recipe;
+}
+
+function buildAllowedInputItemSet(keys){
+  const items = new Set();
+  for(const key of keys){
+    const recipe = getBioforgeRecipe(key);
+    const inputs = getRecipeInputMap(recipe);
+    for(const item of inputs.keys()){
+      items.add(item);
+    }
+  }
+  return items;
+}
+
 function consumeRecipeInputs(structure){
   const recipe = structure?.recipe;
   if(!recipe) return new Map();
   const consumed = new Map();
-  for(const [item, amount] of (recipe.inputs ?? new Map()).entries()){
+  for(const [item, amount] of getRecipeInputMap(recipe).entries()){
     if(!amount) continue;
     adjustInputBuffer(structure, item, -amount);
     consumed.set(item, amount);
@@ -767,7 +899,13 @@ function acceptItem(structure, tileIdx, item, factory){
       }
       return true;
     case FactoryKind.SMELTER:
-      if(!structure.recipe?.inputs?.has(item)) return false;
+      if(structure && !structure.allowedInputItems && Array.isArray(structure.availableRecipeKeys)){
+        structure.allowedInputItems = buildAllowedInputItemSet(structure.availableRecipeKeys);
+      }
+      const recipeInputs = getRecipeInputMap(structure.recipe);
+      if(!recipeInputs.has(item) && !(structure.allowedInputItems?.has(item))){
+        return false;
+      }
       adjustInputBuffer(structure, item, 1);
       if(structure.pendingInputJob instanceof Set){
         structure.pendingInputJob.delete(item);
@@ -899,7 +1037,9 @@ function maybeStartJob(structure, factory){
 }
 
 function updateRecipeProducer(tileIdx, structure, factory){
-  const recipe = structure.recipe;
+  const recipe = structure.kind === FactoryKind.SMELTER
+    ? ensureActiveSmelterRecipe(structure)
+    : structure.recipe;
   if(!recipe) return;
   const telemetry = ensureStructureTelemetry(structure);
   if(telemetry){
@@ -912,7 +1052,7 @@ function updateRecipeProducer(tileIdx, structure, factory){
     telemetry.inputBuffer = totalInputCount(structure);
     telemetry.outputBuffer = structure.outputBuffer ?? 0;
   }
-  const requirements = recipe.inputs ?? new Map();
+  const requirements = getRecipeInputMap(recipe);
   if(!structure.active && requirements.size){
     const opposite = ORIENTATION_OPPOSITE[structure.orientation] || 'west';
     const sourceIdx = neighborIndex(tileIdx, opposite);
@@ -942,6 +1082,9 @@ function updateRecipeProducer(tileIdx, structure, factory){
     }
   }
   if(!structure.active){
+    if(structure.kind === FactoryKind.SMELTER){
+      ensureActiveSmelterRecipe(structure);
+    }
     maybeStartJob(structure, factory);
   }
   if(structure.active){
@@ -964,6 +1107,10 @@ function updateRecipeProducer(tileIdx, structure, factory){
       }
       structure.lastCompletedCycle = structure.currentCycle;
       structure.currentCycle = null;
+      if(structure.kind === FactoryKind.SMELTER && Array.isArray(structure.availableRecipeKeys) && structure.availableRecipeKeys.length){
+        structure.activeRecipeIndex = (structure.activeRecipeIndex + 1) % structure.availableRecipeKeys.length;
+        ensureActiveSmelterRecipe(structure);
+      }
       maybeStartJob(structure, factory);
     }
   }
@@ -1064,6 +1211,19 @@ export function placeFactoryStructure(tileIdx, brush, { orientation } = {}){
   if(world.vent) world.vent[tileIdx] = 0;
   if(world.fire) world.fire.delete(tileIdx);
   const structure = createStructure(spec.kind, dir);
+  if(structure && Array.isArray(spec.recipeKeys) && spec.recipeKeys.length){
+    structure.availableRecipeKeys = spec.recipeKeys.slice();
+    if(structure.kind === FactoryKind.SMELTER){
+      const firstKey = structure.availableRecipeKeys[0];
+      const firstRecipe = firstKey ? getBioforgeRecipe(firstKey) : null;
+      if(firstRecipe){
+        structure.recipe = firstRecipe;
+        structure.recipeKey = firstRecipe.key;
+        structure.activeRecipeIndex = 0;
+      }
+      structure.allowedInputItems = buildAllowedInputItemSet(structure.availableRecipeKeys);
+    }
+  }
   if(structure && spec.recipeKey){
     if(structure.kind === FactoryKind.SMELTER){
       const recipe = getBioforgeRecipe(spec.recipeKey);

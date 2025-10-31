@@ -43,4 +43,4 @@ export {
   clearClusterAccumulator,
   updateClusterAccumulatorMembership,
 } from './sim/index.js';
-export { createCloudClusterEditor, getCloudClusterPalette } from './ui/index.js';
+export { createCloudClusterEditor, getCloudClusterPalette, getSmelterRecipeSummaries } from './ui/index.js';

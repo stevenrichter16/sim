@@ -93,10 +93,11 @@
               <button class="btn" data-brush="factory-node-gland">🧫 Endocrine Node</button>
               <button class="btn" data-brush="factory-miner">🩺 Harvest Surgeon</button>
               <button class="btn" data-brush="factory-belt">🪢 Vein Conveyor</button>
-              <button class="btn" data-brush="factory-smelter">🧪 Bioforge Vat</button>
+              <!--<button class="btn" data-brush="factory-smelter">🧪 Bioforge Vat</button>
               <button class="btn" data-brush="factory-smelter-neural">🕸️ Neural Loom</button>
               <button class="btn" data-brush="factory-smelter-frame">🦾 Frame Press</button>
-              <button class="btn" data-brush="factory-smelter-gland">💊 Endocrine Bloom</button>
+              <button class="btn" data-brush="factory-smelter-gland">💊 Endocrine Bloom</button>-->
+              <button class="btn" data-brush="factory-smelter-omni">🧬 Omni Bioforge</button>
               <button class="btn" data-brush="factory-constructor">🧍 Synth Constructor</button>
               <button class="btn" data-brush="factory-constructor-caretaker">🤖 Caretaker Printer</button>
               <button class="btn" data-brush="factory-constructor-emissary">🕊️ Emissary Crucible</button>
@@ -121,12 +122,16 @@ Stock Humans 0 • Caretakers 0 • Emissaries 0 (Delivered Humans 0 • Caretak
                 <button class="btn" id="cloudClusterCreate" type="button">➕ New Cluster</button>
               </div>
             </div>
-            <div class="cloud-cluster-body">
-              <div class="cloud-cluster-palette" id="cloudClusterPalette" aria-label="Cloud cluster palette"></div>
-              <div class="cloud-cluster-graph" id="cloudClusterGraph" aria-live="polite"></div>
-              <div class="cloud-cluster-inspector" id="cloudClusterInspector" aria-live="polite"></div>
+              <div class="cloud-cluster-layout">
+                <div class="cloud-cluster-body">
+                  <div class="cloud-cluster-palette" id="cloudClusterPalette" aria-label="Cloud cluster palette"></div>
+                  <div class="cloud-cluster-graph" id="cloudClusterGraph" aria-live="polite"></div>
+                  <div class="cloud-cluster-inspector" id="cloudClusterInspector" aria-live="polite"></div>
+                </div>
+                <div class="cloud-cluster-visual" id="cloudClusterVisual" aria-label="Cloud cluster visual graph" role="img"></div>
+                <div class="cloud-cluster-glossary" id="cloudClusterGlossary" aria-label="Smelter recipe glossary"></div>
+              </div>
             </div>
-          </div>
 
           <!-- Actions -->
           <div class="grid actions-grid">

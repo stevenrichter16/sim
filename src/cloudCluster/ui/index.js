@@ -1,4 +1,4 @@
-import { FactoryKind, FactoryItem } from '../../factory.js';
+import { FactoryKind, FactoryItem, getBioforgeRecipeDefinition } from '../../factory.js';
 import {
   CloudFactoryPortDirection,
   getPortById,
@@ -174,121 +174,48 @@ const PALETTE_ENTRIES = Object.freeze([
     label: KIND_LABEL[FactoryKind.BELT],
     description: 'Transfers materials between upstream and downstream objects.',
   },
+  /* Legacy smelter palette entries retained for reference.
+  { ... }
+  */
   {
-    key: 'smelter-body',
+    key: 'smelter-omni',
     kind: FactoryKind.SMELTER,
-    icon: '🧪',
-    label: 'Body System Vat',
-    description: 'Bioforge that seals multi-organ capsules.',
-    metadata: { recipeKey: 'body_system' },
+    icon: '🧬',
+    label: 'Omni Bioforge',
+    description: 'Adaptive bioforge capable of every known vat recipe.',
+    metadata: {
+      recipeKey: 'body_system',
+      recipeKeys: ['body_system', 'neural_weave', 'skeletal_frame', 'glandular_network'],
+    },
     ports: [
       {
-        id: 'in-skin',
+        id: 'in-a',
         direction: CloudFactoryPortDirection.INPUT,
-        label: 'Skin Patch Intake',
-        itemKeys: [FactoryItem.SKIN_PATCH],
+        label: 'Intake A',
+        itemKeys: [],
       },
       {
-        id: 'in-blood',
+        id: 'in-b',
         direction: CloudFactoryPortDirection.INPUT,
-        label: 'Blood Vial Intake',
-        itemKeys: [FactoryItem.BLOOD_VIAL],
+        label: 'Intake B',
+        itemKeys: [],
       },
       {
-        id: 'in-organ',
+        id: 'in-c',
         direction: CloudFactoryPortDirection.INPUT,
-        label: 'Organ Mass Intake',
-        itemKeys: [FactoryItem.ORGAN_MASS],
+        label: 'Intake C',
+        itemKeys: [],
       },
       {
-        id: 'out-body',
+        id: 'out-products',
         direction: CloudFactoryPortDirection.OUTPUT,
-        label: 'Body System Output',
-        itemKeys: [FactoryItem.BODY_SYSTEM],
-      },
-    ],
-  },
-  {
-    key: 'smelter-neural',
-    kind: FactoryKind.SMELTER,
-    icon: '🧠',
-    label: 'Neural Weave Loom',
-    description: 'Spins neural weave from nerve thread and serum.',
-    metadata: { recipeKey: 'neural_weave' },
-    ports: [
-      {
-        id: 'in-nerve',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Nerve Thread Intake',
-        itemKeys: [FactoryItem.NERVE_THREAD],
-      },
-      {
-        id: 'in-blood',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Blood Vial Intake',
-        itemKeys: [FactoryItem.BLOOD_VIAL],
-      },
-      {
-        id: 'out-neural',
-        direction: CloudFactoryPortDirection.OUTPUT,
-        label: 'Neural Weave Output',
-        itemKeys: [FactoryItem.NEURAL_WEAVE],
-      },
-    ],
-  },
-  {
-    key: 'smelter-frame',
-    kind: FactoryKind.SMELTER,
-    icon: '🦾',
-    label: 'Frame Press',
-    description: 'Compresses osteo fragments and dermal binding into rigid frames.',
-    metadata: { recipeKey: 'skeletal_frame' },
-    ports: [
-      {
-        id: 'in-bone',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Bone Fragment Intake',
-        itemKeys: [FactoryItem.BONE_FRAGMENT],
-      },
-      {
-        id: 'in-skin',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Skin Patch Intake',
-        itemKeys: [FactoryItem.SKIN_PATCH],
-      },
-      {
-        id: 'out-frame',
-        direction: CloudFactoryPortDirection.OUTPUT,
-        label: 'Skeletal Frame Output',
-        itemKeys: [FactoryItem.SKELETAL_FRAME],
-      },
-    ],
-  },
-  {
-    key: 'smelter-gland',
-    kind: FactoryKind.SMELTER,
-    icon: '🌿',
-    label: 'Endocrine Bloom',
-    description: 'Coaxes gland seeds and organ mass into hormonal webs.',
-    metadata: { recipeKey: 'glandular_network' },
-    ports: [
-      {
-        id: 'in-gland',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Gland Seed Intake',
-        itemKeys: [FactoryItem.GLAND_SEED],
-      },
-      {
-        id: 'in-organ',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Organ Mass Intake',
-        itemKeys: [FactoryItem.ORGAN_MASS],
-      },
-      {
-        id: 'out-gland',
-        direction: CloudFactoryPortDirection.OUTPUT,
-        label: 'Glandular Network Output',
-        itemKeys: [FactoryItem.GLANDULAR_NETWORK],
+        label: 'Bioforge Output',
+        itemKeys: [
+          FactoryItem.BODY_SYSTEM,
+          FactoryItem.NEURAL_WEAVE,
+          FactoryItem.SKELETAL_FRAME,
+          FactoryItem.GLANDULAR_NETWORK,
+        ],
       },
     ],
   },
@@ -404,6 +331,10 @@ function normaliseClusterId(rawId, fallback){
     };
   }
 
+  function getSmelterRecipes(){
+    return getSmelterRecipeSummaries();
+  }
+
   function advanceSimulation(step = 1){
     const telemetry = getCloudClusterTelemetry();
     const currentTick = telemetry?.tick ?? 0;
@@ -473,6 +404,60 @@ export function getCloudClusterPalette(){
         }))
       : undefined,
   }));
+}
+
+function formatRecipeItemName(item){
+  if(typeof item === 'string' && item.length){
+    return item.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }
+  return String(item ?? 'Item');
+}
+
+export function getSmelterRecipeSummaries(){
+  const recipeKeys = ['body_system', 'neural_weave', 'skeletal_frame', 'glandular_network'];
+  const summaries = [];
+  for(const key of recipeKeys){
+    const recipe = getBioforgeRecipeDefinition(key);
+    if(!recipe) continue;
+    const inputs = [];
+    if(recipe.inputs instanceof Map){
+      for(const [item, amount] of recipe.inputs.entries()){
+        inputs.push({
+          item,
+          amount: Number.isFinite(amount) && amount > 0 ? amount : 1,
+          label: formatRecipeItemName(item),
+        });
+      }
+    } else if(Array.isArray(recipe.inputs)){
+      for(const entry of recipe.inputs){
+        if(!entry) continue;
+        const item = entry.item ?? entry[0] ?? null;
+        const amount = Number.isFinite(entry.amount) ? entry.amount : Number.isFinite(entry[1]) ? entry[1] : 1;
+        inputs.push({
+          item,
+          amount: amount > 0 ? amount : 1,
+          label: formatRecipeItemName(entry.label ?? item),
+        });
+      }
+    } else if(recipe.inputs && typeof recipe.inputs === 'object'){
+      for(const [item, value] of Object.entries(recipe.inputs)){
+        const amount = Number.isFinite(value) ? value : 1;
+        inputs.push({
+          item,
+          amount: amount > 0 ? amount : 1,
+          label: formatRecipeItemName(item),
+        });
+      }
+    }
+    summaries.push({
+      key: recipe.key ?? key,
+      output: recipe.output ?? null,
+      outputLabel: recipe.label ?? formatRecipeItemName(recipe.output),
+      description: recipe.description ?? '',
+      inputs,
+    });
+  }
+  return summaries;
 }
 
 export function createCloudClusterEditor(options = {}){
@@ -951,6 +936,7 @@ export function createCloudClusterEditor(options = {}){
     getInspector,
     getOverlay,
     stepSimulation: advanceSimulation,
+    getSmelterRecipes,
   };
 }
 

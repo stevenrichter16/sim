@@ -43,7 +43,7 @@ describe('factory logistics loop', () => {
     placeFactoryStructure(idx(19, 20), 'factory-belt', buildOrientation('east'));
     placeFactoryStructure(idx(20, 20), 'factory-belt', buildOrientation('east'));
     placeFactoryStructure(idx(21, 20), 'factory-belt', buildOrientation('east'));
-    placeFactoryStructure(idx(22, 20), 'factory-smelter', buildOrientation('east'));
+    placeFactoryStructure(idx(22, 20), 'factory-smelter-omni', buildOrientation('east'));
     placeFactoryStructure(idx(23, 20), 'factory-constructor', buildOrientation('east'));
     placeFactoryStructure(idx(24, 20), 'factory-storage', buildOrientation('east'));
 

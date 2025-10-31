@@ -129,6 +129,8 @@ export function initInput({ canvas, draw }){
   const cloudClusterPalette = document.getElementById('cloudClusterPalette');
   const cloudClusterGraph = document.getElementById('cloudClusterGraph');
   const cloudClusterInspector = document.getElementById('cloudClusterInspector');
+  const cloudClusterVisual = document.getElementById('cloudClusterVisual');
+  const cloudClusterGlossary = document.getElementById('cloudClusterGlossary');
   const overlayToggleKeys = {
     Digit1: 'help',
     Digit2: 'panic',
@@ -151,6 +153,7 @@ export function initInput({ canvas, draw }){
   overlayToggleKeys.KeyC = 'control';
 
   const cloudEditor = createCloudClusterEditor();
+  const getSmelterRecipes = () => (typeof cloudEditor.getSmelterRecipes === 'function' ? cloudEditor.getSmelterRecipes() : []);
 
   const spawnErrorMessages = {
     'tile-occupied': 'Spawn failed: tile is occupied or blocked.',
@@ -601,6 +604,135 @@ export function initInput({ canvas, draw }){
       }
       cloudClusterInspector.append(objectList);
     }
+  }
+
+  function renderCloudClusterVisualGraph(){
+    if(!cloudClusterVisual) return;
+    const graph = cloudEditor.getGraph();
+    cloudClusterVisual.innerHTML = '';
+    if(!graph || !graph.nodes.length){
+      const empty = document.createElement('div');
+      empty.className = 'cloud-cluster-graph-empty';
+      empty.textContent = 'No links to display.';
+      cloudClusterVisual.append(empty);
+      return;
+    }
+
+    const width = cloudClusterVisual.clientWidth || 480;
+    const height = cloudClusterVisual.clientHeight || 360;
+    const svgNs = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNs, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+    const nodeCount = graph.nodes.length;
+    const radius = Math.min(width, height) / 2 - 60;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const positions = new Map();
+
+    const ring = document.createElementNS(svgNs, 'circle');
+    ring.setAttribute('cx', centerX);
+    ring.setAttribute('cy', centerY);
+    ring.setAttribute('r', radius + 24);
+    ring.setAttribute('class', 'ring');
+    svg.appendChild(ring);
+
+    graph.nodes.forEach((node, index) => {
+      const angle = (index / nodeCount) * Math.PI * 2 - Math.PI / 2;
+      const x = centerX + radius * Math.cos(angle);
+      const y = centerY + radius * Math.sin(angle);
+      positions.set(node.id, { x, y, node });
+    });
+
+    for(const link of graph.links){
+      const source = positions.get(link.source.objectId);
+      const target = positions.get(link.target.objectId);
+      if(!source || !target) continue;
+      const line = document.createElementNS(svgNs, 'line');
+      line.setAttribute('x1', source.x);
+      line.setAttribute('y1', source.y);
+      line.setAttribute('x2', target.x);
+      line.setAttribute('y2', target.y);
+      line.setAttribute('class', `link-line${(source.node?.selected || target.node?.selected) ? ' highlight' : ''}`);
+      svg.appendChild(line);
+    }
+
+    for(const { x, y, node } of positions.values()){
+      const circle = document.createElementNS(svgNs, 'circle');
+      circle.setAttribute('cx', x);
+      circle.setAttribute('cy', y);
+      circle.setAttribute('r', 14);
+      circle.setAttribute('data-node', node.id);
+      const kindClass = (() => {
+        switch(node.kind){
+          case 'node':
+            return 'nodes';
+          case 'smelter':
+            return 'smelters';
+          case 'constructor':
+            return 'constructors';
+          case 'storage':
+            return 'storage';
+          case 'belt':
+            return 'belt';
+          default:
+            return 'nodes';
+        }
+      })();
+      circle.setAttribute('class', `node-circle ${kindClass}${node.selected ? ' selected' : ''}`);
+      svg.appendChild(circle);
+
+      const label = document.createElementNS(svgNs, 'text');
+      label.setAttribute('x', x);
+      label.setAttribute('y', y + 4);
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('data-node', node.id);
+      label.textContent = node.label ?? node.id;
+      svg.appendChild(label);
+
+      const handleSelect = (event) => {
+        event.stopPropagation();
+        try {
+          cloudEditor.selectObject(node.id);
+        } catch (error){
+          console.error('Failed to select node', error);
+        }
+        refreshCloudClusterUI();
+      };
+
+      circle.addEventListener('click', handleSelect);
+      label.addEventListener('click', handleSelect);
+    }
+
+    const legend = document.createElement('div');
+    legend.className = 'cloud-cluster-legend';
+    const legendItems = [
+      { label: 'Nodes', class: 'nodes' },
+      { label: 'Smelters', class: 'smelters' },
+      { label: 'Constructors', class: 'constructors' },
+      { label: 'Storage', class: 'storage' },
+      { label: 'Belts', class: 'belt' },
+    ];
+    for(const item of legendItems){
+      const span = document.createElement('span');
+      const indicator = document.createElement('i');
+      indicator.className = item.class;
+      span.append(indicator, document.createTextNode(item.label));
+      legend.append(span);
+    }
+
+    svg.addEventListener('click', () => {
+      try {
+        cloudEditor.selectObject(null);
+      } catch (error){
+        console.error('Failed to clear selection', error);
+      }
+      refreshCloudClusterUI();
+    });
+
+    cloudClusterVisual.append(svg);
+    cloudClusterVisual.append(legend);
   }
 
 let scenarioManifestEntries = [];
@@ -1215,7 +1347,50 @@ function toggleScenarioDiagPanel(force){
     renderCloudClusterPalette();
     renderCloudClusterGraph();
     renderCloudClusterInspector();
+    renderCloudClusterVisualGraph();
+    renderCloudClusterGlossary();
     renderCloudClusterTelemetry();
+  }
+
+  function renderCloudClusterGlossary(){
+    if(!cloudClusterGlossary) return;
+    const recipes = getSmelterRecipes();
+    cloudClusterGlossary.innerHTML = '';
+    if(!recipes.length){
+      const empty = document.createElement('div');
+      empty.className = 'cloud-cluster-graph-empty';
+      empty.textContent = 'No smelter recipes available.';
+      cloudClusterGlossary.append(empty);
+      return;
+    }
+    const heading = document.createElement('h4');
+    heading.textContent = 'Bioforge Recipes';
+    cloudClusterGlossary.append(heading);
+    for(const recipe of recipes){
+      const card = document.createElement('div');
+      card.className = 'glossary-item';
+      const title = document.createElement('strong');
+      title.textContent = recipe.outputLabel ?? recipe.output;
+      card.append(title);
+      if(recipe.description){
+        const desc = document.createElement('span');
+        desc.textContent = recipe.description;
+        card.append(desc);
+      }
+      const list = document.createElement('ul');
+      for(const input of recipe.inputs ?? []){
+        const li = document.createElement('li');
+        li.textContent = `${input.label ?? input.item} ×${input.amount ?? 1}`;
+        list.append(li);
+      }
+      if(!list.childElementCount){
+        const li = document.createElement('li');
+        li.textContent = 'No inputs';
+        list.append(li);
+      }
+      card.append(list);
+      cloudClusterGlossary.append(card);
+    }
   }
 
   function renderFactoryTelemetry(tileIdx = getInspectedTile()){

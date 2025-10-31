@@ -112,7 +112,30 @@ h3{margin:4px 0 6px;}
 .cloud-cluster-header{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .cloud-cluster-controls{display:flex;align-items:center;gap:8px;}
 .cloud-cluster-select{min-width:140px;}
-.cloud-cluster-body{display:flex;flex-direction:column;gap:10px;}
+.cloud-cluster-layout{display:flex;flex-direction:row;gap:12px;align-items:flex-start;flex-wrap:wrap;}
+.cloud-cluster-body{display:flex;flex-direction:column;gap:10px;flex:1 1 320px;}
+.cloud-cluster-visual{flex:1 1 320px;min-width:320px;height:360px;background:radial-gradient(circle at top,#17213d 0%,#0c1427 60%,#070d1d 100%);border:1px solid rgba(116,136,209,0.35);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;box-shadow:0 18px 40px rgba(4,10,26,0.55);transition:transform .2s ease,box-shadow .2s ease;}
+.cloud-cluster-visual:hover{transform:translateY(-2px);box-shadow:0 24px 60px rgba(4,10,26,0.65);}
+.cloud-cluster-visual svg{width:100%;height:100%;display:block;overflow:visible;}
+.cloud-cluster-visual text{fill:#f1f4ff;font-size:10px;font-family:"Inter",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;pointer-events:none;letter-spacing:0.3px;text-shadow:0 1px 2px rgba(0,0,0,0.6);}
+.cloud-cluster-visual .node-circle{stroke-width:1.6;transition:transform .2s ease,stroke .2s ease,fill-opacity .2s ease;}
+.cloud-cluster-visual .node-circle.nodes{fill:rgba(87,183,255,0.18);stroke:#57b7ff;}
+.cloud-cluster-visual .node-circle.smelters{fill:rgba(187,130,255,0.2);stroke:#bb82ff;}
+.cloud-cluster-visual .node-circle.constructors{fill:rgba(255,196,108,0.24);stroke:#ffc46c;}
+.cloud-cluster-visual .node-circle.storage{fill:rgba(126,209,170,0.24);stroke:#7ed1aa;}
+.cloud-cluster-visual .node-circle.belt{fill:rgba(123,149,255,0.2);stroke:#7b95ff;}
+.cloud-cluster-visual .node-circle.selected{stroke-width:2.4;stroke:#fff2b3;fill-opacity:0.45;}
+.cloud-cluster-visual .link-line{stroke:rgba(107,144,255,0.55);stroke-width:1.4;opacity:0.8;stroke-linecap:round;}
+.cloud-cluster-visual .link-line.highlight{stroke:#ffe07d;opacity:1;stroke-width:1.6;}
+.cloud-cluster-visual .ring{stroke:rgba(96,124,188,0.22);stroke-width:1.2;fill:none;stroke-dasharray:6 6;}
+.cloud-cluster-legend{position:absolute;bottom:12px;right:12px;background:rgba(10,16,32,0.82);border:1px solid rgba(106,140,215,0.25);border-radius:10px;padding:8px 10px;font-size:10px;color:#d7e0ff;display:flex;gap:10px;backdrop-filter:blur(8px);box-shadow:0 12px 30px rgba(5,9,23,0.55);}
+.cloud-cluster-legend span{display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.cloud-cluster-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;box-shadow:0 0 6px rgba(255,255,255,0.25);} 
+.cloud-cluster-legend i.nodes{background:#57b7ff;} 
+.cloud-cluster-legend i.smelters{background:#bb82ff;} 
+.cloud-cluster-legend i.constructors{background:#ffc46c;} 
+.cloud-cluster-legend i.storage{background:#7ed1aa;} 
+.cloud-cluster-legend i.belt{background:#7b95ff;} 
 .cloud-cluster-palette{display:flex;flex-wrap:wrap;gap:6px;}
 .cloud-cluster-palette .btn{flex:0 0 auto;}
 .cloud-cluster-graph{display:flex;flex-direction:column;gap:8px;background:#10182a;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;}
@@ -168,3 +191,10 @@ h3{margin:4px 0 6px;}
 .metrics-summary{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
 .metrics-summary[hidden]{display:none !important;}
 .controls-buttons{display:flex;flex-direction:column;gap:12px;}
+.cloud-cluster-glossary{flex:1 1 260px;min-width:240px;max-width:320px;background:#10182a;border:1px solid rgba(116,136,209,0.35);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 18px 40px rgba(4,10,26,0.4);color:#e4ecff;font-size:12px;line-height:1.4;}
+.cloud-cluster-glossary h4{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:0.2em;font-weight:600;color:#9fb5ff;}
+.cloud-cluster-glossary .glossary-item{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;background:rgba(18,30,58,0.72);border:1px solid rgba(116,136,209,0.25);backdrop-filter:blur(6px);}
+.cloud-cluster-glossary .glossary-item strong{font-size:12px;letter-spacing:0.05em;color:#ffd98a;}
+.cloud-cluster-glossary ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:4px;color:#bcc8ff;}
+.cloud-cluster-glossary li{list-style:none;position:relative;padding-left:10px;font-size:11px;}
+.cloud-cluster-glossary li::before{content:'•';position:absolute;left:0;color:#6ea8ff;}
