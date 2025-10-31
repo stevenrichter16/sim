@@ -20,6 +20,19 @@ function toArray(value){
   return Array.from(value);
 }
 
+function buildInboundLinkMap(cluster){
+  const inbound = new Map();
+  for(const link of cluster.links.values()){
+    const targetId = link?.target?.objectId;
+    if(!targetId) continue;
+    if(!inbound.has(targetId)){
+      inbound.set(targetId, []);
+    }
+    inbound.get(targetId).push(link);
+  }
+  return inbound;
+}
+
 function incrementMapValue(map, key, amount){
   if(!Number.isFinite(amount) || Math.abs(amount) <= RATE_EPSILON){
     return;
@@ -116,6 +129,23 @@ export function clearClusterAccumulator(clusterId){
     return;
   }
   state.accumulators.delete(clusterId);
+}
+
+export function updateClusterAccumulatorMembership(clusterId, { added = [], removed = [] } = {}){
+  const state = getCloudClusterState();
+  if(!state.accumulators){
+    state.accumulators = new Map();
+  }
+  const record = state.accumulators.get(clusterId);
+  if(!record){
+    return;
+  }
+  for(const id of removed){
+    record.objectTotals.delete(id);
+  }
+  for(const id of added){
+    record.objectTotals.delete(id);
+  }
 }
 
 function buildAdjacency(cluster){
@@ -322,6 +352,44 @@ function resolveNodeOutputs(object){
   return entries;
 }
 
+function collectPotentialOutputItems(object){
+  switch(object.kind){
+    case FactoryKind.NODE: {
+      const entries = resolveNodeOutputs(object);
+      return new Set(entries.map((entry) => entry.item));
+    }
+    case FactoryKind.MINER: {
+      return new Set([resolveMinerOutputItem(object)]);
+    }
+    case FactoryKind.SMELTER: {
+      const recipe = resolveSmelterRecipe(object);
+      return recipe?.output ? new Set([recipe.output]) : new Set();
+    }
+    case FactoryKind.CONSTRUCTOR: {
+      const recipe = resolveConstructorRecipe(object);
+      return recipe?.output ? new Set([recipe.output]) : new Set();
+    }
+    default:
+      return new Set();
+  }
+}
+
+function isItemSupplied(cluster, inboundMap, outputItemsMap, objectId, item){
+  const inboundLinks = inboundMap.get(objectId);
+  if(!inboundLinks || !inboundLinks.length){
+    return false;
+  }
+  for(const link of inboundLinks){
+    const sourceId = link?.source?.objectId;
+    if(!sourceId) continue;
+    const sourceItems = outputItemsMap.get(sourceId);
+    if(sourceItems?.has(item)){
+      return true;
+    }
+  }
+  return false;
+}
+
 function resolveSmelterRecipe(object){
   const meta = object?.metadata ?? {};
   const key = typeof meta.recipeKey === 'string'
@@ -440,6 +508,11 @@ export function calculateClusterThroughput(cluster){
   if(!isCluster(cluster)){
     throw new TypeError('Expected a cloud cluster instance to calculate throughput.');
   }
+  const inboundMap = buildInboundLinkMap(cluster);
+  const outputItemsMap = new Map();
+  for(const [objectId, object] of cluster.objects.entries()){
+    outputItemsMap.set(objectId, collectPotentialOutputItems(object));
+  }
   const totals = new Map();
   const objects = [];
 
@@ -469,11 +542,20 @@ export function calculateClusterThroughput(cluster){
         const recipe = resolveSmelterRecipe(object);
         const outputItem = recipe?.output ?? null;
         const speed = recipe?.speed ?? 0;
+        const requirements = recipe?.inputs ?? [];
+        const canRun = outputItem && speed > 0 && requirements.every((requirement) => {
+          const item = requirement?.item;
+          if(!item) return false;
+          return isItemSupplied(cluster, inboundMap, outputItemsMap, object.id, item);
+        });
+        if(!canRun){
+          break;
+        }
         pushRate(outputs, outputItem, speed);
         if(outputItem){
           updateTotals(totals, outputItem, speed, 0);
         }
-        for(const input of recipe?.inputs ?? []){
+        for(const input of requirements){
           const amount = Number.isFinite(input.amount) ? input.amount : 0;
           if(amount <= 0) continue;
           const rate = speed * amount;
@@ -488,11 +570,20 @@ export function calculateClusterThroughput(cluster){
         const recipe = resolveConstructorRecipe(object);
         const outputItem = recipe?.output ?? null;
         const speed = recipe?.speed ?? 0;
+        const requirements = recipe?.inputs ?? [];
+        const canRun = outputItem && speed > 0 && requirements.every((requirement) => {
+          const item = requirement?.item;
+          if(!item) return false;
+          return isItemSupplied(cluster, inboundMap, outputItemsMap, object.id, item);
+        });
+        if(!canRun){
+          break;
+        }
         pushRate(outputs, outputItem, speed);
         if(outputItem){
           updateTotals(totals, outputItem, speed, 0);
         }
-        for(const input of recipe?.inputs ?? []){
+        for(const input of requirements){
           const amount = Number.isFinite(input.amount) ? input.amount : 0;
           if(amount <= 0) continue;
           const rate = speed * amount;

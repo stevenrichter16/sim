@@ -26,6 +26,7 @@ import {
   getClusterThroughput,
   stepCloudClusterSimulation,
   clearClusterAccumulator,
+  updateClusterAccumulatorMembership,
 } from '../sim/index.js';
 
 const KIND_LABEL = Object.freeze({
@@ -544,11 +545,23 @@ export function createCloudClusterEditor(options = {}){
     const draft = cloneCluster(currentCluster);
     const result = updater(draft);
     nextRegistry.byId.set(clusterId, draft);
+    const added = [];
+    const removed = [];
+    for(const id of currentCluster.objects.keys()){
+      if(!draft.objects.has(id)){
+        removed.push(id);
+      }
+    }
+    for(const id of draft.objects.keys()){
+      if(!currentCluster.objects.has(id)){
+        added.push(id);
+      }
+    }
     if(!nextRegistry.order.includes(clusterId)){
       nextRegistry.order.push(clusterId);
     }
     commit(nextRegistry);
-    clearClusterAccumulator(clusterId);
+    updateClusterAccumulatorMembership(clusterId, { added, removed });
     return result;
   }
 
@@ -803,6 +816,15 @@ export function createCloudClusterEditor(options = {}){
     if(!clusterId || !state.registry.byId.has(clusterId)) return null;
     const cluster = state.registry.byId.get(clusterId);
     ensureCluster(cluster);
+    const linkedPorts = new Set();
+    for(const link of cluster.links.values()){
+      if(link?.source?.objectId && link?.source?.portId){
+        linkedPorts.add(`${link.source.objectId}::${link.source.portId}::${link.id}`);
+      }
+      if(link?.target?.objectId && link?.target?.portId){
+        linkedPorts.add(`${link.target.objectId}::${link.target.portId}::${link.id}`);
+      }
+    }
     return {
       clusterId: cluster.id,
       name: cluster.name,
@@ -814,14 +836,26 @@ export function createCloudClusterEditor(options = {}){
         description: object.description,
         metadata: object.metadata,
         selected: object.id === state.selectedObjectId,
-        ports: object.ports.map((port) => ({
-          id: port.id,
-          label: port.label,
-          direction: port.direction,
-          itemKeys: port.itemKeys.slice(),
-          capacity: port.capacity,
-          metadata: port.metadata,
-        })),
+        ports: object.ports.map((port) => {
+          let linkedEntry = null;
+          for(const entry of linkedPorts){
+            if(entry.startsWith(`${object.id}::${port.id}::`)){
+              const [, , linkId] = entry.split('::');
+              linkedEntry = { linkId };
+              break;
+            }
+          }
+          return {
+            id: port.id,
+            label: port.label,
+            direction: port.direction,
+            itemKeys: port.itemKeys.slice(),
+            capacity: port.capacity,
+            metadata: port.metadata,
+            linked: Boolean(linkedEntry),
+            linkId: linkedEntry?.linkId ?? null,
+          };
+        }),
       })),
       links: Array.from(cluster.links.values(), (link) => ({
         id: link.id,

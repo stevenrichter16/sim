@@ -380,8 +380,9 @@ export function initInput({ canvas, draw }){
           btn.type = 'button';
           btn.className = 'btn';
           if(port.direction === 'output'){
-            btn.textContent = 'Link →';
-            btn.title = 'Start link from this output port';
+            btn.textContent = port.linked ? 'Linked' : 'Link →';
+            btn.disabled = port.linked;
+            btn.title = port.linked ? 'Already linked' : 'Start link from this output port';
             btn.addEventListener('click', () => {
               try {
                 cloudEditor.beginLink(node.id, port.id);
@@ -390,12 +391,30 @@ export function initInput({ canvas, draw }){
               }
               refreshCloudClusterUI();
             });
+            if(port.linked && port.linkId){
+              const removeBtn = document.createElement('button');
+              removeBtn.type = 'button';
+              removeBtn.className = 'btn';
+              removeBtn.textContent = 'Remove link';
+              removeBtn.addEventListener('click', () => {
+                try {
+                  cloudEditor.removeLink(port.linkId);
+                } catch (error){
+                  console.error('Failed to remove link', error);
+                }
+                refreshCloudClusterUI();
+              });
+              row.append(removeBtn);
+            }
           } else {
-            btn.textContent = graph.pendingLink ? 'Complete link' : '← Link';
-            btn.title = graph.pendingLink
-              ? 'Complete link to this input port'
-              : 'Select an output port before linking';
-            btn.disabled = !graph.pendingLink;
+            const isLinked = port.linked;
+            btn.textContent = isLinked ? 'Linked' : (graph.pendingLink ? 'Complete link' : '← Link');
+            btn.title = isLinked
+              ? 'Already linked'
+              : graph.pendingLink
+                ? 'Complete link to this input port'
+                : 'Select an output port before linking';
+            btn.disabled = isLinked || !graph.pendingLink;
             btn.addEventListener('click', () => {
               if(btn.disabled) return;
               try {
@@ -405,6 +424,21 @@ export function initInput({ canvas, draw }){
               }
               refreshCloudClusterUI();
             });
+            if(isLinked && port.linkId){
+              const removeBtn = document.createElement('button');
+              removeBtn.type = 'button';
+              removeBtn.className = 'btn';
+              removeBtn.textContent = 'Remove link';
+              removeBtn.addEventListener('click', () => {
+                try {
+                  cloudEditor.removeLink(port.linkId);
+                } catch (error){
+                  console.error('Failed to remove link', error);
+                }
+                refreshCloudClusterUI();
+              });
+              row.append(removeBtn);
+            }
           }
           row.append(btn);
           portsList.append(row);

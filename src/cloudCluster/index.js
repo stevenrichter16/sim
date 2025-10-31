@@ -41,5 +41,6 @@ export {
   getClusterValidationReport,
   getClusterThroughput,
   clearClusterAccumulator,
+  updateClusterAccumulatorMembership,
 } from './sim/index.js';
 export { createCloudClusterEditor, getCloudClusterPalette } from './ui/index.js';

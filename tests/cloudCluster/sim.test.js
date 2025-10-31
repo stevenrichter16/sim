@@ -17,6 +17,7 @@ import {
   getClusterValidationReport,
   getClusterThroughput,
   createCloudClusterRegistry,
+  updateClusterAccumulatorMembership,
 } from '../../src/cloudCluster/index.js';
 
 function createCycleCluster(){
@@ -64,15 +65,28 @@ function createThroughputCluster(){
     name: 'Throughput Cluster',
     objects: [
       {
-        id: 'miner-1',
+        id: 'miner-nerve',
         kind: FactoryKind.MINER,
-        metadata: { resource: FactoryItem.BONE_FRAGMENT },
+        metadata: { resource: FactoryItem.NERVE_THREAD },
         ports: [
           {
-            id: 'ore-out',
+            id: 'nerve-out',
             direction: 'output',
-            label: 'Ore Output',
-            itemKeys: [FactoryItem.BONE_FRAGMENT],
+            label: 'Nerve Output',
+            itemKeys: [FactoryItem.NERVE_THREAD],
+          },
+        ],
+      },
+      {
+        id: 'miner-blood',
+        kind: FactoryKind.MINER,
+        metadata: { resource: FactoryItem.BLOOD_VIAL },
+        ports: [
+          {
+            id: 'blood-out',
+            direction: 'output',
+            label: 'Blood Output',
+            itemKeys: [FactoryItem.BLOOD_VIAL],
           },
         ],
       },
@@ -82,10 +96,16 @@ function createThroughputCluster(){
         metadata: { recipeKey: 'neural_weave' },
         ports: [
           {
-            id: 'ore-in',
+            id: 'nerve-in',
             direction: 'input',
-            label: 'Ore Input',
+            label: 'Nerve Input',
             itemKeys: [FactoryItem.NERVE_THREAD],
+          },
+          {
+            id: 'blood-in',
+            direction: 'input',
+            label: 'Blood Input',
+            itemKeys: [FactoryItem.BLOOD_VIAL],
           },
           {
             id: 'ingot-out',
@@ -98,9 +118,14 @@ function createThroughputCluster(){
     ],
     links: [
       {
-        id: 'ore-flow',
-        source: { objectId: 'miner-1', portId: 'ore-out' },
-        target: { objectId: 'smelter-1', portId: 'ore-in' },
+        id: 'nerve-flow',
+        source: { objectId: 'miner-nerve', portId: 'nerve-out' },
+        target: { objectId: 'smelter-1', portId: 'nerve-in' },
+      },
+      {
+        id: 'blood-flow',
+        source: { objectId: 'miner-blood', portId: 'blood-out' },
+        target: { objectId: 'smelter-1', portId: 'blood-in' },
       },
     ],
   });
@@ -175,6 +200,41 @@ function createNodeProducerCluster(){
   });
 }
 
+function createIncompleteBioforgeCluster(){
+  return createCluster({
+    id: 'incomplete',
+    name: 'Incomplete Cluster',
+    objects: [
+      {
+        id: 'node-skin',
+        kind: FactoryKind.NODE,
+        metadata: { outputRate: 0.2, outputItems: [FactoryItem.SKIN_PATCH] },
+        ports: [
+          { id: 'skin-out', direction: 'output', label: 'Skin Output', itemKeys: [FactoryItem.SKIN_PATCH] },
+        ],
+      },
+      {
+        id: 'vat-body',
+        kind: FactoryKind.SMELTER,
+        metadata: { recipeKey: 'body_system' },
+        ports: [
+          { id: 'body-in-skin', direction: 'input', label: 'Skin Intake', itemKeys: [FactoryItem.SKIN_PATCH] },
+          { id: 'body-in-blood', direction: 'input', label: 'Blood Intake', itemKeys: [FactoryItem.BLOOD_VIAL] },
+          { id: 'body-in-organ', direction: 'input', label: 'Organ Intake', itemKeys: [FactoryItem.ORGAN_MASS] },
+          { id: 'body-out', direction: 'output', label: 'Body Output', itemKeys: [FactoryItem.BODY_SYSTEM] },
+        ],
+      },
+    ],
+    links: [
+      {
+        id: 'skin-to-body',
+        source: { objectId: 'node-skin', portId: 'skin-out' },
+        target: { objectId: 'vat-body', portId: 'body-in-skin' },
+      },
+    ],
+  });
+}
+
 describe('cloud cluster simulation services', () => {
   beforeEach(() => {
     resetCloudClusterState();
@@ -191,9 +251,14 @@ describe('cloud cluster simulation services', () => {
   it('calculates throughput using existing factory recipe data', () => {
     const cluster = createThroughputCluster();
     const throughput = calculateClusterThroughput(cluster);
-    const miner = throughput.objects.find((entry) => entry.id === 'miner-1');
-    expect(miner.outputs).toEqual([
-      { item: FactoryItem.BONE_FRAGMENT, rate: getMinerExtractionRate() },
+    const nerveMiner = throughput.objects.find((entry) => entry.id === 'miner-nerve');
+    expect(nerveMiner.outputs).toEqual([
+      { item: FactoryItem.NERVE_THREAD, rate: getMinerExtractionRate() },
+    ]);
+
+    const bloodMiner = throughput.objects.find((entry) => entry.id === 'miner-blood');
+    expect(bloodMiner.outputs).toEqual([
+      { item: FactoryItem.BLOOD_VIAL, rate: getMinerExtractionRate() },
     ]);
 
     const smelter = throughput.objects.find((entry) => entry.id === 'smelter-1');
@@ -204,6 +269,9 @@ describe('cloud cluster simulation services', () => {
     const nerveInput = smelter.inputs.find((input) => input.item === FactoryItem.NERVE_THREAD);
     const nerveRequirement = recipe.inputs.find((input) => input.item === FactoryItem.NERVE_THREAD)?.amount ?? 0;
     expect(nerveInput.rate).toBeCloseTo(recipe.speed * nerveRequirement, 6);
+    const bloodInput = smelter.inputs.find((input) => input.item === FactoryItem.BLOOD_VIAL);
+    const bloodRequirement = recipe.inputs.find((input) => input.item === FactoryItem.BLOOD_VIAL)?.amount ?? 0;
+    expect(bloodInput.rate).toBeCloseTo(recipe.speed * bloodRequirement, 6);
   });
 
   it('creates telemetry snapshots and caches results in state', () => {
@@ -225,7 +293,7 @@ describe('cloud cluster simulation services', () => {
     expect(validation.issues).toHaveLength(0);
 
     const throughput = getClusterThroughput(cluster.id);
-    expect(throughput.objects).toHaveLength(2);
+    expect(throughput.objects).toHaveLength(3);
 
     const telemetryEntry = createClusterTelemetry(cluster, {
       validation,
@@ -250,5 +318,72 @@ describe('cloud cluster simulation services', () => {
     expect(smelter.inputs.some((input) => input.item === FactoryItem.SKIN_PATCH)).toBe(true);
     expect(smelter.inputs.some((input) => input.item === FactoryItem.BLOOD_VIAL)).toBe(true);
     expect(smelter.inputs.some((input) => input.item === FactoryItem.ORGAN_MASS)).toBe(true);
+  });
+
+  it('does not run smelters when required inputs are missing', () => {
+    const cluster = createIncompleteBioforgeCluster();
+    const throughput = calculateClusterThroughput(cluster);
+    const smelter = throughput.objects.find((entry) => entry.id === 'vat-body');
+    expect(smelter.totalOutput).toBeCloseTo(0, 6);
+    expect(smelter.outputs.length).toBe(0);
+    const totalsByItem = Object.fromEntries(throughput.totals.map((entry) => [entry.item, entry]));
+    expect(totalsByItem[FactoryItem.BODY_SYSTEM]?.produced ?? 0).toBeCloseTo(0, 6);
+    expect(totalsByItem[FactoryItem.BLOOD_VIAL]?.consumed ?? 0).toBeCloseTo(0, 6);
+    expect(totalsByItem[FactoryItem.ORGAN_MASS]?.consumed ?? 0).toBeCloseTo(0, 6);
+  });
+
+  it('preserves historical production when adding new nodes', () => {
+    resetCloudClusterState();
+    const registry = createCloudClusterRegistry();
+    const baseCluster = createCluster({
+      id: 'history',
+      name: 'History Test',
+      objects: [
+        {
+          id: 'node-early',
+          kind: FactoryKind.NODE,
+          metadata: { outputRate: 0.2, outputItems: [FactoryItem.SKIN_PATCH] },
+          ports: [
+            { id: 'out', direction: 'output', label: 'Output', itemKeys: [FactoryItem.SKIN_PATCH] },
+          ],
+        },
+      ],
+      links: [],
+    });
+    registry.byId.set(baseCluster.id, baseCluster);
+    registry.order.push(baseCluster.id);
+    setCloudClusterRegistry(registry);
+
+    stepCloudClusterSimulation({ tick: 10 });
+
+    const updatedCluster = createCluster({
+      id: 'history',
+      name: 'History Test',
+      objects: [
+        ...baseCluster.objects.values(),
+        {
+          id: 'node-late',
+          kind: FactoryKind.NODE,
+          metadata: { outputRate: 0.2, outputItems: [FactoryItem.SKIN_PATCH] },
+          ports: [
+            { id: 'out', direction: 'output', label: 'Output', itemKeys: [FactoryItem.SKIN_PATCH] },
+          ],
+        },
+      ],
+      links: [],
+    });
+
+    registry.byId.set(updatedCluster.id, updatedCluster);
+    updateClusterAccumulatorMembership(updatedCluster.id, { added: ['node-late'], removed: [] });
+    setCloudClusterRegistry(registry);
+
+    stepCloudClusterSimulation({ tick: 12 });
+
+    const telemetry = getCloudClusterTelemetry();
+    const entry = telemetry.clusters.find((item) => item.id === 'history');
+    const earlyNode = entry.objects.find((obj) => obj.id === 'node-early');
+    const lateNode = entry.objects.find((obj) => obj.id === 'node-late');
+    expect(earlyNode.cumulativeProduced).toBeGreaterThan(lateNode.cumulativeProduced);
+    expect(lateNode.cumulativeProduced).toBeGreaterThan(0);
   });
 });
