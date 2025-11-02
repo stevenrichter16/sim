@@ -41,6 +41,8 @@ import {
   isFactoryMode,
   getFactoryDiagnostics,
   getFactoryTelemetry,
+  FactoryKind,
+  FactoryItem,
 } from './factory.js';
 import { createCloudClusterEditor } from './cloudCluster/ui/index.js';
 
@@ -522,7 +524,8 @@ export function initInput({ canvas, draw }){
       const totalsList = document.createElement('div');
       totalsList.className = 'cloud-cluster-totals';
       for(const total of totals){
-        const row = document.createElement('span');
+        const row = document.createElement('div');
+        row.className = 'cloud-cluster-total-row';
         const producedValue = Number(total.produced ?? 0);
         const consumedValue = Number(total.consumed ?? 0);
         const netValue = Number(total.net ?? (producedValue - consumedValue));
@@ -535,12 +538,23 @@ export function initInput({ canvas, draw }){
         const cumulativeProducedLabel = Number.isFinite(cumulativeProduced) ? cumulativeProduced.toFixed(2) : '0.00';
         const cumulativeConsumedLabel = Number.isFinite(cumulativeConsumed) ? cumulativeConsumed.toFixed(2) : '0.00';
         const cumulativeNetLabel = Number.isFinite(cumulativeNet) ? `${cumulativeNet >= 0 ? '+' : ''}${cumulativeNet.toFixed(2)}` : '+0.00';
-        row.textContent = `${total.item ?? 'item'} · rate +${producedLabel} / -${consumedLabel} (net ${netLabel}) · total +${cumulativeProducedLabel} / -${cumulativeConsumedLabel} (net ${cumulativeNetLabel})`;
+        const label = document.createElement('span');
+        label.className = 'cloud-cluster-total-label';
+        label.textContent = total.item ?? 'item';
+        const rateRow = document.createElement('span');
+        rateRow.className = 'cloud-cluster-total-metrics';
+        rateRow.innerHTML = `<strong>rate</strong> +${producedLabel} / -${consumedLabel} <em>net</em> ${netLabel}`;
+        const totalRow = document.createElement('span');
+        totalRow.className = 'cloud-cluster-total-metrics';
+        totalRow.innerHTML = `<strong>total</strong> +${cumulativeProducedLabel} / -${cumulativeConsumedLabel} <em>net</em> ${cumulativeNetLabel}`;
+        row.append(label, rateRow, totalRow);
         totalsList.append(row);
       }
       cloudClusterInspector.append(totalsList);
     }
     const objects = Array.isArray(inspector.objects) ? inspector.objects : [];
+    const graph = cloudEditor.getGraph();
+    const nodeMap = new Map(Array.isArray(graph?.nodes) ? graph.nodes.map((node) => [node.id, node]) : []);
     if(objects.length){
       const objectList = document.createElement('div');
       objectList.className = 'cloud-cluster-links';
@@ -552,58 +566,381 @@ export function initInput({ canvas, draw }){
         const num = Number(value ?? 0);
         return Number.isFinite(num) ? num.toFixed(2) : '0.00';
       };
-      function createRateRow(prefix, entries){
-        const container = document.createElement('div');
-        container.className = 'cloud-cluster-rate-row';
-        const title = document.createElement('span');
-        title.className = 'cloud-cluster-rate-label';
-        title.textContent = `${prefix}:`;
-        container.append(title);
+      function createRateSection(titleText, entries, { layout = 'row', emphasizeOutputs = false } = {}){
+        const section = document.createElement('div');
+        section.className = `cloud-cluster-rate-section layout-${layout}`;
+        const title = document.createElement('div');
+        title.className = 'cloud-cluster-rate-heading';
+        title.textContent = titleText;
+        section.append(title);
         if(!Array.isArray(entries) || entries.length === 0){
-          const value = document.createElement('span');
-          value.className = 'cloud-cluster-rate-value';
-          value.textContent = '—';
-          container.append(value);
-        } else {
-          for(const entry of entries){
-            const value = document.createElement('span');
-            value.className = 'cloud-cluster-rate-value';
-            const itemLabel = typeof entry.item === 'string' && entry.item.length ? entry.item : 'item';
-            const segments = [`rate ${formatRate(entry.rate)}`];
-            if(entry.total != null){
-              segments.push(`total ${formatTotal(entry.total)}`);
-            }
-            value.textContent = `${itemLabel} (${segments.join(', ')})`;
-            container.append(value);
-          }
+          const empty = document.createElement('div');
+          empty.className = 'cloud-cluster-rate-empty';
+          empty.textContent = '—';
+          section.append(empty);
+          return section;
         }
-        return container;
+        for(const entry of entries){
+          const itemRow = document.createElement('div');
+          itemRow.className = 'cloud-cluster-rate-item';
+          const name = document.createElement('div');
+          name.className = 'cloud-cluster-rate-item-name';
+          name.textContent = typeof entry.item === 'string' && entry.item.length ? entry.item : 'item';
+          if(emphasizeOutputs){
+            name.classList.add('emphasis');
+          }
+          const metrics = document.createElement('div');
+          metrics.className = 'cloud-cluster-rate-metrics';
+          const rateSpan = document.createElement('span');
+          rateSpan.textContent = `rate ${formatRate(entry.rate)}`;
+          metrics.append(rateSpan);
+          if(entry.total != null){
+            const totalSpan = document.createElement('span');
+            totalSpan.textContent = `total ${formatTotal(entry.total)}`;
+            metrics.append(totalSpan);
+          }
+          itemRow.append(name, metrics);
+          section.append(itemRow);
+        }
+        return section;
       }
       for(const obj of objects){
         const row = document.createElement('div');
         row.className = 'cloud-cluster-link';
-        const label = document.createElement('span');
+        if(obj.kind === FactoryKind.SMELTER){
+          row.classList.add('cloud-cluster-bioforge-entry');
+          const nodeInfo = nodeMap.get(obj.id);
+          const recipeKeys = nodeInfo?.metadata?.recipeKeys;
+          const isOmni = Array.isArray(recipeKeys) && recipeKeys.length > 1;
+          const previewWrapper = document.createElement('div');
+          previewWrapper.className = 'cloud-cluster-bioforge-preview-wrapper';
+          const previewCanvas = createBioforgePreviewCanvas({ isOmni });
+          previewWrapper.append(previewCanvas);
+          row.append(previewWrapper);
+        } else if(obj.kind === FactoryKind.NODE){
+          const nodeInfo = nodeMap.get(obj.id);
+          const resource = nodeInfo?.metadata?.resource
+            ?? (Array.isArray(nodeInfo?.metadata?.outputItems) ? nodeInfo.metadata.outputItems[0] : null);
+          if(resource === FactoryItem.BLOOD_VIAL){
+            row.classList.add('cloud-cluster-bloodwell-entry');
+            const previewWrapper = document.createElement('div');
+            previewWrapper.className = 'cloud-cluster-bloodwell-preview-wrapper';
+            const previewCanvas = createBloodwellPreviewCanvas();
+            previewWrapper.append(previewCanvas);
+            row.append(previewWrapper);
+          }
+        }
+        const header = document.createElement('div');
+        header.className = 'cloud-cluster-object-header';
+        const name = document.createElement('span');
+        name.className = 'cloud-cluster-object-name';
+        name.textContent = obj.label ?? obj.id;
+        header.append(name);
+
+        const totals = document.createElement('div');
+        totals.className = 'cloud-cluster-object-totals';
         const outValue = Number(obj.totalOutput ?? 0);
         const inValue = Number(obj.totalInput ?? 0);
         const outLabel = Number.isFinite(outValue) ? outValue.toFixed(2) : '0.00';
         const inLabel = Number.isFinite(inValue) ? inValue.toFixed(2) : '0.00';
-        const cumulativeProduced = Number(obj.cumulativeProduced ?? 0);
-        const cumulativeConsumed = Number(obj.cumulativeConsumed ?? 0);
-        const cumulativeNet = Number(obj.cumulativeNet ?? (cumulativeProduced - cumulativeConsumed));
-        const producedTotalLabel = formatTotal(cumulativeProduced);
-        const consumedTotalLabel = formatTotal(cumulativeConsumed);
-        const netTotalLabel = formatTotal(cumulativeNet);
-        label.textContent = `${obj.label ?? obj.id} · rate out ${outLabel} / in ${inLabel} · total +${producedTotalLabel} / -${consumedTotalLabel} (net ${netTotalLabel})`;
-        row.append(label);
-        row.append(createRateRow('Outputs', obj.outputs));
-        row.append(createRateRow('Inputs', obj.inputs));
+        const totalsOutput = document.createElement('span');
+        totalsOutput.innerHTML = `<strong>Output</strong> ${outLabel}`;
+        const totalsInput = document.createElement('span');
+        totalsInput.innerHTML = `<strong>Input</strong> ${inLabel}`;
+        totals.append(totalsOutput, totalsInput);
+        header.append(totals);
+        row.append(header);
+
+        row.append(createRateSection('Outputs', obj.outputs, { layout: 'column', emphasizeOutputs: true }));
+        row.append(createRateSection('Inputs', obj.inputs, { layout: 'column' }));
         if(Array.isArray(obj.net) && obj.net.length){
-          row.append(createRateRow('Net', obj.net));
+          row.append(createRateSection('Net Flow', obj.net, { layout: 'column' }));
         }
         objectList.append(row);
       }
       cloudClusterInspector.append(objectList);
     }
+  }
+
+  const CLOUD_PREVIEW_SIZE = 128;
+
+  function createBioforgePreviewCanvas({ isOmni = false } = {}){
+    const size = CLOUD_PREVIEW_SIZE;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const canvas = document.createElement('canvas');
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    canvas.className = 'cloud-cluster-bioforge-preview-canvas';
+    const ctx = canvas.getContext('2d');
+    if(!ctx){
+      return canvas;
+    }
+    ctx.scale(dpr, dpr);
+    if(isOmni){
+      const renderFrame = (timestamp) => {
+        if(!canvas.isConnected){
+          return;
+        }
+        const phaseSeconds = (timestamp ?? performance.now()) / 1000;
+        drawOmniBioforgePreviewFrame(ctx, size, phaseSeconds);
+        requestAnimationFrame(renderFrame);
+      };
+      requestAnimationFrame(renderFrame);
+    } else {
+      drawStandardBioforgePreviewFrame(ctx, size);
+    }
+    return canvas;
+  }
+
+  function drawStandardBioforgePreviewFrame(ctx, size){
+    ctx.clearRect(0, 0, size, size);
+    const cx = size / 2;
+    const cy = size / 2;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    const rimGradient = ctx.createLinearGradient(-size * 0.42, -size * 0.36, size * 0.42, size * 0.34);
+    rimGradient.addColorStop(0, '#5b1d42');
+    rimGradient.addColorStop(0.4, '#7d275a');
+    rimGradient.addColorStop(1, '#4a1235');
+    ctx.fillStyle = rimGradient;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * 0.46, size * 0.34, 0, 0, TAU);
+    ctx.fill();
+
+    const fluidGradient = ctx.createRadialGradient(-size * 0.08, -size * 0.12, size * 0.04, 0, size * 0.04, size * 0.36);
+    fluidGradient.addColorStop(0, '#ffe1ff');
+    fluidGradient.addColorStop(0.35, '#ff8ccc');
+    fluidGradient.addColorStop(0.7, '#d34592');
+    fluidGradient.addColorStop(1, 'rgba(130,24,82,0.95)');
+    ctx.fillStyle = fluidGradient;
+    ctx.beginPath();
+    ctx.ellipse(0, size * 0.02, size * 0.36, size * 0.26, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = Math.max(1, size * 0.04);
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.12, -size * 0.06, size * 0.24, size * 0.18, -0.2, Math.PI * 0.1, Math.PI * 1.6);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255,200,235,0.45)';
+    ctx.lineWidth = Math.max(1, size * 0.03);
+    ctx.beginPath();
+    ctx.ellipse(size * 0.1, size * 0.08, size * 0.18, size * 0.12, 0.35, Math.PI * 0.2, Math.PI * 1.9);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    for(let i = 0; i < 4; i += 1){
+      const bubbleAngle = (Math.PI * 0.5 * i) + 0.6;
+      const bubbleX = Math.cos(bubbleAngle) * size * 0.18;
+      const bubbleY = Math.sin(bubbleAngle) * size * 0.1;
+      const bubbleRadius = size * (0.04 + 0.01 * (i % 2));
+      ctx.beginPath();
+      ctx.ellipse(bubbleX, bubbleY, bubbleRadius, bubbleRadius * 0.8, bubbleAngle * 0.5, 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.2, -size * 0.18, size * 0.22, size * 0.12, -0.3, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = '#ffe6f5';
+    ctx.beginPath();
+    ctx.moveTo(size * 0.12, -size * 0.16);
+    ctx.lineTo(size * 0.36, -size * 0.04);
+    ctx.lineTo(size * 0.36, size * 0.04);
+    ctx.lineTo(size * 0.12, size * 0.16);
+    ctx.quadraticCurveTo(size * 0.04, size * 0.08, size * 0.04, 0);
+    ctx.quadraticCurveTo(size * 0.04, -size * 0.08, size * 0.12, -size * 0.16);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,136,206,0.6)';
+    ctx.lineWidth = Math.max(1, size * 0.02);
+    ctx.beginPath();
+    ctx.moveTo(size * 0.16, -size * 0.08);
+    ctx.lineTo(size * 0.32, 0);
+    ctx.lineTo(size * 0.16, size * 0.08);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawOmniBioforgePreviewFrame(ctx, size, phaseSeconds){
+    ctx.clearRect(0, 0, size, size);
+    const cx = size / 2;
+    const cy = size / 2;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    const outerRadius = size * 0.42;
+    const innerRadius = size * 0.18;
+    const ringGradient = ctx.createRadialGradient(0, 0, innerRadius * 0.4, 0, 0, outerRadius);
+    ringGradient.addColorStop(0, 'rgba(252, 244, 255, 0.92)');
+    ringGradient.addColorStop(0.55, 'rgba(185, 118, 255, 0.65)');
+    ringGradient.addColorStop(1, 'rgba(65, 22, 110, 0.78)');
+    ctx.fillStyle = ringGradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, outerRadius, 0, TAU);
+    ctx.fill();
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(0, 0, innerRadius, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    const pulse = 1 + 0.05 * Math.sin(phaseSeconds * 1.8);
+    const coreGradient = ctx.createRadialGradient(0, 0, innerRadius * 0.2, 0, 0, innerRadius * 1.08 * pulse);
+    coreGradient.addColorStop(0, 'rgba(120, 255, 225, 0.9)');
+    coreGradient.addColorStop(0.6, 'rgba(40, 160, 200, 0.35)');
+    coreGradient.addColorStop(1, 'rgba(12, 35, 48, 0)');
+    ctx.fillStyle = coreGradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, innerRadius * 1.08 * pulse, 0, TAU);
+    ctx.fill();
+
+    const swirlPhase = (phaseSeconds * 0.9) % TAU;
+    ctx.save();
+    ctx.rotate(swirlPhase * 0.33);
+    for(let i = 0; i < 3; i += 1){
+      const petalAngle = swirlPhase + i * (TAU / 3);
+      ctx.save();
+      ctx.rotate(petalAngle);
+      const petalGradient = ctx.createLinearGradient(innerRadius * 0.6, 0, size * 0.44, 0);
+      petalGradient.addColorStop(0, 'rgba(255, 240, 210, 0.85)');
+      petalGradient.addColorStop(0.45, 'rgba(135, 210, 255, 0.6)');
+      petalGradient.addColorStop(1, 'rgba(60, 120, 255, 0)');
+      ctx.fillStyle = petalGradient;
+      ctx.beginPath();
+      ctx.moveTo(innerRadius * 0.64, -size * 0.08);
+      ctx.quadraticCurveTo(size * 0.44, 0, innerRadius * 0.64, size * 0.08);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+
+    for(let i = 0; i < 3; i += 1){
+      const orbAngle = swirlPhase * 0.6 + i * (TAU / 3);
+      const orbitRadius = size * (0.28 + 0.03 * Math.sin(phaseSeconds * 1.4 + i));
+      const px = Math.cos(orbAngle) * orbitRadius;
+      const py = Math.sin(orbAngle) * orbitRadius;
+      const orbGradient = ctx.createRadialGradient(px, py, size * 0.04, px, py, size * 0.14);
+      orbGradient.addColorStop(0, 'rgba(255, 245, 220, 0.9)');
+      orbGradient.addColorStop(0.35, 'rgba(255, 140, 210, 0.55)');
+      orbGradient.addColorStop(1, 'rgba(50, 10, 30, 0)');
+      ctx.fillStyle = orbGradient;
+      ctx.beginPath();
+      ctx.arc(px, py, size * 0.12, 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function createBloodwellPreviewCanvas(){
+    const size = CLOUD_PREVIEW_SIZE;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const canvas = document.createElement('canvas');
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    canvas.className = 'cloud-cluster-bloodwell-preview-canvas';
+    const ctx = canvas.getContext('2d');
+    if(!ctx){
+      return canvas;
+    }
+    ctx.scale(dpr, dpr);
+    const renderFrame = (timestamp) => {
+      if(!canvas.isConnected){
+        return;
+      }
+      const seconds = (timestamp ?? performance.now()) / 1000;
+      drawBloodwellPreviewFrame(ctx, size, seconds);
+      requestAnimationFrame(renderFrame);
+    };
+    requestAnimationFrame(renderFrame);
+    return canvas;
+  }
+
+  function drawBloodwellPreviewFrame(ctx, size, phaseSeconds){
+    ctx.clearRect(0, 0, size, size);
+    const cx = size / 2;
+    const cy = size / 2 + size * 0.05;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    const baseGradient = ctx.createLinearGradient(-size * 0.5, -size * 0.35, size * 0.45, size * 0.45);
+    baseGradient.addColorStop(0, '#2d1423');
+    baseGradient.addColorStop(1, '#0b0712');
+    ctx.fillStyle = baseGradient;
+    ctx.beginPath();
+    if(typeof ctx.roundRect === 'function'){
+      ctx.roundRect(-size * 0.4, -size * 0.4, size * 0.8, size * 0.8, size * 0.12);
+    } else {
+      ctx.rect(-size * 0.4, -size * 0.4, size * 0.8, size * 0.8);
+    }
+    ctx.fill();
+
+    const basinGradient = ctx.createRadialGradient(0, size * 0.02, size * 0.04, 0, size * 0.02, size * 0.3);
+    basinGradient.addColorStop(0, 'rgba(255,122,162,0.94)');
+    basinGradient.addColorStop(0.6, 'rgba(150,26,60,0.86)');
+    basinGradient.addColorStop(1, 'rgba(45,8,21,0.98)');
+    ctx.fillStyle = basinGradient;
+    ctx.beginPath();
+    ctx.ellipse(0, size * 0.04, size * 0.32, size * 0.24, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,198,214,0.42)';
+    ctx.lineWidth = Math.max(1, size * 0.028);
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.07, -size * 0.05, size * 0.26, size * 0.18, -0.18, TAU * 0.16, TAU * 0.74);
+    ctx.stroke();
+
+    const liquidPulse = 1 + 0.035 * Math.sin(phaseSeconds * 1.6);
+    const innerGlow = ctx.createRadialGradient(0, -size * 0.08, size * 0.015, 0, 0, size * 0.24 * liquidPulse);
+    innerGlow.addColorStop(0, 'rgba(255,224,236,0.95)');
+    innerGlow.addColorStop(0.45, 'rgba(255,122,175,0.6)');
+    innerGlow.addColorStop(1, 'rgba(255,82,140,0.08)');
+    ctx.fillStyle = innerGlow;
+    ctx.beginPath();
+    ctx.ellipse(0, -size * 0.015, size * 0.27, size * 0.2 * liquidPulse, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,248,252,0.32)';
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.11, -size * 0.17, size * 0.11, size * 0.075, -0.22, 0, TAU);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.42;
+    for(let i = 0; i < 3; i += 1){
+      const angle = phaseSeconds * 1.3 + i * (TAU / 3);
+      const bx = Math.cos(angle) * size * 0.18;
+      const by = Math.sin(angle * 1.5) * size * 0.07 - size * 0.09;
+      const bubbleRadius = size * (0.045 + 0.008 * Math.sin(phaseSeconds * 2 + i));
+      const bubbleGradient = ctx.createRadialGradient(bx, by, bubbleRadius * 0.25, bx, by, bubbleRadius);
+      bubbleGradient.addColorStop(0, 'rgba(255,224,236,0.85)');
+      bubbleGradient.addColorStop(1, 'rgba(255,110,150,0)');
+      ctx.fillStyle = bubbleGradient;
+      ctx.beginPath();
+      ctx.arc(bx, by, bubbleRadius, 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 
   function renderCloudClusterVisualGraph(){
