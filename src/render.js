@@ -557,23 +557,81 @@ function drawFactorySmelterTile(ctx, x, y, size, orientation){
   drawShadedTile(ctx, x, y, size, '#4b1e2b', { outline: '#1f0911', sheen: 0.18 });
   ctx.save();
   ctx.translate(x + size / 2, y + size / 2);
-  const vatGradient = ctx.createLinearGradient(-size * 0.28, -size * 0.3, size * 0.28, size * 0.3);
-  vatGradient.addColorStop(0, '#ffb7c9');
-  vatGradient.addColorStop(0.5, '#ff6f9d');
-  vatGradient.addColorStop(1, '#b43a6d');
+
+  const basinGradient = ctx.createRadialGradient(0, size * 0.05, size * 0.08, 0, size * 0.05, size * 0.45);
+  basinGradient.addColorStop(0, '#552138');
+  basinGradient.addColorStop(0.55, '#31101f');
+  basinGradient.addColorStop(1, '#16060d');
+  ctx.fillStyle = basinGradient;
+  ctx.beginPath();
+  ctx.ellipse(0, size * 0.06, size * 0.44, size * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255, 188, 215, 0.4)';
+  ctx.lineWidth = Math.max(1, size * 0.05);
+  ctx.beginPath();
+  ctx.ellipse(0, size * 0.04, size * 0.36, size * 0.28, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const vatGradient = ctx.createLinearGradient(0, -size * 0.28, 0, size * 0.28);
+  vatGradient.addColorStop(0, '#fff1ff');
+  vatGradient.addColorStop(0.35, '#ff9fca');
+  vatGradient.addColorStop(0.7, '#ff5a98');
+  vatGradient.addColorStop(1, '#b12e5f');
   ctx.fillStyle = vatGradient;
-  ctx.fillRect(-size * 0.3, -size * 0.28, size * 0.6, size * 0.56);
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillRect(-size * 0.24, -size * 0.18, size * 0.18, size * 0.36);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, size * 0.28, size * 0.22, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const glow = ctx.createRadialGradient(0, 0, size * 0.1, 0, 0, size * 0.32);
+  glow.addColorStop(0, 'rgba(255, 182, 217, 0.55)');
+  glow.addColorStop(1, 'rgba(255, 182, 217, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(0, 0, size * 0.32, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = Math.max(1, size * 0.035);
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.22, -size * 0.04);
+  ctx.quadraticCurveTo(0, -size * 0.22, size * 0.18, -size * 0.02);
+  ctx.quadraticCurveTo(-size * 0.02, size * 0.18, -size * 0.18, size * 0.08);
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.65;
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.beginPath();
+  ctx.ellipse(-size * 0.12, -size * 0.06, size * 0.12, size * 0.08, -Math.PI / 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
   const angle = getOrientationAngle(orientation);
   ctx.rotate(angle);
-  ctx.fillStyle = '#ffdfef';
+
+  const nozzleGradient = ctx.createLinearGradient(size * 0.18, 0, size * 0.4, 0);
+  nozzleGradient.addColorStop(0, '#ffd2ec');
+  nozzleGradient.addColorStop(1, '#ff6fab');
+  ctx.fillStyle = nozzleGradient;
   ctx.beginPath();
-  ctx.moveTo(-size * 0.05, size * 0.28);
-  ctx.lineTo(size * 0.08, size * 0.2);
-  ctx.lineTo(size * 0.08, size * 0.36);
+  ctx.moveTo(size * 0.12, -size * 0.18);
+  ctx.lineTo(size * 0.38, -size * 0.08);
+  ctx.lineTo(size * 0.42, 0);
+  ctx.lineTo(size * 0.38, size * 0.08);
+  ctx.lineTo(size * 0.12, size * 0.18);
   ctx.closePath();
   ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.lineWidth = Math.max(1, size * 0.025);
+  ctx.stroke();
+
+  ctx.fillStyle = '#ff9bcf';
+  ctx.fillRect(size * 0.24, -size * 0.06, size * 0.12, size * 0.12);
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = Math.max(1, size * 0.02);
+  ctx.strokeRect(size * 0.24, -size * 0.06, size * 0.12, size * 0.12);
+
   ctx.restore();
 }
 
