@@ -398,8 +398,27 @@ function collectPotentialOutputItems(object){
       return outputs;
     }
     case FactoryKind.CONSTRUCTOR: {
+      const meta = object?.metadata ?? {};
+      const outputs = new Set();
+      if(Array.isArray(meta.blueprintKeys)){
+        for(const key of meta.blueprintKeys){
+          const blueprint = getConstructorBlueprintDefinition(key);
+          if(blueprint?.output){
+            outputs.add(blueprint.output);
+          }
+        }
+      }
       const recipe = resolveConstructorRecipe(object);
-      return recipe?.output ? new Set([recipe.output]) : new Set();
+      if(recipe?.output){
+        outputs.add(recipe.output);
+      }
+      if(!outputs.size){
+        const fallback = getDefaultConstructorBlueprintDefinition();
+        if(fallback?.output){
+          outputs.add(fallback.output);
+        }
+      }
+      return outputs;
     }
     default:
       return new Set();

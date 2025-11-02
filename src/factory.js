@@ -571,16 +571,7 @@ const BRUSH_SPEC = Object.freeze({
     kind: FactoryKind.CONSTRUCTOR,
     mode: Mode.FACTORY_CONSTRUCTOR,
     recipeKey: 'human_shell',
-  },
-  'factory-constructor-caretaker': {
-    kind: FactoryKind.CONSTRUCTOR,
-    mode: Mode.FACTORY_CONSTRUCTOR,
-    recipeKey: 'caretaker_drone',
-  },
-  'factory-constructor-emissary': {
-    kind: FactoryKind.CONSTRUCTOR,
-    mode: Mode.FACTORY_CONSTRUCTOR,
-    recipeKey: 'emissary_avatar',
+    recipeKeys: ['human_shell', 'caretaker_drone', 'emissary_avatar'],
   },
   'factory-storage': {
     kind: FactoryKind.STORAGE,
@@ -691,7 +682,9 @@ function createStructure(kind, orientation){
         allowedInputItems: null,
         telemetry,
       };
-    case FactoryKind.CONSTRUCTOR:
+    case FactoryKind.CONSTRUCTOR: {
+      const availableKeys = Object.keys(CONSTRUCTOR_BLUEPRINTS);
+      const defaultIndex = Math.max(0, availableKeys.indexOf(DEFAULT_CONSTRUCTOR_BLUEPRINT.key));
       return {
         kind,
         orientation,
@@ -704,8 +697,12 @@ function createStructure(kind, orientation){
         currentCycle: null,
         recipe: DEFAULT_CONSTRUCTOR_BLUEPRINT,
         recipeKey: DEFAULT_CONSTRUCTOR_BLUEPRINT.key,
+        availableRecipeKeys: availableKeys,
+        activeRecipeIndex: defaultIndex,
+        allowedInputItems: buildAllowedInputItemSet(availableKeys, getConstructorBlueprint),
         telemetry,
       };
+    }
     case FactoryKind.STORAGE:
       return { kind, orientation, contents: new Map(), telemetry };
     default:
@@ -822,10 +819,50 @@ function ensureActiveSmelterRecipe(structure){
   return structure.recipe;
 }
 
-function buildAllowedInputItemSet(keys){
+function ensureActiveConstructorBlueprint(structure){
+  if(!structure || structure.kind !== FactoryKind.CONSTRUCTOR) return structure?.recipe ?? null;
+  const keys = Array.isArray(structure.availableRecipeKeys) ? structure.availableRecipeKeys : null;
+  if(!keys || !keys.length) return structure.recipe;
+  if(!structure.allowedInputItems){
+    structure.allowedInputItems = buildAllowedInputItemSet(keys, getConstructorBlueprint);
+  }
+  const buffer = getStructureInputBuffer(structure);
+  const startIndex = typeof structure.activeRecipeIndex === 'number' ? structure.activeRecipeIndex : 0;
+  let bestRecipe = structure.recipe ?? null;
+  let bestScore = bestRecipe ? computeRecipeMatchScore(buffer, bestRecipe) : -1;
+  for(let offset = 0; offset < keys.length; offset += 1){
+    const index = (startIndex + offset) % keys.length;
+    const key = keys[index];
+    const candidate = getConstructorBlueprint(key);
+    if(!candidate) continue;
+    if(hasInputsForRecipe(buffer, candidate)){
+      structure.recipe = candidate;
+      structure.recipeKey = candidate.key;
+      structure.activeRecipeIndex = index;
+      return candidate;
+    }
+    const score = computeRecipeMatchScore(buffer, candidate);
+    if(score > bestScore || (!bestRecipe && score >= 0)){
+      bestRecipe = candidate;
+      bestScore = score;
+      structure.activeRecipeIndex = index;
+    }
+  }
+  if(!bestRecipe && keys.length){
+    bestRecipe = getConstructorBlueprint(keys[0]);
+    structure.activeRecipeIndex = 0;
+  }
+  if(bestRecipe){
+    structure.recipe = bestRecipe;
+    structure.recipeKey = bestRecipe.key;
+  }
+  return structure.recipe;
+}
+
+function buildAllowedInputItemSet(keys, resolver = getBioforgeRecipe){
   const items = new Set();
   for(const key of keys){
-    const recipe = getBioforgeRecipe(key);
+    const recipe = resolver(key);
     const inputs = getRecipeInputMap(recipe);
     for(const item of inputs.keys()){
       items.add(item);
@@ -918,7 +955,13 @@ function acceptItem(structure, tileIdx, item, factory){
       }
       return true;
     case FactoryKind.CONSTRUCTOR:
-      if(!structure.recipe?.inputs?.has(item)) return false;
+      if(structure && !structure.allowedInputItems && Array.isArray(structure.availableRecipeKeys)){
+        structure.allowedInputItems = buildAllowedInputItemSet(structure.availableRecipeKeys, getConstructorBlueprint);
+      }
+      const constructorInputs = getRecipeInputMap(structure.recipe);
+      if(!constructorInputs.has(item) && !(structure.allowedInputItems?.has(item))){
+        return false;
+      }
       adjustInputBuffer(structure, item, 1);
       if(structure.pendingInputJob instanceof Set){
         structure.pendingInputJob.delete(item);
@@ -1039,7 +1082,9 @@ function maybeStartJob(structure, factory){
 function updateRecipeProducer(tileIdx, structure, factory){
   const recipe = structure.kind === FactoryKind.SMELTER
     ? ensureActiveSmelterRecipe(structure)
-    : structure.recipe;
+    : structure.kind === FactoryKind.CONSTRUCTOR
+      ? ensureActiveConstructorBlueprint(structure)
+      : structure.recipe;
   if(!recipe) return;
   const telemetry = ensureStructureTelemetry(structure);
   if(telemetry){
@@ -1084,6 +1129,8 @@ function updateRecipeProducer(tileIdx, structure, factory){
   if(!structure.active){
     if(structure.kind === FactoryKind.SMELTER){
       ensureActiveSmelterRecipe(structure);
+    } else if(structure.kind === FactoryKind.CONSTRUCTOR){
+      ensureActiveConstructorBlueprint(structure);
     }
     maybeStartJob(structure, factory);
   }
@@ -1107,9 +1154,13 @@ function updateRecipeProducer(tileIdx, structure, factory){
       }
       structure.lastCompletedCycle = structure.currentCycle;
       structure.currentCycle = null;
-      if(structure.kind === FactoryKind.SMELTER && Array.isArray(structure.availableRecipeKeys) && structure.availableRecipeKeys.length){
+      if(Array.isArray(structure.availableRecipeKeys) && structure.availableRecipeKeys.length){
         structure.activeRecipeIndex = (structure.activeRecipeIndex + 1) % structure.availableRecipeKeys.length;
-        ensureActiveSmelterRecipe(structure);
+        if(structure.kind === FactoryKind.SMELTER){
+          ensureActiveSmelterRecipe(structure);
+        } else if(structure.kind === FactoryKind.CONSTRUCTOR){
+          ensureActiveConstructorBlueprint(structure);
+        }
       }
       maybeStartJob(structure, factory);
     }
@@ -1222,6 +1273,15 @@ export function placeFactoryStructure(tileIdx, brush, { orientation } = {}){
         structure.activeRecipeIndex = 0;
       }
       structure.allowedInputItems = buildAllowedInputItemSet(structure.availableRecipeKeys);
+    } else if(structure.kind === FactoryKind.CONSTRUCTOR){
+      const firstKey = structure.availableRecipeKeys[0];
+      const firstBlueprint = firstKey ? getConstructorBlueprint(firstKey) : null;
+      if(firstBlueprint){
+        structure.recipe = firstBlueprint;
+        structure.recipeKey = firstBlueprint.key;
+        structure.activeRecipeIndex = 0;
+      }
+      structure.allowedInputItems = buildAllowedInputItemSet(structure.availableRecipeKeys, getConstructorBlueprint);
     }
   }
   if(structure && spec.recipeKey){
@@ -1229,10 +1289,24 @@ export function placeFactoryStructure(tileIdx, brush, { orientation } = {}){
       const recipe = getBioforgeRecipe(spec.recipeKey);
       structure.recipe = recipe;
       structure.recipeKey = recipe.key;
+      if(Array.isArray(structure.availableRecipeKeys)){
+        const index = structure.availableRecipeKeys.indexOf(recipe.key);
+        structure.activeRecipeIndex = index >= 0 ? index : 0;
+      }
+      if(structure.availableRecipeKeys){
+        structure.allowedInputItems = buildAllowedInputItemSet(structure.availableRecipeKeys);
+      }
     } else if(structure.kind === FactoryKind.CONSTRUCTOR){
       const recipe = getConstructorBlueprint(spec.recipeKey);
       structure.recipe = recipe;
       structure.recipeKey = recipe.key;
+      if(Array.isArray(structure.availableRecipeKeys)){
+        const index = structure.availableRecipeKeys.indexOf(recipe.key);
+        structure.activeRecipeIndex = index >= 0 ? index : 0;
+      }
+      if(structure.availableRecipeKeys){
+        structure.allowedInputItems = buildAllowedInputItemSet(structure.availableRecipeKeys, getConstructorBlueprint);
+      }
     }
   }
   factory.structures.set(tileIdx, structure);

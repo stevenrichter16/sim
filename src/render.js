@@ -4,7 +4,7 @@ import { drainParticleBursts, drainFlashes } from './effects.js';
 import { debugConfig } from './debug.js';
 import { roles } from './config.js';
 import { FACTIONS, DEFAULT_FACTION_ID, factionById } from './factions.js';
-import { getFactoryStructures, getFactoryNodes, FactoryKind, getOrientationAngle, getOrientationVector, FactoryItem } from './factory.js';
+import { getFactoryStructures, FactoryKind, getOrientationAngle, getOrientationVector, FactoryItem } from './factory.js';
 
 const clamp255 = (value) => Math.max(0, Math.min(255, Math.round(value)));
 
@@ -73,7 +73,6 @@ export function draw(){
   offscreen.height = world.H;
   const img = offctx.createImageData(world.W, world.H);
   const factoryStructures = getFactoryStructures();
-  const factoryNodes = getFactoryNodes();
   for(let i=0;i<world.W*world.H;i++){
     const h = Math.min(1, world.heat[i]);
     const o = Math.max(0, Math.min(0.30, world.o2[i]))/0.30;
@@ -153,7 +152,7 @@ export function draw(){
         drawMyceliumTile(ctx, baseX, baseY, world.cell, S, tile, frameTicker);
       }
       else if(S.mode===Mode.FACTORY_NODE){
-        drawFactoryNodeTile(ctx, baseX, baseY, world.cell, factoryNodes.get(tile));
+        drawFactoryNodeTile(ctx, baseX, baseY, world.cell);
       }
       else if(S.mode===Mode.FACTORY_MINER){
         drawFactoryMinerTile(ctx, baseX, baseY, world.cell, structure?.orientation);
@@ -162,7 +161,7 @@ export function draw(){
         drawFactoryBeltTile(ctx, baseX, baseY, world.cell, structure?.orientation);
       }
       else if(S.mode===Mode.FACTORY_SMELTER){
-        drawFactorySmelterTile(ctx, baseX, baseY, world.cell, structure);
+        drawFactorySmelterTile(ctx, baseX, baseY, world.cell, structure?.orientation);
       }
       else if(S.mode===Mode.FACTORY_CONSTRUCTOR){
         drawFactoryConstructorTile(ctx, baseX, baseY, world.cell, structure?.orientation);
@@ -480,161 +479,150 @@ function drawMyceliumTile(ctx, x, y, size, S, tileIndex, ticker){
 }
 
 
-function drawFactoryNodeTile(ctx, x, y, size, node){
-  const resource = node?.resource ?? null;
-  if(resource === FactoryItem.BLOOD_VIAL){
-    drawBloodwellNodeTile(ctx, x, y, size);
-    return;
-  }
-  drawShadedTile(ctx, x, y, size, '#43262f', { outline: '#1e0d15', sheen: 0.18 });
+function drawFactoryNodeTile(ctx, x, y, size){
+  drawShadedTile(ctx, x, y, size, '#3b213b', { outline: '#160b19', sheen: 0.18 });
   ctx.save();
   const cx = x + size * 0.5;
-  const cy = y + size * 0.52;
-  const gradient = ctx.createRadialGradient(cx, cy, size * 0.05, cx, cy, size * 0.32);
-  gradient.addColorStop(0, 'rgba(255,228,220,0.95)');
-  gradient.addColorStop(0.5, 'rgba(236,163,173,0.85)');
-  gradient.addColorStop(1, 'rgba(130,54,80,0.6)');
-  ctx.fillStyle = gradient;
+  const cy = y + size * 0.5;
+  const coreGradient = ctx.createRadialGradient(cx, cy, size * 0.04, cx, cy, size * 0.34);
+  coreGradient.addColorStop(0, 'rgba(255,231,244,0.95)');
+  coreGradient.addColorStop(0.42, 'rgba(244,138,190,0.85)');
+  coreGradient.addColorStop(1, 'rgba(118,44,108,0.65)');
+  ctx.fillStyle = coreGradient;
   ctx.beginPath();
-  ctx.arc(cx, cy, size * 0.3, 0, TAU);
+  ctx.arc(cx, cy, size * 0.3, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(60,15,28,0.6)';
+
+  ctx.strokeStyle = 'rgba(255,207,240,0.45)';
   ctx.lineWidth = Math.max(1, size * 0.08);
-  ctx.stroke();
-  ctx.globalAlpha = 0.65;
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
   ctx.beginPath();
-  ctx.arc(cx - size * 0.12, cy - size * 0.08, size * 0.1, 0, TAU);
-  ctx.arc(cx + size * 0.14, cy + size * 0.1, size * 0.08, 0, TAU);
-  ctx.arc(cx + size * 0.05, cy - size * 0.18, size * 0.06, 0, TAU);
+  ctx.arc(cx, cy, size * 0.36, Math.PI * 0.12, Math.PI * 1.2);
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.8;
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath();
+  ctx.arc(cx - size * 0.12, cy - size * 0.14, size * 0.08, 0, Math.PI * 2);
+  ctx.arc(cx + size * 0.1, cy + size * 0.05, size * 0.06, 0, Math.PI * 2);
   ctx.fill('evenodd');
-  ctx.restore();
-}
+  ctx.globalAlpha = 1;
 
-function drawBloodwellNodeTile(ctx, x, y, size){
-  drawShadedTile(ctx, x, y, size, '#2f1a2a', { outline: '#120712', sheen: 0.14 });
-  ctx.save();
-  const cx = x + size * 0.5;
-  const cy = y + size * 0.56;
-
-  const basinGradient = ctx.createRadialGradient(cx, cy, size * 0.06, cx, cy, size * 0.34);
-  basinGradient.addColorStop(0, 'rgba(255,112,152,0.9)');
-  basinGradient.addColorStop(0.55, 'rgba(150,26,60,0.8)');
-  basinGradient.addColorStop(1, 'rgba(58,10,26,0.94)');
-  ctx.fillStyle = basinGradient;
+  ctx.strokeStyle = 'rgba(255,221,248,0.5)';
+  ctx.lineWidth = Math.max(1, size * 0.05);
+  ctx.setLineDash([size * 0.08, size * 0.1]);
   ctx.beginPath();
-  ctx.ellipse(cx, cy, size * 0.34, size * 0.26, 0, 0, TAU);
-  ctx.fill();
-
-  ctx.strokeStyle = 'rgba(255,186,210,0.4)';
-  ctx.lineWidth = Math.max(1, size * 0.035);
-  ctx.beginPath();
-  ctx.ellipse(cx - size * 0.06, cy - size * 0.08, size * 0.28, size * 0.2, -0.12, TAU * 0.08, TAU * 0.68);
+  ctx.arc(cx, cy, size * 0.46, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.setLineDash([]);
 
-  const innerGlow = ctx.createRadialGradient(cx, cy - size * 0.08, size * 0.02, cx, cy, size * 0.24);
-  innerGlow.addColorStop(0, 'rgba(255,210,224,0.9)');
-  innerGlow.addColorStop(0.45, 'rgba(255,120,170,0.55)');
-  innerGlow.addColorStop(1, 'rgba(255,80,140,0)');
-  ctx.fillStyle = innerGlow;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy - size * 0.04, size * 0.28, size * 0.2, 0, 0, TAU);
-  ctx.fill();
-
-  ctx.fillStyle = 'rgba(255,255,255,0.28)';
-  ctx.beginPath();
-  ctx.ellipse(cx - size * 0.1, cy - size * 0.15, size * 0.12, size * 0.08, -0.25, 0, TAU);
-  ctx.fill();
-
-  ctx.fillStyle = 'rgba(255,255,255,0.18)';
-  ctx.beginPath();
-  ctx.ellipse(cx + size * 0.09, cy + size * 0.02, size * 0.1, size * 0.06, 0.45, 0, TAU);
-  ctx.fill();
-
-  ctx.strokeStyle = 'rgba(255,110,160,0.45)';
-  ctx.lineWidth = Math.max(1, size * 0.02);
-  ctx.beginPath();
-  ctx.moveTo(cx - size * 0.26, cy - size * 0.02);
-  ctx.bezierCurveTo(cx - size * 0.14, cy - size * 0.2, cx + size * 0.18, cy - size * 0.1, cx + size * 0.24, cy + size * 0.06);
-  ctx.stroke();
-
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = 0.45;
-  for(let i = 0; i < 3; i += 1){
-    const angle = i * (TAU / 3) + frameTicker * 0.05;
-    const bx = cx + Math.cos(angle) * size * 0.18;
-    const by = cy - size * 0.08 + Math.sin(angle * 1.4) * size * 0.06;
-    const bubbleRadius = size * 0.055;
-    const bubbleGradient = ctx.createRadialGradient(bx, by, bubbleRadius * 0.2, bx, by, bubbleRadius);
-    bubbleGradient.addColorStop(0, 'rgba(255,200,220,0.85)');
-    bubbleGradient.addColorStop(1, 'rgba(255,110,150,0)');
-    ctx.fillStyle = bubbleGradient;
+  ctx.fillStyle = '#ffe7f6';
+  const nodeCount = 4;
+  for(let i = 0; i < nodeCount; i++){
+    const angle = (Math.PI * 2 / nodeCount) * i + Math.PI / 4;
+    const nx = cx + Math.cos(angle) * size * 0.42;
+    const ny = cy + Math.sin(angle) * size * 0.42;
     ctx.beginPath();
-    ctx.arc(bx, by, bubbleRadius, 0, TAU);
+    ctx.arc(nx, ny, size * 0.06, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
 }
 
 function drawFactoryMinerTile(ctx, x, y, size, orientation){
-  drawShadedTile(ctx, x, y, size, '#2f3747', { outline: '#0f1626', sheen: 0.2 });
+  drawShadedTile(ctx, x, y, size, '#2f3344', { outline: '#0f1524', sheen: 0.2 });
   const angle = getOrientationAngle(orientation);
   ctx.save();
   ctx.translate(x + size / 2, y + size / 2);
   ctx.rotate(angle);
-  ctx.fillStyle = '#f3f7ff';
+
+  ctx.fillStyle = '#4a5670';
+  ctx.fillRect(-size * 0.3, -size * 0.22, size * 0.6, size * 0.44);
+  ctx.strokeStyle = 'rgba(13,18,28,0.6)';
+  ctx.lineWidth = Math.max(1, size * 0.05);
+  ctx.strokeRect(-size * 0.3, -size * 0.22, size * 0.6, size * 0.44);
+
+  ctx.fillStyle = '#ffcfdd';
   ctx.beginPath();
-  ctx.moveTo(-size * 0.3, -size * 0.2);
-  ctx.lineTo(size * 0.26, 0);
-  ctx.lineTo(-size * 0.3, size * 0.2);
+  ctx.moveTo(-size * 0.05, -size * 0.28);
+  ctx.lineTo(size * 0.34, -size * 0.08);
+  ctx.lineTo(size * 0.1, size * 0.32);
+  ctx.lineTo(-size * 0.16, size * 0.08);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#c24a6f';
-  ctx.fillRect(-size * 0.24, -size * 0.12, size * 0.16, size * 0.24);
-  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+
+  ctx.fillStyle = '#ffd6e6';
+  ctx.beginPath();
+  ctx.moveTo(size * 0.28, -size * 0.04);
+  ctx.lineTo(size * 0.44, 0);
+  ctx.lineTo(size * 0.28, size * 0.04);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = '#ffe9f3';
   ctx.lineWidth = Math.max(1, size * 0.05);
   ctx.beginPath();
-  ctx.moveTo(size * 0.04, -size * 0.18);
-  ctx.lineTo(size * 0.24, -size * 0.04);
-  ctx.lineTo(size * 0.24, size * 0.04);
-  ctx.lineTo(size * 0.04, size * 0.18);
+  ctx.moveTo(-size * 0.08, -size * 0.18);
+  ctx.lineTo(size * 0.28, -size * 0.04);
+  ctx.moveTo(-size * 0.14, 0);
+  ctx.lineTo(size * 0.16, size * 0.16);
+  ctx.stroke();
+
+  ctx.fillStyle = '#202536';
+  ctx.beginPath();
+  ctx.arc(-size * 0.18, 0, size * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#7d87a5';
+  ctx.lineWidth = Math.max(1, size * 0.04);
+  ctx.beginPath();
+  ctx.arc(-size * 0.18, 0, size * 0.12, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
 }
 
 function drawFactoryBeltTile(ctx, x, y, size, orientation){
-  drawShadedTile(ctx, x, y, size, '#201429', { outline: '#0c060f', sheen: 0.12 });
+  drawShadedTile(ctx, x, y, size, '#1f1528', { outline: '#09040d', sheen: 0.12 });
   const angle = getOrientationAngle(orientation);
   ctx.save();
   ctx.translate(x + size / 2, y + size / 2);
   ctx.rotate(angle);
-  ctx.strokeStyle = '#f76d94';
-  ctx.lineWidth = Math.max(1, size * 0.14);
-  ctx.lineCap = 'round';
+
+  const beltGradient = ctx.createLinearGradient(-size * 0.34, -size * 0.18, size * 0.34, size * 0.18);
+  beltGradient.addColorStop(0, '#522547');
+  beltGradient.addColorStop(0.5, '#7f3963');
+  beltGradient.addColorStop(1, '#4c1d3d');
+  ctx.fillStyle = beltGradient;
+  ctx.fillRect(-size * 0.36, -size * 0.18, size * 0.72, size * 0.36);
+
+  ctx.strokeStyle = '#f5789b';
+  ctx.lineWidth = Math.max(1, size * 0.06);
   ctx.beginPath();
-  ctx.moveTo(-size * 0.32, 0);
-  ctx.quadraticCurveTo(-size * 0.05, size * 0.18, size * 0.22, 0);
+  ctx.moveTo(-size * 0.32, -size * 0.1);
+  ctx.lineTo(size * 0.32, size * 0.1);
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+
+  ctx.strokeStyle = 'rgba(255,214,235,0.55)';
   ctx.lineWidth = Math.max(1, size * 0.04);
+  ctx.setLineDash([size * 0.12, size * 0.08]);
   ctx.beginPath();
-  ctx.moveTo(-size * 0.22, -size * 0.1);
-  ctx.lineTo(size * 0.18, size * 0.1);
+  ctx.moveTo(-size * 0.3, size * 0.06);
+  ctx.lineTo(size * 0.3, -size * 0.06);
   ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = '#ffccd8';
+  ctx.beginPath();
+  ctx.arc(-size * 0.28, 0, size * 0.12, 0, Math.PI * 2);
+  ctx.arc(size * 0.28, 0, size * 0.12, 0, Math.PI * 2);
+  ctx.fill('evenodd');
   ctx.restore();
 }
 
-function drawFactorySmelterTile(ctx, x, y, size, structure){
-  const orientation = structure?.orientation;
-  const isOmniBioforge = Array.isArray(structure?.availableRecipeKeys) && structure.availableRecipeKeys.length > 1;
-  if(isOmniBioforge){
-    drawOmniBioforgeTile(ctx, x, y, size, orientation);
-    return;
-  }
-
+function drawFactorySmelterTile(ctx, x, y, size, orientation){
   drawShadedTile(ctx, x, y, size, '#40172a', { outline: '#170710', sheen: 0.22 });
+  const angle = getOrientationAngle(orientation);
   ctx.save();
   ctx.translate(x + size / 2, y + size / 2);
+  if(angle) ctx.rotate(angle);
 
   const rimGradient = ctx.createLinearGradient(-size * 0.42, -size * 0.36, size * 0.42, size * 0.34);
   rimGradient.addColorStop(0, '#5b1d42');
@@ -642,190 +630,130 @@ function drawFactorySmelterTile(ctx, x, y, size, structure){
   rimGradient.addColorStop(1, '#4a1235');
   ctx.fillStyle = rimGradient;
   ctx.beginPath();
-  ctx.ellipse(0, 0, size * 0.46, size * 0.34, 0, 0, TAU);
+  ctx.ellipse(0, 0, size * 0.46, size * 0.34, 0, 0, Math.PI * 2);
   ctx.fill();
 
   const fluidGradient = ctx.createRadialGradient(-size * 0.08, -size * 0.12, size * 0.04, 0, size * 0.04, size * 0.36);
   fluidGradient.addColorStop(0, '#ffe1ff');
-  fluidGradient.addColorStop(0.35, '#ff8ccc');
-  fluidGradient.addColorStop(0.7, '#d34592');
-  fluidGradient.addColorStop(1, 'rgba(130,24,82,0.95)');
+  fluidGradient.addColorStop(0.42, 'rgba(255,126,178,0.9)');
+  fluidGradient.addColorStop(0.76, 'rgba(146,31,84,0.85)');
+  fluidGradient.addColorStop(1, 'rgba(64,10,39,0.65)');
   ctx.fillStyle = fluidGradient;
   ctx.beginPath();
-  ctx.ellipse(0, size * 0.02, size * 0.36, size * 0.26, 0, 0, TAU);
+  ctx.ellipse(0, 0, size * 0.34, size * 0.24, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-  ctx.lineWidth = Math.max(1, size * 0.04);
-  ctx.beginPath();
-  ctx.ellipse(-size * 0.12, -size * 0.06, size * 0.24, size * 0.18, -0.2, Math.PI * 0.1, Math.PI * 1.6);
-  ctx.stroke();
-
-  ctx.strokeStyle = 'rgba(255,200,235,0.45)';
-  ctx.lineWidth = Math.max(1, size * 0.03);
-  ctx.beginPath();
-  ctx.ellipse(size * 0.1, size * 0.08, size * 0.18, size * 0.12, 0.35, Math.PI * 0.2, Math.PI * 1.9);
-  ctx.stroke();
-
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  for(let i = 0; i < 4; i += 1){
-    const bubbleAngle = (Math.PI * 0.5 * i) + 0.6;
-    const bubbleX = Math.cos(bubbleAngle) * size * 0.18;
-    const bubbleY = Math.sin(bubbleAngle) * size * 0.1;
-    const bubbleRadius = size * (0.04 + 0.01 * (i % 2));
+  const bubbleCount = 4;
+  ctx.fillStyle = 'rgba(255,214,255,0.6)';
+  for(let i = 0; i < bubbleCount; i++){
+    const phase = (frameTicker * 0.1 + i * Math.PI * 0.75) % (Math.PI * 2);
+    const bx = Math.sin(phase * 1.3 + i) * size * 0.12;
+    const by = Math.cos(phase * 1.1 + i * 0.5) * size * 0.1;
+    const br = size * (0.05 + 0.015 * Math.sin(phase * 1.9));
+    ctx.globalAlpha = 0.55 + 0.3 * Math.sin(phase * 2.4);
     ctx.beginPath();
-    ctx.ellipse(bubbleX, bubbleY, bubbleRadius, bubbleRadius * 0.8, bubbleAngle * 0.5, 0, TAU);
+    ctx.arc(bx, by * 0.7, br, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = Math.max(1, size * 0.04);
   ctx.beginPath();
-  ctx.ellipse(-size * 0.2, -size * 0.18, size * 0.22, size * 0.12, -0.3, 0, TAU);
-  ctx.fill();
-  ctx.restore();
+  ctx.ellipse(0, -size * 0.02, size * 0.36, size * 0.26, 0, Math.PI * 0.04, Math.PI * 0.96);
+  ctx.stroke();
 
-  ctx.save();
-  ctx.translate(x + size / 2, y + size / 2);
-  const nozzleAngle = getOrientationAngle(orientation);
-  ctx.rotate(nozzleAngle);
-  ctx.fillStyle = '#ffe6f5';
-  ctx.beginPath();
-  ctx.moveTo(size * 0.12, -size * 0.16);
-  ctx.lineTo(size * 0.36, -size * 0.04);
-  ctx.lineTo(size * 0.36, size * 0.04);
-  ctx.lineTo(size * 0.12, size * 0.16);
-  ctx.quadraticCurveTo(size * 0.04, size * 0.08, size * 0.04, 0);
-  ctx.quadraticCurveTo(size * 0.04, -size * 0.08, size * 0.12, -size * 0.16);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle = 'rgba(255,136,206,0.6)';
-  ctx.lineWidth = Math.max(1, size * 0.02);
+  ctx.strokeStyle = '#ff98c7';
+  ctx.lineWidth = Math.max(1, size * 0.06);
   ctx.beginPath();
   ctx.moveTo(size * 0.16, -size * 0.08);
   ctx.lineTo(size * 0.32, 0);
   ctx.lineTo(size * 0.16, size * 0.08);
   ctx.stroke();
+
+  ctx.fillStyle = 'rgba(255,172,215,0.35)';
+  ctx.fillRect(-size * 0.36, -size * 0.48, size * 0.22, size * 0.18);
   ctx.restore();
 }
-
-function drawOmniBioforgeTile(ctx, x, y, size, orientation){
-  drawShadedTile(ctx, x, y, size, '#2c1736', { outline: '#130918', sheen: 0.26 });
-  const cx = x + size / 2;
-  const cy = y + size / 2;
-
-  ctx.save();
-  ctx.translate(cx, cy);
-
-  const outerRadius = size * 0.42;
-  const innerRadius = size * 0.18;
-  const ringGradient = ctx.createRadialGradient(0, 0, innerRadius * 0.4, 0, 0, outerRadius);
-  ringGradient.addColorStop(0, 'rgba(252, 244, 255, 0.92)');
-  ringGradient.addColorStop(0.55, 'rgba(185, 118, 255, 0.65)');
-  ringGradient.addColorStop(1, 'rgba(65, 22, 110, 0.78)');
-  ctx.fillStyle = ringGradient;
-  ctx.beginPath();
-  ctx.arc(0, 0, outerRadius, 0, TAU);
-  ctx.fill();
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.beginPath();
-  ctx.arc(0, 0, innerRadius, 0, TAU);
-  ctx.fill();
-  ctx.restore();
-
-  const coreGradient = ctx.createRadialGradient(0, 0, innerRadius * 0.2, 0, 0, innerRadius * 1.08);
-  coreGradient.addColorStop(0, 'rgba(120, 255, 225, 0.9)');
-  coreGradient.addColorStop(0.6, 'rgba(40, 160, 200, 0.35)');
-  coreGradient.addColorStop(1, 'rgba(12, 35, 48, 0)');
-  ctx.fillStyle = coreGradient;
-  ctx.beginPath();
-  ctx.arc(0, 0, innerRadius * 1.08, 0, TAU);
-  ctx.fill();
-
-  const swirlPhase = (frameTicker * 0.05) % TAU;
-  ctx.save();
-  ctx.rotate(swirlPhase * 0.33);
-  for(let i = 0; i < 3; i += 1){
-    const petalAngle = swirlPhase + i * (TAU / 3);
-    ctx.save();
-    ctx.rotate(petalAngle);
-    const petalGradient = ctx.createLinearGradient(innerRadius * 0.6, 0, size * 0.44, 0);
-    petalGradient.addColorStop(0, 'rgba(255, 240, 210, 0.85)');
-    petalGradient.addColorStop(0.45, 'rgba(135, 210, 255, 0.6)');
-    petalGradient.addColorStop(1, 'rgba(60, 120, 255, 0)');
-    ctx.fillStyle = petalGradient;
-    ctx.beginPath();
-    ctx.moveTo(innerRadius * 0.64, -size * 0.08);
-    ctx.quadraticCurveTo(size * 0.44, 0, innerRadius * 0.64, size * 0.08);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-  ctx.restore();
-
-  for(let i = 0; i < 3; i += 1){
-    const orbAngle = swirlPhase * 0.6 + i * (TAU / 3);
-    const orbitRadius = size * 0.32;
-    const px = Math.cos(orbAngle) * orbitRadius;
-    const py = Math.sin(orbAngle) * orbitRadius;
-    const orbGradient = ctx.createRadialGradient(px, py, size * 0.04, px, py, size * 0.14);
-    orbGradient.addColorStop(0, 'rgba(255, 245, 220, 0.9)');
-    orbGradient.addColorStop(0.35, 'rgba(255, 140, 210, 0.55)');
-    orbGradient.addColorStop(1, 'rgba(50, 10, 30, 0)');
-    ctx.fillStyle = orbGradient;
-    ctx.beginPath();
-    ctx.arc(px, py, size * 0.12, 0, TAU);
-    ctx.fill();
-  }
-
-  ctx.restore();
-}
-
 
 function drawFactoryConstructorTile(ctx, x, y, size, orientation){
-  drawShadedTile(ctx, x, y, size, '#2b334e', { outline: '#101424', sheen: 0.22 });
+  drawShadedTile(ctx, x, y, size, '#263049', { outline: '#0c1323', sheen: 0.22 });
+  const angle = getOrientationAngle(orientation);
   ctx.save();
   ctx.translate(x + size / 2, y + size / 2);
-  const angle = getOrientationAngle(orientation);
   ctx.rotate(angle);
-  ctx.fillStyle = '#92d8f0';
-  ctx.fillRect(-size * 0.28, -size * 0.2, size * 0.56, size * 0.4);
-  ctx.fillStyle = '#e0f7ff';
-  const radius = size * 0.08;
+
+  ctx.fillStyle = '#9de0fb';
+  ctx.fillRect(-size * 0.34, -size * 0.26, size * 0.68, size * 0.52);
+
+  ctx.fillStyle = '#e9f8ff';
   ctx.beginPath();
-  ctx.moveTo(-size * 0.18 + radius, -size * 0.12);
-  ctx.lineTo(size * 0.18 - radius, -size * 0.12);
-  ctx.quadraticCurveTo(size * 0.18, -size * 0.12, size * 0.18, -size * 0.12 + radius);
-  ctx.lineTo(size * 0.18, size * 0.12 - radius);
-  ctx.quadraticCurveTo(size * 0.18, size * 0.12, size * 0.18 - radius, size * 0.12);
-  ctx.lineTo(-size * 0.18 + radius, size * 0.12);
-  ctx.quadraticCurveTo(-size * 0.18, size * 0.12, -size * 0.18, size * 0.12 - radius);
-  ctx.lineTo(-size * 0.18, -size * 0.12 + radius);
-  ctx.quadraticCurveTo(-size * 0.18, -size * 0.12, -size * 0.18 + radius, -size * 0.12);
+  ctx.moveTo(-size * 0.24, -size * 0.06);
+  ctx.lineTo(size * 0.24, -size * 0.06);
+  ctx.lineTo(size * 0.16, size * 0.22);
+  ctx.lineTo(-size * 0.16, size * 0.22);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
   ctx.lineWidth = Math.max(1, size * 0.05);
-  ctx.strokeRect(-size * 0.3, -size * 0.22, size * 0.6, size * 0.44);
+  ctx.strokeRect(-size * 0.34, -size * 0.26, size * 0.68, size * 0.52);
+
+  ctx.strokeStyle = '#f5b4ff';
+  ctx.lineWidth = Math.max(1, size * 0.05);
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.26, -size * 0.18);
+  ctx.lineTo(size * 0.12, size * 0.12);
+  ctx.moveTo(-size * 0.1, -size * 0.18);
+  ctx.lineTo(size * 0.28, size * 0.08);
+  ctx.stroke();
+
+  ctx.fillStyle = '#232a3d';
+  ctx.beginPath();
+  ctx.arc(-size * 0.22, -size * 0.16, size * 0.08, 0, Math.PI * 2);
+  ctx.arc(size * 0.14, -size * 0.12, size * 0.08, 0, Math.PI * 2);
+  ctx.fill('evenodd');
   ctx.restore();
 }
 
 function drawFactoryStorageTile(ctx, x, y, size){
-  drawShadedTile(ctx, x, y, size, '#453524', { outline: '#1b1208', sheen: 0.16 });
+  drawShadedTile(ctx, x, y, size, '#44321f', { outline: '#160d05', sheen: 0.16 });
   ctx.save();
-  ctx.fillStyle = 'rgba(255,235,200,0.22)';
+  const baseGradient = ctx.createLinearGradient(x, y + size * 0.2, x, y + size);
+  baseGradient.addColorStop(0, 'rgba(255,225,188,0.6)');
+  baseGradient.addColorStop(1, 'rgba(140,84,38,0.9)');
+  ctx.fillStyle = baseGradient;
   ctx.fillRect(x + size * 0.18, y + size * 0.18, size * 0.64, size * 0.64);
-  ctx.strokeStyle = '#f8cfa8';
-  ctx.lineWidth = Math.max(1, size * 0.08);
+
+  ctx.strokeStyle = '#f0c28d';
+  ctx.lineWidth = Math.max(1, size * 0.07);
   ctx.strokeRect(x + size * 0.18, y + size * 0.18, size * 0.64, size * 0.64);
+
+  ctx.strokeStyle = 'rgba(255,232,200,0.7)';
+  ctx.lineWidth = Math.max(1, size * 0.04);
   ctx.beginPath();
-  ctx.moveTo(x + size * 0.18, y + size * 0.5);
-  ctx.lineTo(x + size * 0.82, y + size * 0.5);
-  ctx.moveTo(x + size * 0.5, y + size * 0.18);
-  ctx.lineTo(x + size * 0.5, y + size * 0.82);
+  ctx.moveTo(x + size * 0.18, y + size * 0.36);
+  ctx.lineTo(x + size * 0.82, y + size * 0.36);
+  ctx.moveTo(x + size * 0.18, y + size * 0.64);
+  ctx.lineTo(x + size * 0.82, y + size * 0.64);
   ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255,248,236,0.55)';
+  ctx.lineWidth = Math.max(1, size * 0.03);
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.38, y + size * 0.18);
+  ctx.lineTo(x + size * 0.38, y + size * 0.82);
+  ctx.moveTo(x + size * 0.62, y + size * 0.18);
+  ctx.lineTo(x + size * 0.62, y + size * 0.82);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(255,244,228,0.4)';
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.22, y + size * 0.22);
+  ctx.lineTo(x + size * 0.66, y + size * 0.22);
+  ctx.lineTo(x + size * 0.46, y + size * 0.38);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
 }
 

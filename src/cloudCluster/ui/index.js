@@ -1,4 +1,9 @@
-import { FactoryKind, FactoryItem, getBioforgeRecipeDefinition } from '../../factory.js';
+import {
+  FactoryKind,
+  FactoryItem,
+  getBioforgeRecipeDefinition,
+  getConstructorBlueprintDefinition,
+} from '../../factory.js';
 import {
   CloudFactoryPortDirection,
   getPortById,
@@ -38,10 +43,19 @@ const KIND_LABEL = Object.freeze({
   [FactoryKind.STORAGE]: 'Cradle Vault',
 });
 
+const CONSTRUCTOR_BLUEPRINT_KEYS = Object.freeze([
+  'human_shell',
+  'caretaker_drone',
+  'emissary_avatar',
+]);
+
 const DEFAULT_OBJECT_METADATA = Object.freeze({
   [FactoryKind.MINER]: { resource: FactoryItem.SKIN_PATCH },
   [FactoryKind.SMELTER]: { recipeKey: 'body_system' },
-  [FactoryKind.CONSTRUCTOR]: { blueprintKey: 'human_shell' },
+  [FactoryKind.CONSTRUCTOR]: {
+    blueprintKey: 'human_shell',
+    blueprintKeys: CONSTRUCTOR_BLUEPRINT_KEYS,
+  },
 });
 
 const DEFAULT_PORT_TEMPLATES = Object.freeze({
@@ -61,8 +75,35 @@ const DEFAULT_PORT_TEMPLATES = Object.freeze({
     { direction: CloudFactoryPortDirection.OUTPUT, label: 'Output' },
   ],
   [FactoryKind.CONSTRUCTOR]: [
-    { direction: CloudFactoryPortDirection.INPUT, label: 'Input' },
-    { direction: CloudFactoryPortDirection.OUTPUT, label: 'Output' },
+    {
+      direction: CloudFactoryPortDirection.INPUT,
+      label: 'Body System Intake',
+      itemKeys: [FactoryItem.BODY_SYSTEM],
+    },
+    {
+      direction: CloudFactoryPortDirection.INPUT,
+      label: 'Neural Weave Intake',
+      itemKeys: [FactoryItem.NEURAL_WEAVE],
+    },
+    {
+      direction: CloudFactoryPortDirection.INPUT,
+      label: 'Skeletal Frame Intake',
+      itemKeys: [FactoryItem.SKELETAL_FRAME],
+    },
+    {
+      direction: CloudFactoryPortDirection.INPUT,
+      label: 'Glandular Network Intake',
+      itemKeys: [FactoryItem.GLANDULAR_NETWORK],
+    },
+    {
+      direction: CloudFactoryPortDirection.OUTPUT,
+      label: 'Construct Output',
+      itemKeys: [
+        FactoryItem.HUMAN_SHELL,
+        FactoryItem.CARETAKER_DRONE,
+        FactoryItem.EMISSARY_AVATAR,
+      ],
+    },
   ],
   [FactoryKind.STORAGE]: [
     { direction: CloudFactoryPortDirection.INPUT, label: 'Input' },
@@ -241,12 +282,15 @@ const PALETTE_ENTRIES = Object.freeze([
     ],
   },
   {
-    key: 'constructor-shell',
+    key: 'constructor-omni',
     kind: FactoryKind.CONSTRUCTOR,
     icon: '🧍',
-    label: 'Recruit Constructor',
-    description: 'Prints baseline human shells from body systems.',
-    metadata: { blueprintKey: 'human_shell' },
+    label: 'Omni Constructor',
+    description: 'Synth fab that assembles shells, caretakers, or emissaries from available stock.',
+    metadata: {
+      blueprintKey: 'human_shell',
+      blueprintKeys: CONSTRUCTOR_BLUEPRINT_KEYS,
+    },
     ports: [
       {
         id: 'in-body',
@@ -254,22 +298,6 @@ const PALETTE_ENTRIES = Object.freeze([
         label: 'Body System Intake',
         itemKeys: [FactoryItem.BODY_SYSTEM],
       },
-      {
-        id: 'out-shell',
-        direction: CloudFactoryPortDirection.OUTPUT,
-        label: 'Human Shell Output',
-        itemKeys: [FactoryItem.HUMAN_SHELL],
-      },
-    ],
-  },
-  {
-    key: 'constructor-caretaker',
-    kind: FactoryKind.CONSTRUCTOR,
-    icon: '🤖',
-    label: 'Caretaker Constructor',
-    description: 'Assembles caretaker drones from weave and frames.',
-    metadata: { blueprintKey: 'caretaker_drone' },
-    ports: [
       {
         id: 'in-neural',
         direction: CloudFactoryPortDirection.INPUT,
@@ -283,44 +311,20 @@ const PALETTE_ENTRIES = Object.freeze([
         itemKeys: [FactoryItem.SKELETAL_FRAME],
       },
       {
-        id: 'out-caretaker',
-        direction: CloudFactoryPortDirection.OUTPUT,
-        label: 'Caretaker Drone Output',
-        itemKeys: [FactoryItem.CARETAKER_DRONE],
-      },
-    ],
-  },
-  {
-    key: 'constructor-emissary',
-    kind: FactoryKind.CONSTRUCTOR,
-    icon: '🕊️',
-    label: 'Emissary Constructor',
-    description: 'Combines systems, weaves, and glands into emissaries.',
-    metadata: { blueprintKey: 'emissary_avatar' },
-    ports: [
-      {
-        id: 'in-body',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Body System Intake',
-        itemKeys: [FactoryItem.BODY_SYSTEM],
-      },
-      {
-        id: 'in-neural',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Neural Weave Intake',
-        itemKeys: [FactoryItem.NEURAL_WEAVE],
-      },
-      {
         id: 'in-gland',
         direction: CloudFactoryPortDirection.INPUT,
         label: 'Glandular Network Intake',
         itemKeys: [FactoryItem.GLANDULAR_NETWORK],
       },
       {
-        id: 'out-emissary',
+        id: 'out-construct',
         direction: CloudFactoryPortDirection.OUTPUT,
-        label: 'Emissary Output',
-        itemKeys: [FactoryItem.EMISSARY_AVATAR],
+        label: 'Construct Output',
+        itemKeys: [
+          FactoryItem.HUMAN_SHELL,
+          FactoryItem.CARETAKER_DRONE,
+          FactoryItem.EMISSARY_AVATAR,
+        ],
       },
     ],
   },
@@ -354,6 +358,10 @@ function normaliseClusterId(rawId, fallback){
 
   function getSmelterRecipes(){
     return getSmelterRecipeSummaries();
+  }
+
+  function getConstructorBlueprints(){
+    return getConstructorBlueprintSummaries();
   }
 
   function advanceSimulation(step = 1){
@@ -475,6 +483,52 @@ export function getSmelterRecipeSummaries(){
       output: recipe.output ?? null,
       outputLabel: recipe.label ?? formatRecipeItemName(recipe.output),
       description: recipe.description ?? '',
+      inputs,
+    });
+  }
+  return summaries;
+}
+
+export function getConstructorBlueprintSummaries(){
+  const summaries = [];
+  for(const key of CONSTRUCTOR_BLUEPRINT_KEYS){
+    const blueprint = getConstructorBlueprintDefinition(key);
+    if(!blueprint) continue;
+    const inputs = [];
+    if(blueprint.inputs instanceof Map){
+      for(const [item, amount] of blueprint.inputs.entries()){
+        inputs.push({
+          item,
+          amount: Number.isFinite(amount) && amount > 0 ? amount : 1,
+          label: formatRecipeItemName(item),
+        });
+      }
+    } else if(Array.isArray(blueprint.inputs)){
+      for(const entry of blueprint.inputs){
+        if(!entry) continue;
+        const item = entry.item ?? entry[0] ?? null;
+        const amount = Number.isFinite(entry.amount) ? entry.amount : Number.isFinite(entry[1]) ? entry[1] : 1;
+        inputs.push({
+          item,
+          amount: amount > 0 ? amount : 1,
+          label: formatRecipeItemName(entry.label ?? item),
+        });
+      }
+    } else if(blueprint.inputs && typeof blueprint.inputs === 'object'){
+      for(const [item, value] of Object.entries(blueprint.inputs)){
+        const amount = Number.isFinite(value) ? value : 1;
+        inputs.push({
+          item,
+          amount: amount > 0 ? amount : 1,
+          label: formatRecipeItemName(item),
+        });
+      }
+    }
+    summaries.push({
+      key: blueprint.key ?? key,
+      output: blueprint.output ?? null,
+      outputLabel: blueprint.label ?? formatRecipeItemName(blueprint.output),
+      description: blueprint.description ?? '',
       inputs,
     });
   }
@@ -958,6 +1012,7 @@ export function createCloudClusterEditor(options = {}){
     getOverlay,
     stepSimulation: advanceSimulation,
     getSmelterRecipes,
+    getConstructorBlueprints,
   };
 }
 

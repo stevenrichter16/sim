@@ -156,6 +156,7 @@ export function initInput({ canvas, draw }){
 
   const cloudEditor = createCloudClusterEditor();
   const getSmelterRecipes = () => (typeof cloudEditor.getSmelterRecipes === 'function' ? cloudEditor.getSmelterRecipes() : []);
+  const getConstructorBlueprints = () => (typeof cloudEditor.getConstructorBlueprints === 'function' ? cloudEditor.getConstructorBlueprints() : []);
 
   const spawnErrorMessages = {
     'tile-occupied': 'Spawn failed: tile is occupied or blocked.',
@@ -165,6 +166,7 @@ export function initInput({ canvas, draw }){
   };
   let spawnStatusNode = null;
   let spawnStatusTimer = null;
+  let visualLinkDrag = null;
 
   function ensureSpawnStatusNode(){
     if(typeof document === 'undefined') return null;
@@ -180,6 +182,27 @@ export function initInput({ canvas, draw }){
       document.body.appendChild(spawnStatusNode);
     }
     return spawnStatusNode;
+  }
+
+  function clearVisualLinkDrag(cancelPending = true){
+    if(!visualLinkDrag) return;
+    window.removeEventListener('pointermove', visualLinkDrag.moveHandler);
+    window.removeEventListener('pointerup', visualLinkDrag.upHandler);
+    if(visualLinkDrag.dragLine){
+      visualLinkDrag.dragLine.style.display = 'none';
+      visualLinkDrag.dragLine.removeAttribute('d');
+    }
+    if(visualLinkDrag.highlightCircle){
+      visualLinkDrag.highlightCircle.classList.remove('link-target');
+    }
+    if(cancelPending){
+      try {
+        cloudEditor.cancelLink();
+      } catch (error){
+        console.error('Failed to cancel link', error);
+      }
+    }
+    visualLinkDrag = null;
   }
 
   function clearSpawnStatus(){
@@ -452,32 +475,33 @@ export function initInput({ canvas, draw }){
       }
       cloudClusterGraph.append(nodeEl);
     }
-    if(Array.isArray(graph.links) && graph.links.length){
-      const linksContainer = document.createElement('div');
-      linksContainer.className = 'cloud-cluster-links';
-      for(const link of graph.links){
-        const linkRow = document.createElement('div');
-        linkRow.className = 'cloud-cluster-link';
-        const label = document.createElement('span');
-        label.textContent = `${link.source.objectId}:${link.source.portId} → ${link.target.objectId}:${link.target.portId}`;
-        linkRow.append(label);
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'btn';
-        removeBtn.textContent = 'Remove';
-        removeBtn.addEventListener('click', () => {
-          try {
-            cloudEditor.removeLink(link.id);
-          } catch (error){
-            console.error('Failed to remove link', error);
-          }
-          refreshCloudClusterUI();
-        });
-        linkRow.append(removeBtn);
-        linksContainer.append(linkRow);
-      }
-      cloudClusterGraph.append(linksContainer);
-    }
+    // Temporarily hide legacy link list in favour of visual graph workflow.
+    // if(Array.isArray(graph.links) && graph.links.length){
+    //   const linksContainer = document.createElement('div');
+    //   linksContainer.className = 'cloud-cluster-links';
+    //   for(const link of graph.links){
+    //     const linkRow = document.createElement('div');
+    //     linkRow.className = 'cloud-cluster-link';
+    //     const label = document.createElement('span');
+    //     label.textContent = `${link.source.objectId}:${link.source.portId} → ${link.target.objectId}:${link.target.portId}`;
+    //     linkRow.append(label);
+    //     const removeBtn = document.createElement('button');
+    //     removeBtn.type = 'button';
+    //     removeBtn.className = 'btn';
+    //     removeBtn.textContent = 'Remove';
+    //     removeBtn.addEventListener('click', () => {
+    //       try {
+    //         cloudEditor.removeLink(link.id);
+    //       } catch (error){
+    //         console.error('Failed to remove link', error);
+    //       }
+    //       refreshCloudClusterUI();
+    //     });
+    //     linkRow.append(removeBtn);
+    //     linksContainer.append(linkRow);
+    //   }
+    //   cloudClusterGraph.append(linksContainer);
+    // }
   }
 
   function renderCloudClusterInspector(){
@@ -621,11 +645,33 @@ export function initInput({ canvas, draw }){
           const nodeInfo = nodeMap.get(obj.id);
           const resource = nodeInfo?.metadata?.resource
             ?? (Array.isArray(nodeInfo?.metadata?.outputItems) ? nodeInfo.metadata.outputItems[0] : null);
-          if(resource === FactoryItem.BLOOD_VIAL){
-            row.classList.add('cloud-cluster-bloodwell-entry');
+          const previewCanvas = createFactoryNodePreviewCanvas(resource);
+          if(previewCanvas){
+            row.classList.add('cloud-cluster-node-entry');
+            if(resource === FactoryItem.BLOOD_VIAL){
+              row.classList.add('cloud-cluster-bloodwell-entry');
+            }
             const previewWrapper = document.createElement('div');
-            previewWrapper.className = 'cloud-cluster-bloodwell-preview-wrapper';
-            const previewCanvas = createBloodwellPreviewCanvas();
+            previewWrapper.className = 'cloud-cluster-node-preview-wrapper';
+            if(resource === FactoryItem.BLOOD_VIAL){
+              previewWrapper.classList.add('cloud-cluster-bloodwell-preview-wrapper');
+            }
+            previewWrapper.append(previewCanvas);
+            row.append(previewWrapper);
+          }
+        } else if(obj.kind === FactoryKind.CONSTRUCTOR){
+          const nodeInfo = nodeMap.get(obj.id);
+          const blueprintKey =
+            nodeInfo?.metadata?.blueprintKey
+              ?? obj.blueprintKey
+              ?? obj.metadata?.blueprintKey
+              ?? obj.recipeKey
+              ?? null;
+          const previewCanvas = createFactoryConstructorPreviewCanvas(blueprintKey);
+          if(previewCanvas){
+            row.classList.add('cloud-cluster-constructor-entry');
+            const previewWrapper = document.createElement('div');
+            previewWrapper.className = 'cloud-cluster-constructor-preview-wrapper';
             previewWrapper.append(previewCanvas);
             row.append(previewWrapper);
           }
@@ -663,6 +709,638 @@ export function initInput({ canvas, draw }){
   }
 
   const CLOUD_PREVIEW_SIZE = 128;
+
+  const BASE_NODE_PREVIEW_CONFIG = {
+    baseInner: '#47264b',
+    baseOuter: '#120818',
+    tileLight: '#3e1d3f',
+    tileDark: '#1b0c21',
+    haloInner: 'rgba(255,236,250,0.45)',
+    haloOuter: 'rgba(20,8,24,0)',
+    coreInner: 'rgba(255,231,244,0.95)',
+    coreMid: 'rgba(244,138,190,0.82)',
+    coreOuter: 'rgba(118,44,108,0.62)',
+    highlightColor: 'rgba(255,255,255,0.38)',
+    ringColor: 'rgba(255,221,248,0.5)',
+    ringDashColor: 'rgba(255,221,248,0.25)',
+    satelliteInner: 'rgba(255,235,248,0.85)',
+    satelliteOuter: 'rgba(255,235,248,0)',
+    satelliteCount: 4,
+    satelliteAlpha: 0.85,
+    orbitSpeed: 0.6,
+    orbitWobble: 1.1,
+    orbitTrail: 'rgba(250,206,241,0.28)',
+    sparkleColor: 'rgba(255,255,255,0.2)',
+    sparkleCount: 3,
+    filamentColor: null,
+    filamentSpeed: 1.2,
+    boxShadow: '0 18px 42px rgba(130, 70, 160, 0.42)',
+  };
+
+  function createNodeConfig(overrides = {}){
+    return { ...BASE_NODE_PREVIEW_CONFIG, ...overrides };
+  }
+
+  const NODE_PREVIEW_CONFIG = {
+    default: createNodeConfig(),
+    [FactoryItem.SKIN_PATCH]: createNodeConfig({
+      baseInner: '#4b2a2e',
+      baseOuter: '#1a0d12',
+      tileLight: '#4b2d2c',
+      tileDark: '#231013',
+      haloInner: 'rgba(255,220,206,0.42)',
+      coreInner: 'rgba(255,227,214,0.96)',
+      coreMid: 'rgba(249,171,146,0.78)',
+      coreOuter: 'rgba(176,89,76,0.62)',
+      ringColor: 'rgba(255,210,195,0.55)',
+      ringDashColor: 'rgba(255,190,160,0.25)',
+      satelliteInner: 'rgba(255,208,188,0.88)',
+      orbitTrail: 'rgba(255,190,166,0.28)',
+      highlightColor: 'rgba(255,242,236,0.45)',
+      sparkleColor: 'rgba(255,235,220,0.22)',
+      filamentColor: 'rgba(255,180,150,0.45)',
+      boxShadow: '0 18px 42px rgba(255, 170, 140, 0.34)',
+    }),
+    [FactoryItem.ORGAN_MASS]: createNodeConfig({
+      baseInner: '#45252d',
+      baseOuter: '#17090f',
+      tileLight: '#402129',
+      tileDark: '#1b0b11',
+      haloInner: 'rgba(255,210,196,0.45)',
+      coreInner: 'rgba(255,214,196,0.95)',
+      coreMid: 'rgba(255,148,132,0.78)',
+      coreOuter: 'rgba(188,68,72,0.6)',
+      ringColor: 'rgba(255,210,200,0.6)',
+      ringDashColor: 'rgba(255,170,150,0.28)',
+      satelliteInner: 'rgba(255,178,150,0.88)',
+      orbitTrail: 'rgba(255,162,132,0.3)',
+      highlightColor: 'rgba(255,234,222,0.44)',
+      sparkleColor: 'rgba(255,200,186,0.24)',
+      filamentColor: 'rgba(255,158,130,0.42)',
+      filamentSpeed: 1.35,
+      boxShadow: '0 18px 42px rgba(255, 150, 120, 0.33)',
+    }),
+    [FactoryItem.NERVE_THREAD]: createNodeConfig({
+      baseInner: '#2d2c58',
+      baseOuter: '#0f0f24',
+      tileLight: '#2b2b4a',
+      tileDark: '#141437',
+      haloInner: 'rgba(200,220,255,0.42)',
+      coreInner: 'rgba(220,210,255,0.96)',
+      coreMid: 'rgba(150,134,255,0.72)',
+      coreOuter: 'rgba(88,70,210,0.6)',
+      ringColor: 'rgba(180,170,255,0.58)',
+      ringDashColor: 'rgba(160,150,255,0.3)',
+      satelliteInner: 'rgba(190,178,255,0.9)',
+      orbitTrail: 'rgba(150,140,255,0.35)',
+      highlightColor: 'rgba(240,235,255,0.5)',
+      sparkleColor: 'rgba(190,180,255,0.25)',
+      filamentColor: 'rgba(140,128,255,0.5)',
+      filamentSpeed: 1.5,
+      satelliteCount: 6,
+      boxShadow: '0 20px 46px rgba(140, 120, 255, 0.38)',
+    }),
+    [FactoryItem.BONE_FRAGMENT]: createNodeConfig({
+      baseInner: '#3f3732',
+      baseOuter: '#130f0c',
+      tileLight: '#3c342f',
+      tileDark: '#1b1510',
+      haloInner: 'rgba(245,236,220,0.42)',
+      coreInner: 'rgba(244,236,224,0.95)',
+      coreMid: 'rgba(214,196,174,0.7)',
+      coreOuter: 'rgba(150,132,112,0.58)',
+      ringColor: 'rgba(238,226,210,0.55)',
+      ringDashColor: 'rgba(210,198,180,0.25)',
+      satelliteInner: 'rgba(236,226,210,0.86)',
+      orbitTrail: 'rgba(210,198,176,0.28)',
+      highlightColor: 'rgba(255,248,232,0.45)',
+      sparkleColor: 'rgba(240,232,216,0.22)',
+      filamentColor: 'rgba(214,196,172,0.42)',
+      filamentSpeed: 1.1,
+      boxShadow: '0 18px 42px rgba(210, 198, 175, 0.3)',
+    }),
+    [FactoryItem.GLAND_SEED]: createNodeConfig({
+      baseInner: '#3b321d',
+      baseOuter: '#131006',
+      tileLight: '#3d321a',
+      tileDark: '#1b1407',
+      haloInner: 'rgba(255,236,184,0.44)',
+      coreInner: 'rgba(255,236,192,0.95)',
+      coreMid: 'rgba(240,187,96,0.78)',
+      coreOuter: 'rgba(180,126,46,0.6)',
+      ringColor: 'rgba(255,220,162,0.6)',
+      ringDashColor: 'rgba(255,198,120,0.28)',
+      satelliteInner: 'rgba(255,204,120,0.88)',
+      orbitTrail: 'rgba(240,182,90,0.3)',
+      highlightColor: 'rgba(255,248,220,0.48)',
+      sparkleColor: 'rgba(255,226,160,0.25)',
+      filamentColor: 'rgba(240,182,90,0.45)',
+      filamentSpeed: 1.25,
+      boxShadow: '0 18px 42px rgba(255, 200, 120, 0.34)',
+    }),
+  };
+
+  function createFactoryNodePreviewCanvas(resource){
+    if(resource === FactoryItem.BLOOD_VIAL){
+      return createBloodwellPreviewCanvas();
+    }
+    const config = NODE_PREVIEW_CONFIG[resource] ?? NODE_PREVIEW_CONFIG.default;
+    if(!config) return null;
+    const size = CLOUD_PREVIEW_SIZE;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const canvas = document.createElement('canvas');
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    canvas.className = 'cloud-cluster-node-preview-canvas';
+    canvas.dataset.resource = resource ?? 'default';
+    if(config.boxShadow){
+      canvas.style.boxShadow = config.boxShadow;
+    }
+    const ctx = canvas.getContext('2d');
+    if(!ctx){
+      return canvas;
+    }
+    ctx.scale(dpr, dpr);
+    const renderFrame = (timestamp) => {
+      if(!canvas.isConnected){
+        return;
+      }
+      const phaseSeconds = (timestamp ?? performance.now()) / 1000;
+      drawFactoryNodePreviewFrame(ctx, size, phaseSeconds, config);
+      requestAnimationFrame(renderFrame);
+    };
+    requestAnimationFrame(renderFrame);
+    return canvas;
+  }
+
+  function drawFactoryNodePreviewFrame(ctx, size, phaseSeconds, config){
+    ctx.clearRect(0, 0, size, size);
+    const background = ctx.createRadialGradient(
+      size * 0.5,
+      size * 0.42,
+      size * 0.14,
+      size * 0.5,
+      size * 0.62,
+      size * 0.64
+    );
+    background.addColorStop(0, config.baseInner);
+    background.addColorStop(1, config.baseOuter);
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.save();
+    ctx.translate(size / 2, size / 2);
+
+    const tileSize = size * 0.72;
+    const tileGradient = ctx.createLinearGradient(-tileSize / 2, -tileSize / 2, tileSize / 2, tileSize / 2);
+    tileGradient.addColorStop(0, config.tileLight ?? config.baseInner);
+    tileGradient.addColorStop(1, config.tileDark ?? config.baseOuter);
+    ctx.fillStyle = tileGradient;
+    if(typeof ctx.roundRect === 'function'){
+      ctx.beginPath();
+      ctx.roundRect(-tileSize / 2, -tileSize / 2, tileSize, tileSize, size * 0.16);
+      ctx.fill();
+    } else {
+      ctx.fillRect(-tileSize / 2, -tileSize / 2, tileSize, tileSize);
+    }
+
+    if(config.haloInner && config.haloOuter){
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const haloGradient = ctx.createRadialGradient(0, 0, size * 0.08, 0, 0, size * 0.44);
+      haloGradient.addColorStop(0, config.haloInner);
+      haloGradient.addColorStop(1, config.haloOuter);
+      ctx.fillStyle = haloGradient;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.44, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if(config.filamentColor){
+      ctx.save();
+      ctx.strokeStyle = config.filamentColor;
+      ctx.lineWidth = size * 0.035;
+      ctx.globalAlpha = 0.55;
+      const wave = Math.sin(phaseSeconds * (config.filamentSpeed ?? 1.2)) * size * 0.12;
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.26, -size * 0.1);
+      ctx.quadraticCurveTo(-size * 0.04, -wave, size * 0.24, size * 0.16);
+      ctx.stroke();
+      ctx.lineWidth = size * 0.024;
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.24, size * 0.18);
+      ctx.bezierCurveTo(-size * 0.12, size * 0.05, size * 0.08, -size * 0.1 + wave * 0.4, size * 0.26, -size * 0.22);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const pulse = 1 + 0.05 * Math.sin(phaseSeconds * 1.6);
+    const coreGradient = ctx.createRadialGradient(0, 0, size * 0.05, 0, 0, size * 0.28 * pulse);
+    coreGradient.addColorStop(0, config.coreInner);
+    if(config.coreMid){
+      coreGradient.addColorStop(0.5, config.coreMid);
+    }
+    coreGradient.addColorStop(1, config.coreOuter);
+    ctx.fillStyle = coreGradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.28 * pulse, 0, TAU);
+    ctx.fill();
+
+    if(config.highlightColor){
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = config.highlightColor;
+      ctx.beginPath();
+      ctx.ellipse(-size * 0.08, -size * 0.12, size * 0.12, size * 0.08, -0.35, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if(config.ringColor){
+      ctx.save();
+      ctx.strokeStyle = config.ringColor;
+      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = size * 0.05;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.36, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if(config.ringDashColor){
+      ctx.save();
+      ctx.strokeStyle = config.ringDashColor;
+      ctx.lineWidth = size * 0.03;
+      ctx.setLineDash([size * 0.1, size * 0.08]);
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.42, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const satelliteCount = config.satelliteCount ?? 4;
+    const orbitSpeed = config.orbitSpeed ?? 0.7;
+    const orbitWobble = config.orbitWobble ?? 1.1;
+    for(let i = 0; i < satelliteCount; i += 1){
+      const angle = phaseSeconds * orbitSpeed + i * (TAU / satelliteCount);
+      const orbitRadius = size * (0.34 + 0.04 * Math.sin(phaseSeconds * orbitWobble + i));
+      const px = Math.cos(angle) * orbitRadius;
+      const py = Math.sin(angle) * orbitRadius;
+      const radius = size * (0.045 + 0.008 * Math.sin(phaseSeconds * 1.8 + i));
+      const glow = ctx.createRadialGradient(px, py, radius * 0.2, px, py, radius);
+      glow.addColorStop(0, config.satelliteInner ?? 'rgba(255,255,255,0.85)');
+      glow.addColorStop(1, config.satelliteOuter ?? 'rgba(255,255,255,0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = config.satelliteAlpha ?? 0.85;
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if(config.orbitTrail){
+      ctx.save();
+      ctx.strokeStyle = config.orbitTrail;
+      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = size * 0.02;
+      const offset = phaseSeconds * orbitSpeed;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.38, offset, offset + Math.PI * 1.4);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if(config.sparkleColor){
+      if(!config._sparkles){
+        const count = config.sparkleCount ?? 3;
+        config._sparkles = Array.from({ length: count }, (_, idx) => {
+          const angle = (idx / count) * TAU + 0.4;
+          return {
+            angle,
+            radius: size * (0.18 + idx * 0.05),
+            sizeX: size * 0.012 * (1 + (idx % 2 ? 0.3 : 0)),
+            sizeY: size * 0.028 * (1 + (idx % 2 ? 0.35 : 0.1)),
+          };
+        });
+      }
+      ctx.save();
+      ctx.fillStyle = config.sparkleColor;
+      ctx.globalAlpha = 0.8;
+      const sparklePulse = 1 + 0.15 * Math.sin(phaseSeconds * 2.4);
+      for(const sparkle of config._sparkles){
+        const px = Math.cos(sparkle.angle + phaseSeconds * 0.3) * sparkle.radius;
+        const py = Math.sin(sparkle.angle + phaseSeconds * 0.3) * sparkle.radius;
+        ctx.beginPath();
+        ctx.ellipse(px, py, sparkle.sizeX * sparklePulse, sparkle.sizeY * sparklePulse, sparkle.angle, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  const BASE_CONSTRUCTOR_PREVIEW_CONFIG = {
+    backgroundInner: '#1b2338',
+    backgroundOuter: '#060913',
+    platformTop: '#2b344d',
+    platformBottom: '#12182a',
+    platformEdge: '#090d18',
+    platformHighlight: 'rgba(160,190,255,0.16)',
+    consoleBody: '#86c9f0',
+    consoleShadow: '#1f324c',
+    consolePanel: '#dff5ff',
+    consoleTrim: '#aacff9',
+    accent: '#f5b4ff',
+    beamColor: 'rgba(124,233,255,0.32)',
+    beamGlow: 'rgba(124,233,255,0.7)',
+    productColor: '#ffe9ad',
+    productGlow: 'rgba(255,233,173,0.55)',
+    indicatorColor: '#7cf1ff',
+    indicatorOff: '#2b3e55',
+    auraColor: 'rgba(136,210,255,0.2)',
+    haloColor: 'rgba(134,210,255,0.32)',
+    sparkColor: 'rgba(255,255,255,0.35)',
+  };
+
+  function createConstructorConfig(overrides = {}){
+    return { ...BASE_CONSTRUCTOR_PREVIEW_CONFIG, ...overrides };
+  }
+
+  const CONSTRUCTOR_PREVIEW_CONFIG = {
+    default: createConstructorConfig(),
+    human_shell: createConstructorConfig({
+      accent: '#f5b4ff',
+      productColor: '#ffe9ad',
+      productGlow: 'rgba(255,233,173,0.65)',
+      beamColor: 'rgba(170,226,255,0.35)',
+      beamGlow: 'rgba(160,226,255,0.78)',
+      auraColor: 'rgba(245,180,255,0.18)',
+      haloColor: 'rgba(255,236,200,0.32)',
+    }),
+    caretaker_drone: createConstructorConfig({
+      accent: '#64f2d8',
+      consoleBody: '#8feaf0',
+      consoleTrim: '#59cbd3',
+      productColor: '#9fe3f9',
+      productGlow: 'rgba(159,227,249,0.6)',
+      beamColor: 'rgba(120,255,214,0.32)',
+      beamGlow: 'rgba(140,255,230,0.78)',
+      indicatorColor: '#60f7d4',
+      auraColor: 'rgba(120,255,214,0.2)',
+      haloColor: 'rgba(120,255,214,0.3)',
+    }),
+    emissary_avatar: createConstructorConfig({
+      accent: '#d8a8ff',
+      consoleBody: '#9f91ff',
+      consoleTrim: '#c7b5ff',
+      productColor: '#ffe0f3',
+      productGlow: 'rgba(255,224,243,0.62)',
+      beamColor: 'rgba(235,150,255,0.34)',
+      beamGlow: 'rgba(235,150,255,0.78)',
+      indicatorColor: '#ff9bf0',
+      auraColor: 'rgba(235,155,255,0.2)',
+      haloColor: 'rgba(235,155,255,0.32)',
+      sparkColor: 'rgba(255,220,255,0.42)',
+    }),
+  };
+
+  function createFactoryConstructorPreviewCanvas(blueprintKey){
+    const key = blueprintKey && CONSTRUCTOR_PREVIEW_CONFIG[blueprintKey]
+      ? blueprintKey
+      : 'default';
+    const config = CONSTRUCTOR_PREVIEW_CONFIG[key];
+    const size = CLOUD_PREVIEW_SIZE;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const canvas = document.createElement('canvas');
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    canvas.className = 'cloud-cluster-constructor-preview-canvas';
+    canvas.dataset.blueprint = key;
+    const ctx = canvas.getContext('2d');
+    if(!ctx){
+      return canvas;
+    }
+    ctx.scale(dpr, dpr);
+    const renderFrame = (timestamp) => {
+      if(!canvas.isConnected){
+        return;
+      }
+      const phaseSeconds = (timestamp ?? performance.now()) / 1000;
+      drawConstructorPreviewFrame(ctx, size, phaseSeconds, config);
+      requestAnimationFrame(renderFrame);
+    };
+    requestAnimationFrame(renderFrame);
+    return canvas;
+  }
+
+  function drawConstructorPreviewFrame(ctx, size, phaseSeconds, config){
+    ctx.clearRect(0, 0, size, size);
+    const bg = ctx.createRadialGradient(
+      size * 0.5,
+      size * 0.3,
+      size * 0.2,
+      size * 0.5,
+      size * 0.75,
+      size * 0.65,
+    );
+    bg.addColorStop(0, config.backgroundInner);
+    bg.addColorStop(1, config.backgroundOuter);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.save();
+    ctx.translate(size / 2, size / 2 + size * 0.06);
+
+    const platformWidth = size * 0.78;
+    const platformHeight = size * 0.34;
+    const platformGradient = ctx.createLinearGradient(0, -platformHeight / 2, 0, platformHeight / 2);
+    platformGradient.addColorStop(0, config.platformTop);
+    platformGradient.addColorStop(1, config.platformBottom);
+    ctx.fillStyle = platformGradient;
+    ctx.beginPath();
+    if(typeof ctx.roundRect === 'function'){
+      ctx.roundRect(-platformWidth / 2, -platformHeight / 2, platformWidth, platformHeight, size * 0.08);
+    } else {
+      ctx.rect(-platformWidth / 2, -platformHeight / 2, platformWidth, platformHeight);
+    }
+    ctx.fill();
+
+    ctx.strokeStyle = config.platformEdge;
+    ctx.lineWidth = size * 0.016;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = config.platformHighlight;
+    ctx.beginPath();
+    ctx.ellipse(0, -platformHeight * 0.55, platformWidth * 0.48, platformHeight * 0.32, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    if(config.haloColor){
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const halo = ctx.createRadialGradient(0, 0, size * 0.15, 0, 0, size * 0.46);
+      halo.addColorStop(0, config.haloColor);
+      halo.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.45, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    const consoleWidth = size * 0.42;
+    const consoleHeight = size * 0.32;
+    const consoleGradient = ctx.createLinearGradient(-consoleWidth / 2, -consoleHeight / 2, consoleWidth / 2, consoleHeight / 2);
+    consoleGradient.addColorStop(0, config.consoleShadow);
+    consoleGradient.addColorStop(1, config.consoleBody);
+    ctx.fillStyle = consoleGradient;
+    ctx.beginPath();
+    if(typeof ctx.roundRect === 'function'){
+      ctx.roundRect(-consoleWidth / 2, -consoleHeight * 0.9, consoleWidth, consoleHeight, size * 0.05);
+    } else {
+      ctx.rect(-consoleWidth / 2, -consoleHeight * 0.9, consoleWidth, consoleHeight);
+    }
+    ctx.fill();
+
+    ctx.strokeStyle = config.consoleTrim;
+    ctx.lineWidth = size * 0.015;
+    ctx.stroke();
+
+    const panelHeight = size * 0.16;
+    ctx.fillStyle = config.consolePanel;
+    ctx.beginPath();
+    if(typeof ctx.roundRect === 'function'){
+      ctx.roundRect(-consoleWidth * 0.44, -consoleHeight * 1.05, consoleWidth * 0.88, panelHeight, size * 0.04);
+    } else {
+      ctx.rect(-consoleWidth * 0.44, -consoleHeight * 1.05, consoleWidth * 0.88, panelHeight);
+    }
+    ctx.fill();
+
+    ctx.strokeStyle = config.accent;
+    ctx.lineWidth = size * 0.01;
+    ctx.stroke();
+
+    const scanPhase = (Math.sin(phaseSeconds * 1.6) + 1) * 0.5;
+    const beamY = -consoleHeight * 0.82 + scanPhase * panelHeight * 0.6;
+    ctx.save();
+    ctx.beginPath();
+    if(typeof ctx.roundRect === 'function'){
+      ctx.roundRect(-consoleWidth * 0.42, -consoleHeight * 1.02, consoleWidth * 0.84, panelHeight * 0.92, size * 0.035);
+    } else {
+      ctx.rect(-consoleWidth * 0.42, -consoleHeight * 1.02, consoleWidth * 0.84, panelHeight * 0.92);
+    }
+    ctx.clip();
+    const beamGradient = ctx.createLinearGradient(0, beamY - size * 0.02, 0, beamY + size * 0.02);
+    beamGradient.addColorStop(0, 'rgba(255,255,255,0)');
+    beamGradient.addColorStop(0.5, config.beamGlow);
+    beamGradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = config.beamColor;
+    ctx.globalAlpha = 0.65;
+    ctx.fillRect(-consoleWidth * 0.4, beamY - size * 0.015, consoleWidth * 0.8, size * 0.03);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = beamGradient;
+    ctx.fillRect(-consoleWidth * 0.4, beamY - size * 0.02, consoleWidth * 0.8, size * 0.04);
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = config.accent;
+    ctx.lineWidth = size * 0.008;
+    ctx.beginPath();
+    ctx.moveTo(-consoleWidth * 0.52, -consoleHeight * 0.45);
+    ctx.quadraticCurveTo(-consoleWidth * 0.36, -consoleHeight * 0.15, -consoleWidth * 0.18, -consoleHeight * 0.02);
+    ctx.moveTo(consoleWidth * 0.52, -consoleHeight * 0.45);
+    ctx.quadraticCurveTo(consoleWidth * 0.36, -consoleHeight * 0.15, consoleWidth * 0.18, -consoleHeight * 0.02);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    const aura = ctx.createRadialGradient(0, consoleHeight * 0.35, size * 0.05, 0, consoleHeight * 0.35, size * 0.3);
+    aura.addColorStop(0, config.productGlow);
+    aura.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.ellipse(0, consoleHeight * 0.35, size * 0.32, size * 0.16, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = config.productColor;
+    ctx.beginPath();
+    ctx.ellipse(0, consoleHeight * 0.24, size * 0.18, size * 0.12, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = size * 0.01;
+    ctx.beginPath();
+    ctx.ellipse(0, consoleHeight * 0.24, size * 0.18, size * 0.12, 0, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = config.accent;
+    const sparkPulse = 1 + 0.12 * Math.sin(phaseSeconds * 3.4);
+    const indicatorCount = 4;
+    for(let i = 0; i < indicatorCount; i++){
+      const offset = -consoleWidth * 0.18 + (i / (indicatorCount - 1)) * consoleWidth * 0.36;
+      ctx.globalAlpha = 0.65 + 0.35 * Math.sin(phaseSeconds * 2 + i);
+      ctx.beginPath();
+      ctx.ellipse(offset, consoleHeight * 0.55, size * 0.03 * sparkPulse, size * 0.012 * sparkPulse, 0, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = config.indicatorOff;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.roundRect(-consoleWidth * 0.28, consoleHeight * 0.12, consoleWidth * 0.56, size * 0.04, size * 0.015);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = config.indicatorColor;
+    const indicatorPhase = (phaseSeconds * 1.8) % 1;
+    const indicatorWidth = consoleWidth * 0.56 * 0.4;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.roundRect(
+      -consoleWidth * 0.28,
+      consoleHeight * 0.12,
+      Math.max(indicatorWidth * 0.2, indicatorWidth * indicatorPhase),
+      size * 0.04,
+      size * 0.015
+    );
+    ctx.fill();
+    ctx.restore();
+
+    if(config.sparkColor){
+      ctx.save();
+      ctx.fillStyle = config.sparkColor;
+      ctx.globalCompositeOperation = 'lighter';
+      for(let i = 0; i < 3; i++){
+        const offset = Math.sin(phaseSeconds * 2.6 + i) * size * 0.05;
+        ctx.globalAlpha = 0.4 + 0.4 * Math.sin(phaseSeconds * 3.1 + i * 0.7);
+        ctx.beginPath();
+        ctx.ellipse(offset, -consoleHeight * 0.5 - size * 0.08 * i, size * 0.04, size * 0.015, Math.PI / 2, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
 
   function createBioforgePreviewCanvas({ isOmni = false } = {}){
     const size = CLOUD_PREVIEW_SIZE;
@@ -856,7 +1534,8 @@ export function initInput({ canvas, draw }){
     canvas.height = size * dpr;
     canvas.style.width = `${size}px`;
     canvas.style.height = `${size}px`;
-    canvas.className = 'cloud-cluster-bloodwell-preview-canvas';
+    canvas.className = 'cloud-cluster-node-preview-canvas cloud-cluster-bloodwell-preview-canvas';
+    canvas.dataset.resource = FactoryItem.BLOOD_VIAL;
     const ctx = canvas.getContext('2d');
     if(!ctx){
       return canvas;
@@ -946,6 +1625,7 @@ export function initInput({ canvas, draw }){
   function renderCloudClusterVisualGraph(){
     if(!cloudClusterVisual) return;
     const graph = cloudEditor.getGraph();
+    clearVisualLinkDrag(false);
     cloudClusterVisual.innerHTML = '';
     if(!graph || !graph.nodes.length){
       const empty = document.createElement('div');
@@ -961,6 +1641,27 @@ export function initInput({ canvas, draw }){
     const svg = document.createElementNS(svgNs, 'svg');
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+    const toSvgPoint = (evt) => {
+      const rect = svg.getBoundingClientRect();
+      if(!rect || rect.width === 0 || rect.height === 0){
+        return { x: evt.clientX, y: evt.clientY };
+      }
+      return {
+        x: ((evt.clientX - rect.left) / rect.width) * width,
+        y: ((evt.clientY - rect.top) / rect.height) * height,
+      };
+    };
+
+    const findDropTarget = (evt) => {
+      const element = document.elementFromPoint(evt.clientX, evt.clientY);
+      if(!element) return null;
+      if(element.dataset && element.dataset.node){
+        return element.dataset.node;
+      }
+      const ancestor = element.closest?.('[data-node]');
+      return ancestor ? ancestor.getAttribute('data-node') : null;
+    };
 
     const nodeCount = graph.nodes.length;
     const radius = Math.min(width, height) / 2 - 60;
@@ -979,7 +1680,7 @@ export function initInput({ canvas, draw }){
       const angle = (index / nodeCount) * Math.PI * 2 - Math.PI / 2;
       const x = centerX + radius * Math.cos(angle);
       const y = centerY + radius * Math.sin(angle);
-      positions.set(node.id, { x, y, node });
+      positions.set(node.id, { x, y, node, circle: null, label: null });
     });
 
     for(const link of graph.links){
@@ -995,7 +1696,151 @@ export function initInput({ canvas, draw }){
       svg.appendChild(line);
     }
 
-    for(const { x, y, node } of positions.values()){
+    const dragLine = document.createElementNS(svgNs, 'path');
+    dragLine.setAttribute('class', 'link-drag');
+    dragLine.setAttribute('fill', 'none');
+    dragLine.style.pointerEvents = 'none';
+    dragLine.style.display = 'none';
+    svg.appendChild(dragLine);
+
+    const startVisualLink = (event, entry) => {
+      if(typeof event.button === 'number' && event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      clearVisualLinkDrag();
+      const ports = Array.isArray(entry.node?.ports) ? entry.node.ports : [];
+      const outputs = ports.filter((port) => port.direction === 'output');
+      if(!outputs.length){
+        try {
+          cloudEditor.selectObject(entry.node.id);
+        } catch (error){
+          console.error('Failed to select node', error);
+        }
+        refreshCloudClusterUI();
+        return;
+      }
+      const outputPort = outputs.find((port) => !port.linked) ?? outputs[0];
+      try {
+        cloudEditor.beginLink(entry.node.id, outputPort.id);
+      } catch (error){
+        console.error('Failed to begin link', error);
+        return;
+      }
+
+      const drag = {
+        pointerId: event.pointerId,
+        sourceId: entry.node.id,
+        sourcePortId: outputPort.id,
+        startX: entry.x,
+        startY: entry.y,
+        dragLine,
+        svg,
+        positions,
+        highlightCircle: null,
+        highlightNodeId: null,
+        moved: false,
+      };
+
+      const updateHighlight = (targetId) => {
+        if(targetId === drag.sourceId){
+          targetId = null;
+        }
+        let nextCircle = null;
+        if(targetId){
+          const targetEntry = drag.positions.get(targetId);
+          const inputs = Array.isArray(targetEntry?.node?.ports)
+            ? targetEntry.node.ports.filter((port) => port.direction === 'input')
+            : [];
+          if(inputs.length){
+            nextCircle = targetEntry.circle ?? null;
+          } else {
+            targetId = null;
+          }
+        }
+        if(drag.highlightCircle && drag.highlightCircle !== nextCircle){
+          drag.highlightCircle.classList.remove('link-target');
+        }
+        if(nextCircle && drag.highlightCircle !== nextCircle){
+          nextCircle.classList.add('link-target');
+        }
+        drag.highlightCircle = nextCircle;
+        drag.highlightNodeId = targetId ?? null;
+      };
+
+      const moveHandler = (evt) => {
+        if(!visualLinkDrag || evt.pointerId !== drag.pointerId) return;
+        evt.preventDefault();
+        const point = toSvgPoint(evt);
+        const dx = point.x - drag.startX;
+        const dy = point.y - drag.startY;
+        if(!drag.moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)){
+          drag.moved = true;
+        }
+        drag.dragLine.setAttribute('d', `M ${drag.startX} ${drag.startY} L ${point.x} ${point.y}`);
+        drag.dragLine.style.display = 'block';
+        const hoverId = findDropTarget(evt);
+        updateHighlight(hoverId);
+      };
+
+      const upHandler = (evt) => {
+        if(!visualLinkDrag || evt.pointerId !== drag.pointerId) return;
+        evt.preventDefault();
+        evt.stopPropagation();
+        window.removeEventListener('pointermove', drag.moveHandler);
+        window.removeEventListener('pointerup', drag.upHandler);
+        let completed = false;
+        const dropId = drag.highlightNodeId ?? findDropTarget(evt);
+        if(drag.moved && dropId && dropId !== drag.sourceId){
+          const targetEntry = drag.positions.get(dropId);
+          const inputs = Array.isArray(targetEntry?.node?.ports)
+            ? targetEntry.node.ports.filter((port) => port.direction === 'input')
+            : [];
+          const targetPort = inputs.find((port) => !port.linked) ?? inputs[0];
+          if(targetPort){
+            try {
+              cloudEditor.completeLink(dropId, targetPort.id);
+              completed = true;
+            } catch (error){
+              console.error('Failed to complete link', error);
+            }
+          }
+        }
+        if(completed){
+          clearVisualLinkDrag(false);
+          refreshCloudClusterUI();
+          return;
+        }
+        try {
+          cloudEditor.cancelLink();
+        } catch (error){
+          console.error('Failed to cancel link', error);
+        }
+        const wasMoved = drag.moved;
+        clearVisualLinkDrag(false);
+        if(!wasMoved){
+          try {
+            cloudEditor.selectObject(drag.sourceId);
+          } catch (error){
+            console.error('Failed to select node', error);
+          }
+        }
+        refreshCloudClusterUI();
+      };
+
+      drag.moveHandler = moveHandler;
+      drag.upHandler = upHandler;
+      visualLinkDrag = drag;
+
+      window.addEventListener('pointermove', moveHandler);
+      window.addEventListener('pointerup', upHandler);
+
+      const initialPoint = toSvgPoint(event);
+      drag.dragLine.setAttribute('d', `M ${drag.startX} ${drag.startY} L ${initialPoint.x} ${initialPoint.y}`);
+      drag.dragLine.style.display = 'block';
+    };
+
+    for(const entry of positions.values()){
+      const { x, y, node } = entry;
       const circle = document.createElementNS(svgNs, 'circle');
       circle.setAttribute('cx', x);
       circle.setAttribute('cy', y);
@@ -1018,7 +1863,11 @@ export function initInput({ canvas, draw }){
         }
       })();
       circle.setAttribute('class', `node-circle ${kindClass}${node.selected ? ' selected' : ''}`);
+      circle.style.cursor = 'pointer';
+      circle.style.touchAction = 'none';
+      circle.addEventListener('pointerdown', (event) => startVisualLink(event, entry));
       svg.appendChild(circle);
+      entry.circle = circle;
 
       const label = document.createElementNS(svgNs, 'text');
       label.setAttribute('x', x);
@@ -1026,9 +1875,8 @@ export function initInput({ canvas, draw }){
       label.setAttribute('text-anchor', 'middle');
       label.setAttribute('data-node', node.id);
       label.textContent = node.label ?? node.id;
-      svg.appendChild(label);
-
-      const handleSelect = (event) => {
+      label.addEventListener('pointerdown', (event) => event.stopPropagation());
+      label.addEventListener('click', (event) => {
         event.stopPropagation();
         try {
           cloudEditor.selectObject(node.id);
@@ -1036,10 +1884,9 @@ export function initInput({ canvas, draw }){
           console.error('Failed to select node', error);
         }
         refreshCloudClusterUI();
-      };
-
-      circle.addEventListener('click', handleSelect);
-      label.addEventListener('click', handleSelect);
+      });
+      svg.appendChild(label);
+      entry.label = label;
     }
 
     const legend = document.createElement('div');
@@ -1059,7 +1906,8 @@ export function initInput({ canvas, draw }){
       legend.append(span);
     }
 
-    svg.addEventListener('click', () => {
+    svg.addEventListener('pointerdown', (event) => {
+      clearVisualLinkDrag();
       try {
         cloudEditor.selectObject(null);
       } catch (error){
@@ -1691,31 +2539,30 @@ function toggleScenarioDiagPanel(force){
 
   function renderCloudClusterGlossary(){
     if(!cloudClusterGlossary) return;
-    const recipes = getSmelterRecipes();
+    const smelterRecipes = getSmelterRecipes();
+    const constructorBlueprints = getConstructorBlueprints();
     cloudClusterGlossary.innerHTML = '';
-    if(!recipes.length){
+    if(!smelterRecipes.length && !constructorBlueprints.length){
       const empty = document.createElement('div');
       empty.className = 'cloud-cluster-graph-empty';
-      empty.textContent = 'No smelter recipes available.';
+      empty.textContent = 'No recipes available.';
       cloudClusterGlossary.append(empty);
       return;
     }
-    const heading = document.createElement('h4');
-    heading.textContent = 'Bioforge Recipes';
-    cloudClusterGlossary.append(heading);
-    for(const recipe of recipes){
+
+    const createCard = (entry) => {
       const card = document.createElement('div');
       card.className = 'glossary-item';
       const title = document.createElement('strong');
-      title.textContent = recipe.outputLabel ?? recipe.output;
+      title.textContent = entry.outputLabel ?? entry.output ?? 'Unknown';
       card.append(title);
-      if(recipe.description){
+      if(entry.description){
         const desc = document.createElement('span');
-        desc.textContent = recipe.description;
-        card.append(desc);
+        desc.textContent = entry.description;
+        //card.append(desc);
       }
       const list = document.createElement('ul');
-      for(const input of recipe.inputs ?? []){
+      for(const input of entry.inputs ?? []){
         const li = document.createElement('li');
         li.textContent = `${input.label ?? input.item} ×${input.amount ?? 1}`;
         list.append(li);
@@ -1726,8 +2573,33 @@ function toggleScenarioDiagPanel(force){
         list.append(li);
       }
       card.append(list);
-      cloudClusterGlossary.append(card);
-    }
+      return card;
+    };
+
+    const buildColumn = (title, entries, emptyLabel) => {
+      const column = document.createElement('div');
+      column.className = 'cloud-cluster-glossary-column';
+      const heading = document.createElement('h4');
+      heading.textContent = title;
+      column.append(heading);
+      if(!entries.length){
+        const empty = document.createElement('div');
+        empty.className = 'cloud-cluster-graph-empty';
+        empty.textContent = emptyLabel;
+        column.append(empty);
+        return column;
+      }
+      for(const entry of entries){
+        column.append(createCard(entry));
+      }
+      return column;
+    };
+
+    const columns = document.createElement('div');
+    columns.className = 'cloud-cluster-glossary-columns';
+    columns.append(buildColumn('Bioforge Recipes', smelterRecipes, 'No smelter recipes available.'));
+    columns.append(buildColumn('Constructor Blueprints', constructorBlueprints, 'No constructor blueprints available.'));
+    cloudClusterGlossary.append(columns);
   }
 
   function renderFactoryTelemetry(tileIdx = getInspectedTile()){

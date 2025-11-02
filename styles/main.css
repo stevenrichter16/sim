@@ -125,8 +125,10 @@ h3{margin:4px 0 6px;}
 .cloud-cluster-visual .node-circle.storage{fill:rgba(126,209,170,0.24);stroke:#7ed1aa;}
 .cloud-cluster-visual .node-circle.belt{fill:rgba(123,149,255,0.2);stroke:#7b95ff;}
 .cloud-cluster-visual .node-circle.selected{stroke-width:2.4;stroke:#fff2b3;fill-opacity:0.45;}
+.cloud-cluster-visual .node-circle.link-target{stroke:#ffe07d;stroke-width:2.2;fill-opacity:0.5;}
 .cloud-cluster-visual .link-line{stroke:rgba(107,144,255,0.55);stroke-width:1.4;opacity:0.8;stroke-linecap:round;}
 .cloud-cluster-visual .link-line.highlight{stroke:#ffe07d;opacity:1;stroke-width:1.6;}
+.cloud-cluster-visual .link-drag{stroke:#ffe07d;stroke-width:1.8;stroke-dasharray:6 4;opacity:0.9;pointer-events:none;}
 .cloud-cluster-visual .ring{stroke:rgba(96,124,188,0.22);stroke-width:1.2;fill:none;stroke-dasharray:6 6;}
 .cloud-cluster-legend{position:absolute;bottom:12px;right:12px;background:rgba(10,16,32,0.82);border:1px solid rgba(106,140,215,0.25);border-radius:10px;padding:8px 10px;font-size:10px;color:#d7e0ff;display:flex;gap:10px;backdrop-filter:blur(8px);box-shadow:0 12px 30px rgba(5,9,23,0.55);}
 .cloud-cluster-legend span{display:flex;align-items:center;gap:6px;white-space:nowrap;}
@@ -154,9 +156,27 @@ h3{margin:4px 0 6px;}
 .cloud-cluster-bioforge-entry{gap:6px;}
 .cloud-cluster-bioforge-preview-wrapper{width:100%;display:flex;justify-content:center;align-items:center;padding:4px 0 6px;}
 .cloud-cluster-bioforge-preview-canvas{width:128px;height:128px;border-radius:14px;background:radial-gradient(circle at 50% 0%,rgba(178,134,255,0.35),rgba(23,16,39,0.92));box-shadow:0 18px 36px rgba(88,61,150,0.45);}
+.cloud-cluster-node-entry{gap:6px;}
+.cloud-cluster-node-preview-wrapper{width:100%;display:flex;justify-content:center;align-items:center;padding:4px 0 6px;}
+.cloud-cluster-node-preview-canvas{width:128px;height:128px;border-radius:18px;display:block;background:radial-gradient(circle at 50% 20%,rgba(255,255,255,0.05),rgba(6,8,18,0.95));box-shadow:0 18px 42px rgba(120,68,160,0.38);transition:transform .28s ease,box-shadow .28s ease;}
+.cloud-cluster-node-preview-canvas:hover{transform:translateY(-2px);}
+.cloud-cluster-node-preview-canvas[data-resource="default"]{box-shadow:0 18px 42px rgba(120,68,160,0.38);}
+.cloud-cluster-node-preview-canvas[data-resource="skin_patch"]{box-shadow:0 18px 42px rgba(255,178,142,0.36);}
+.cloud-cluster-node-preview-canvas[data-resource="organ_mass"]{box-shadow:0 18px 42px rgba(255,144,120,0.35);}
+.cloud-cluster-node-preview-canvas[data-resource="nerve_thread"]{box-shadow:0 20px 46px rgba(140,120,255,0.38);}
+.cloud-cluster-node-preview-canvas[data-resource="bone_fragment"]{box-shadow:0 18px 42px rgba(210,198,175,0.32);}
+.cloud-cluster-node-preview-canvas[data-resource="gland_seed"]{box-shadow:0 18px 42px rgba(250,200,120,0.34);}
+.cloud-cluster-node-preview-canvas[data-resource="blood_vial"]{box-shadow:0 18px 42px rgba(120,42,82,0.5);}
 .cloud-cluster-bloodwell-entry{gap:6px;}
 .cloud-cluster-bloodwell-preview-wrapper{width:100%;display:flex;justify-content:center;align-items:center;padding:4px 0 6px;}
 .cloud-cluster-bloodwell-preview-canvas{width:128px;height:128px;border-radius:18px;background:radial-gradient(circle at 50% 12%,rgba(255,120,160,0.38),rgba(18,8,20,0.96));box-shadow:0 18px 42px rgba(120,42,82,0.5);}
+.cloud-cluster-constructor-entry{gap:6px;}
+.cloud-cluster-constructor-preview-wrapper{width:100%;display:flex;justify-content:center;align-items:center;padding:4px 0 8px;}
+.cloud-cluster-constructor-preview-canvas{width:128px;height:128px;border-radius:18px;display:block;background:radial-gradient(circle at 50% 16%,rgba(140,200,255,0.12),rgba(8,12,24,0.95));box-shadow:0 18px 40px rgba(90,130,210,0.36);transition:transform .28s ease,box-shadow .28s ease;}
+.cloud-cluster-constructor-preview-canvas:hover{transform:translateY(-2px);}
+.cloud-cluster-constructor-preview-canvas[data-blueprint="human_shell"]{box-shadow:0 18px 42px rgba(255,230,176,0.38);}
+.cloud-cluster-constructor-preview-canvas[data-blueprint="caretaker_drone"]{box-shadow:0 20px 46px rgba(120,255,214,0.33);}
+.cloud-cluster-constructor-preview-canvas[data-blueprint="emissary_avatar"]{box-shadow:0 20px 46px rgba(235,150,255,0.37);}
 .cloud-cluster-object-header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;align-items:center;width:100%;}
 .cloud-cluster-object-name{font-weight:600;font-size:12px;color:#ffe1ff;}
 .cloud-cluster-object-totals{font-size:11px;color:#9eaad1;display:flex;gap:6px;align-items:center;}
@@ -210,7 +230,9 @@ h3{margin:4px 0 6px;}
 .metrics-summary{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
 .metrics-summary[hidden]{display:none !important;}
 .controls-buttons{display:flex;flex-direction:column;gap:12px;}
-.cloud-cluster-glossary{flex:1 1 260px;min-width:240px;max-width:320px;background:#10182a;border:1px solid rgba(116,136,209,0.35);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 18px 40px rgba(4,10,26,0.4);color:#e4ecff;font-size:12px;line-height:1.4;}
+.cloud-cluster-glossary{flex:1 1 260px;min-width:240px;max-width:340px;background:#10182a;border:1px solid rgba(116,136,209,0.35);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 18px 40px rgba(4,10,26,0.4);color:#e4ecff;font-size:12px;line-height:1.4;}
+.cloud-cluster-glossary-columns{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;justify-content:space-between;}
+.cloud-cluster-glossary-column{flex:1 1 160px;display:flex;flex-direction:column;gap:12px;min-width:160px;}
 .cloud-cluster-glossary h4{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:0.2em;font-weight:600;color:#9fb5ff;}
 .cloud-cluster-glossary .glossary-item{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;background:rgba(18,30,58,0.72);border:1px solid rgba(116,136,209,0.25);backdrop-filter:blur(6px);}
 .cloud-cluster-glossary .glossary-item strong{font-size:12px;letter-spacing:0.05em;color:#ffd98a;}
