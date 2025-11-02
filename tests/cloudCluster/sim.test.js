@@ -332,6 +332,153 @@ describe('cloud cluster simulation services', () => {
     expect(totalsByItem[FactoryItem.ORGAN_MASS]?.consumed ?? 0).toBeCloseTo(0, 6);
   });
 
+  it('prefers demanded omni bioforge recipes when multiple inputs are satisfied', () => {
+    const cluster = createCluster({
+      id: 'omni-demand',
+      objects: [
+        {
+          id: 'skin-node',
+          kind: FactoryKind.NODE,
+          metadata: { outputItems: [FactoryItem.SKIN_PATCH], outputRate: 0.2 },
+          ports: [
+            {
+              id: 'out-skin',
+              direction: 'output',
+              label: 'Skin Output',
+              itemKeys: [FactoryItem.SKIN_PATCH],
+            },
+          ],
+        },
+        {
+          id: 'blood-node',
+          kind: FactoryKind.NODE,
+          metadata: { outputItems: [FactoryItem.BLOOD_VIAL], outputRate: 0.2 },
+          ports: [
+            {
+              id: 'out-blood',
+              direction: 'output',
+              label: 'Blood Output',
+              itemKeys: [FactoryItem.BLOOD_VIAL],
+            },
+          ],
+        },
+        {
+          id: 'organ-node',
+          kind: FactoryKind.NODE,
+          metadata: { outputItems: [FactoryItem.ORGAN_MASS], outputRate: 0.2 },
+          ports: [
+            {
+              id: 'out-organ',
+              direction: 'output',
+              label: 'Organ Output',
+              itemKeys: [FactoryItem.ORGAN_MASS],
+            },
+          ],
+        },
+        {
+          id: 'gland-node',
+          kind: FactoryKind.NODE,
+          metadata: { outputItems: [FactoryItem.GLAND_SEED], outputRate: 0.2 },
+          ports: [
+            {
+              id: 'out-gland',
+              direction: 'output',
+              label: 'Gland Output',
+              itemKeys: [FactoryItem.GLAND_SEED],
+            },
+          ],
+        },
+        {
+          id: 'omni',
+          kind: FactoryKind.SMELTER,
+          metadata: {
+            recipeKey: 'body_system',
+            recipeKeys: ['body_system', 'glandular_network'],
+          },
+          ports: [
+            {
+              id: 'in-a',
+              direction: 'input',
+              label: 'Intake A',
+              itemKeys: [
+                FactoryItem.SKIN_PATCH,
+                FactoryItem.BLOOD_VIAL,
+                FactoryItem.ORGAN_MASS,
+                FactoryItem.GLAND_SEED,
+              ],
+            },
+            {
+              id: 'in-b',
+              direction: 'input',
+              label: 'Intake B',
+              itemKeys: [
+                FactoryItem.SKIN_PATCH,
+                FactoryItem.BLOOD_VIAL,
+                FactoryItem.ORGAN_MASS,
+                FactoryItem.GLAND_SEED,
+              ],
+            },
+            {
+              id: 'out',
+              direction: 'output',
+              label: 'Output',
+              itemKeys: [FactoryItem.BODY_SYSTEM, FactoryItem.GLANDULAR_NETWORK],
+            },
+          ],
+        },
+        {
+          id: 'storage-demand',
+          kind: FactoryKind.STORAGE,
+          ports: [
+            {
+              id: 'in-storage',
+              direction: 'input',
+              label: 'Demand Intake',
+              itemKeys: [FactoryItem.GLANDULAR_NETWORK],
+            },
+          ],
+        },
+      ],
+      links: [
+        {
+          id: 'skin-link',
+          source: { objectId: 'skin-node', portId: 'out-skin' },
+          target: { objectId: 'omni', portId: 'in-a' },
+        },
+        {
+          id: 'blood-link',
+          source: { objectId: 'blood-node', portId: 'out-blood' },
+          target: { objectId: 'omni', portId: 'in-a' },
+        },
+        {
+          id: 'organ-link',
+          source: { objectId: 'organ-node', portId: 'out-organ' },
+          target: { objectId: 'omni', portId: 'in-b' },
+        },
+        {
+          id: 'gland-link',
+          source: { objectId: 'gland-node', portId: 'out-gland' },
+          target: { objectId: 'omni', portId: 'in-b' },
+        },
+        {
+          id: 'omni-output',
+          source: { objectId: 'omni', portId: 'out' },
+          target: { objectId: 'storage-demand', portId: 'in-storage' },
+        },
+      ],
+    });
+    const throughput = calculateClusterThroughput(cluster);
+    const omni = throughput.objects.find((entry) => entry.id === 'omni');
+    const glandularRecipe = getBioforgeRecipeDefinition('glandular_network');
+    expect(omni.outputs).toHaveLength(1);
+    expect(omni.outputs[0].item).toBe(FactoryItem.GLANDULAR_NETWORK);
+    expect(omni.outputs[0].rate).toBeCloseTo(glandularRecipe.speed, 6);
+    expect(omni.inputs.map((entry) => entry.item)).toEqual(
+      expect.arrayContaining([FactoryItem.GLAND_SEED, FactoryItem.ORGAN_MASS]),
+    );
+    expect(omni.inputs.every((entry) => entry.rate > 0)).toBe(true);
+  });
+
   it('preserves historical production when adding new nodes', () => {
     resetCloudClusterState();
     const registry = createCloudClusterRegistry();

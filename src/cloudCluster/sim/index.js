@@ -8,7 +8,7 @@ import {
   getMinerExtractionRate,
   getBeltBaseSpeed,
 } from '../../factory.js';
-import { CloudFactoryPortDirection } from '../domain/factoryObject.js';
+import { CloudFactoryPortDirection, getPortById } from '../domain/factoryObject.js';
 import { isCluster } from '../domain/cluster.js';
 import { ensureRegistry } from '../registry.js';
 import { getCloudClusterState } from '../state/index.js';
@@ -31,6 +31,19 @@ function buildInboundLinkMap(cluster){
     inbound.get(targetId).push(link);
   }
   return inbound;
+}
+
+function buildOutboundLinkMap(cluster){
+  const outbound = new Map();
+  for(const link of cluster.links.values()){
+    const sourceId = link?.source?.objectId;
+    if(!sourceId) continue;
+    if(!outbound.has(sourceId)){
+      outbound.set(sourceId, []);
+    }
+    outbound.get(sourceId).push(link);
+  }
+  return outbound;
 }
 
 function incrementMapValue(map, key, amount){
@@ -362,8 +375,27 @@ function collectPotentialOutputItems(object){
       return new Set([resolveMinerOutputItem(object)]);
     }
     case FactoryKind.SMELTER: {
+      const meta = object?.metadata ?? {};
+      const outputs = new Set();
+      if(Array.isArray(meta.recipeKeys)){
+        for(const key of meta.recipeKeys){
+          const recipe = getBioforgeRecipeDefinition(key);
+          if(recipe?.output){
+            outputs.add(recipe.output);
+          }
+        }
+      }
       const recipe = resolveSmelterRecipe(object);
-      return recipe?.output ? new Set([recipe.output]) : new Set();
+      if(recipe?.output){
+        outputs.add(recipe.output);
+      }
+      if(!outputs.size){
+        const fallback = getDefaultBioforgeRecipeDefinition();
+        if(fallback?.output){
+          outputs.add(fallback.output);
+        }
+      }
+      return outputs;
     }
     case FactoryKind.CONSTRUCTOR: {
       const recipe = resolveConstructorRecipe(object);
@@ -384,6 +416,35 @@ function isItemSupplied(cluster, inboundMap, outputItemsMap, objectId, item){
     if(!sourceId) continue;
     const sourceItems = outputItemsMap.get(sourceId);
     if(sourceItems?.has(item)){
+      return true;
+    }
+  }
+  return false;
+}
+
+function doesLinkTargetAcceptItem(cluster, link, item){
+  if(!item) return false;
+  const targetId = link?.target?.objectId;
+  const portId = link?.target?.portId;
+  if(!targetId || !portId) return false;
+  const target = cluster.objects.get(targetId);
+  if(!target) return false;
+  const port = getPortById(target, portId);
+  if(!port) return false;
+  if(!Array.isArray(port.itemKeys) || port.itemKeys.length === 0){
+    return true;
+  }
+  return port.itemKeys.includes(item);
+}
+
+function hasDemandForOutput(cluster, outboundMap, objectId, item){
+  if(!item) return false;
+  const outbound = outboundMap.get(objectId);
+  if(!outbound || !outbound.length){
+    return false;
+  }
+  for(const link of outbound){
+    if(doesLinkTargetAcceptItem(cluster, link, item)){
       return true;
     }
   }
@@ -509,6 +570,7 @@ export function calculateClusterThroughput(cluster){
     throw new TypeError('Expected a cloud cluster instance to calculate throughput.');
   }
   const inboundMap = buildInboundLinkMap(cluster);
+  const outboundMap = buildOutboundLinkMap(cluster);
   const outputItemsMap = new Map();
   for(const [objectId, object] of cluster.objects.entries()){
     outputItemsMap.set(objectId, collectPotentialOutputItems(object));
@@ -539,18 +601,52 @@ export function calculateClusterThroughput(cluster){
         break;
       }
       case FactoryKind.SMELTER: {
-        const recipe = resolveSmelterRecipe(object);
-        const outputItem = recipe?.output ?? null;
-        const speed = recipe?.speed ?? 0;
-        const requirements = recipe?.inputs ?? [];
-        const canRun = outputItem && speed > 0 && requirements.every((requirement) => {
+        const recipeCandidates = (() => {
+          const meta = object?.metadata ?? {};
+          if(Array.isArray(meta.recipeKeys) && meta.recipeKeys.length){
+            return meta.recipeKeys;
+          }
+          const resolved = resolveSmelterRecipe(object);
+          return resolved ? [resolved.key] : [];
+        })();
+        let demandMatch = null;
+        let supplyMatch = null;
+        let fallbackMatch = null;
+        for(const key of recipeCandidates){
+          const candidate = getBioforgeRecipeDefinition(key);
+          if(!candidate || !candidate.output) continue;
+          const inputs = Array.isArray(candidate.inputs) ? candidate.inputs : [];
+          const satisfied = inputs.every((requirement) => {
+            const item = requirement?.item;
+            if(!item) return false;
+            return isItemSupplied(cluster, inboundMap, outputItemsMap, object.id, item);
+          });
+          const demanded = hasDemandForOutput(cluster, outboundMap, object.id, candidate.output);
+          if(satisfied && demanded){
+            demandMatch = candidate;
+            break;
+          }
+          if(satisfied && !supplyMatch){
+            supplyMatch = candidate;
+          }
+          if(!fallbackMatch){
+            fallbackMatch = candidate;
+          }
+        }
+        const recipe = demandMatch ?? supplyMatch ?? fallbackMatch;
+        if(!recipe) break;
+        const requirements = Array.isArray(recipe.inputs) ? recipe.inputs : [];
+        const inputsSatisfied = requirements.every((requirement) => {
           const item = requirement?.item;
           if(!item) return false;
           return isItemSupplied(cluster, inboundMap, outputItemsMap, object.id, item);
         });
-        if(!canRun){
+        if(!inputsSatisfied){
           break;
         }
+        const outputItem = recipe.output ?? null;
+        const speed = recipe?.speed ?? 0;
+        if(!outputItem || speed <= RATE_EPSILON) break;
         pushRate(outputs, outputItem, speed);
         if(outputItem){
           updateTotals(totals, outputItem, speed, 0);
