@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Minimal Focus Layout</title>
+  <style>
+    body{margin:0;background:#fafcff;font-family:"Helvetica Neue",Arial,sans-serif;color:#1a202c;}
+    header{padding:20px 40px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e2e8f0;background:#fff;}
+    header h1{margin:0;font-size:22px;letter-spacing:0.08em;text-transform:uppercase;color:#2d3748;}
+    header input{padding:8px 14px;border:1px solid #cbd5e0;border-radius:999px;min-width:240px;}
+    main{display:grid;grid-template-columns:340px 1fr;height:calc(100vh - 80px);}
+    aside{border-right:1px solid #e2e8f0;background:#f7fafc;overflow:auto;}
+    aside h2{margin:24px 28px 12px;font-size:14px;color:#4a5568;text-transform:uppercase;letter-spacing:0.08em;}
+    .list{margin:0;padding:0 28px 28px;list-style:none;}
+    .list li{background:#fff;border:1px solid #d4dee7;border-radius:14px;margin-bottom:12px;padding:14px 16px;cursor:pointer;transition:box-shadow 0.2s;}
+    .list li:hover{box-shadow:0 12px 24px rgba(15, 23, 42, 0.1);}
+    .list li.active{border-color:#4c63ff;box-shadow:0 16px 28px rgba(76, 99, 255, 0.18);}
+    .list small{display:block;margin-top:6px;color:#718096;}
+    section{display:grid;grid-template-rows:60% 40%;background:#fdfefe;}
+    .top{padding:34px 40px;display:grid;grid-template-columns:2fr 1fr;gap:32px;}
+    .canvas{border:2px dashed #c3dafe;border-radius:16px;background:#f0f6ff;display:flex;align-items:center;justify-content:center;font-size:18px;color:#4c63ff;text-transform:uppercase;letter-spacing:0.1em;}
+    .summary{display:flex;flex-direction:column;gap:18px;}
+    .summary article{background:#fff;border-radius:16px;border:1px solid #d4dee7;padding:18px 22px;}
+    .summary article h3{margin:0 0 12px;font-size:15px;color:#334155;text-transform:uppercase;letter-spacing:0.06em;}
+    .summary article .row{display:flex;justify-content:space-between;padding:6px 0;color:#4a5568;}
+    .bottom{border-top:1px solid #e2e8f0;padding:24px 40px;background:#fff;display:grid;grid-template-columns:repeat(3,1fr);gap:24px;}
+    .panel{border-radius:14px;border:1px solid #e2e8f0;background:#f8faff;padding:18px 22px;}
+    .panel h3{margin:0 0 8px;font-size:14px;color:#4a5568;text-transform:uppercase;letter-spacing:0.06em;}
+    .panel p{margin:6px 0;font-size:13px;color:#4a5568;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Minimal Cloud Cluster</h1>
+    <input type="search" placeholder="Search nodes, recipes, intake flows…">
+  </header>
+  <main>
+    <aside>
+      <h2>Clusters</h2>
+      <ul class="list">
+        <li class="active">
+          Omni Constructor Loop
+          <small>Updated 08:43 · 18 nodes</small>
+        </li>
+        <li>
+          Bioforge Chain
+          <small>Updated 07:58 · 12 nodes</small>
+        </li>
+        <li>
+          Diagnostics Sandbox
+          <small>Draft · 6 nodes</small>
+        </li>
+      </ul>
+      <h2>Quick Metrics</h2>
+      <ul class="list">
+        <li>
+          Throughput 82%
+          <small>Goal 90%</small>
+        </li>
+        <li>
+          Idle Workers 2
+          <small>Factory state align</small>
+        </li>
+      </ul>
+    </aside>
+    <section>
+      <div class="top">
+        <div class="canvas">Flow Layout Canvas</div>
+        <div class="summary">
+          <article>
+            <h3>Constructor Snapshot</h3>
+            <div class="row"><span>Blueprint</span><strong>Caretaker Drone</strong></div>
+            <div class="row"><span>Intake Match</span><strong>100%</strong></div>
+            <div class="row"><span>Cycle Time</span><strong>45 seconds</strong></div>
+          </article>
+          <article>
+            <h3>Live Materials</h3>
+            <div class="row"><span>Neural Weave</span><strong>0.07 /s</strong></div>
+            <div class="row"><span>Skeletal Frame</span><strong>0.07 /s</strong></div>
+            <div class="row"><span>Caretaker Drone Output</span><strong>0.07 /s</strong></div>
+          </article>
+        </div>
+      </div>
+      <div class="bottom">
+        <div class="panel">
+          <h3>Automation</h3>
+          <p>Auto-switch blueprint when intake pattern changes.</p>
+          <p>Fallback to body_system only when caretaker flow stops for 20s.</p>
+        </div>
+        <div class="panel">
+          <h3>Alerts</h3>
+          <p>No active alerts.</p>
+          <p>Last event: drone delivery queue clear (08:41).</p>
+        </div>
+        <div class="panel">
+          <h3>Notes</h3>
+          <p>Design goal: frictionless single-pane editing with immediate telemetry surfaces.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

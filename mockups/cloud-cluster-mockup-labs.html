@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Labs Prototype Workspace</title>
+  <style>
+    body{margin:0;font-family:"Fira Sans",Arial,sans-serif;background:#111313;color:#f5f5f5;}
+    header{display:flex;justify-content:space-between;align-items:center;background:#000;padding:16px 28px;border-bottom:1px solid #2a2a2a;}
+    header h1{margin:0;font-size:18px;letter-spacing:0.16em;text-transform:uppercase;color:#8fffd6;}
+    header .lab-tag{background:#1a1f1d;color:#8fffd6;border:1px solid #2f3b36;padding:6px 12px;border-radius:999px;font-size:11px;text-transform:uppercase;}
+    main{display:grid;grid-template-columns:280px 1fr 320px;height:calc(100vh - 64px);}
+    nav{background:#151515;border-right:1px solid #2a2a2a;padding:22px 18px;overflow-y:auto;}
+    nav h2{font-size:13px;color:#a0a0a0;letter-spacing:0.08em;text-transform:uppercase;margin:12px 0;}
+    nav button{width:100%;margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid #2a2a2a;background:#191919;color:#f6f6f6;font-size:13px;text-align:left;cursor:pointer;}
+    nav button.active{border-color:#8fffd6;background:#0f201b;}
+    .canvas{background:#0d0d0d;display:flex;flex-direction:column;}
+    .canvas-controls{display:flex;gap:12px;padding:18px;align-items:center;border-bottom:1px solid #1f1f1f;}
+    .canvas-controls button{background:#131313;border:1px solid #2e2e2e;color:#c6c6c6;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;}
+    .canvas-stage{flex:1;margin:18px;border:1px dashed #2e2e2e;border-radius:12px;background:#050505;display:grid;grid-template-columns:3fr 2fr;gap:18px;padding:18px;}
+    .mock-graph{background:#121212;border-radius:10px;border:1px solid #262626;position:relative;}
+    .mock-graph::after{content:"Graph Mock";color:#353535;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;letter-spacing:0.4em;text-transform:uppercase;}
+    .mock-timeline{background:#101010;border-radius:10px;border:1px solid #262626;padding:16px;display:flex;flex-direction:column;gap:12px;}
+    .mock-timeline h3{margin:0;font-size:12px;color:#7c7c7c;text-transform:uppercase;letter-spacing:0.2em;}
+    .mock-timeline .item{background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;font-size:12px;color:#d5d5d5;}
+    aside{background:#151515;border-left:1px solid #2a2a2a;display:flex;flex-direction:column;gap:18px;padding:22px 20px;overflow:auto;}
+    .widget{background:#101211;border-radius:12px;border:1px solid #2e2e2e;padding:16px;}
+    .widget h3{margin:0 0 12px;font-size:12px;color:#9b9b9b;text-transform:uppercase;letter-spacing:0.18em;}
+    .widget .field{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid #1f1f1f;color:#bfbfbf;}
+    .widget .field:last-child{border-bottom:0;}
+    footer{padding:12px 28px;background:#0b0b0b;border-top:1px solid #1f1f1f;font-size:11px;color:#666;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cluster Labs Prototype</h1>
+    <span class="lab-tag">Experimental build</span>
+  </header>
+  <main>
+    <nav>
+      <h2>Concepts</h2>
+      <button class="active">Caretaker Drone Mesh</button>
+      <button>Emissary Relay Hub</button>
+      <button>Hazard Containment Ladder</button>
+      <h2>Tools</h2>
+      <button>Auto-layout</button>
+      <button>Recipe audit</button>
+      <button>Heat overlay</button>
+      <button>Worker routing</button>
+    </nav>
+    <section class="canvas">
+      <div class="canvas-controls">
+        <button>Record Session</button>
+        <button>Toggle Auto Blueprint</button>
+        <button>Anchor Constructor</button>
+      </div>
+      <div class="canvas-stage">
+        <div class="mock-graph"></div>
+        <div class="mock-timeline">
+          <h3>Prototype Events</h3>
+          <div class="item">09:12 — Linked Omni Bioforge NW-1 to Constructor A</div>
+          <div class="item">09:14 — Linked Skeletal Frame forge to Constructor A</div>
+          <div class="item">09:15 — Blueprint auto-switched to caretaker_drone</div>
+        </div>
+      </div>
+    </section>
+    <aside>
+      <div class="widget">
+        <h3>Intake Monitors</h3>
+        <div class="field"><span>Neural Weave</span><strong>0.07</strong></div>
+        <div class="field"><span>Skeletal Frame</span><strong>0.07</strong></div>
+        <div class="field"><span>Body System</span><strong>0.00</strong></div>
+      </div>
+      <div class="widget">
+        <h3>Blueprint Debug</h3>
+        <div class="field"><span>Active</span><strong>Caretaker Drone</strong></div>
+        <div class="field"><span>Confidence</span><strong>1.00</strong></div>
+        <div class="field"><span>Fallback</span><strong>Human Shell</strong></div>
+      </div>
+      <div class="widget">
+        <h3>Output Log</h3>
+        <div class="field"><span>Instant Rate</span><strong>0.07</strong></div>
+        <div class="field"><span>Average</span><strong>0.06</strong></div>
+        <div class="field"><span>Queued</span><strong>2</strong></div>
+      </div>
+    </aside>
+  </main>
+  <footer>Labs prototype — iterate on clarity, highlight active blueprint switching, keep telemetry front and center.</footer>
+</body>
+</html>

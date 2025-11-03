@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Relationship Focus</title>
+  <style>
+    :root{
+      color-scheme: dark;
+      --bg:#050910;
+      --panel:#0d1522;
+      --accent:#64f0ff;
+      --accent-soft:rgba(100,240,255,0.18);
+      --line:rgba(112,164,255,0.28);
+      --text:#eef9ff;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;background:var(--bg);font-family:"Inter","Segoe UI",sans-serif;color:var(--text);}
+    header{padding:26px 42px;display:flex;justify-content:space-between;align-items:center;background:#09111d;border-bottom:1px solid var(--line);box-shadow:0 24px 60px rgba(0,0,0,0.4);}
+    header h1{margin:0;font-size:22px;text-transform:uppercase;letter-spacing:0.18em;color:var(--accent);}
+    header .filters{display:flex;gap:18px;font-size:13px;color:rgba(228,244,255,0.75);}
+    main{display:grid;grid-template-columns:320px 1fr 360px;height:calc(100vh - 82px);}
+    aside,section{padding:28px 30px;overflow:auto;}
+    .panel{background:var(--panel);border-radius:20px;border:1px solid var(--line);padding:22px;margin-bottom:22px;box-shadow:0 16px 40px rgba(4,10,20,0.55);}
+    .panel h2{margin:0 0 18px;font-size:14px;text-transform:uppercase;letter-spacing:0.12em;color:var(--accent);}
+    .cluster-outline .group{margin-bottom:16px;}
+    .cluster-outline .group-title{font-size:12px;text-transform:uppercase;letter-spacing:0.14em;color:rgba(207,235,255,0.7);margin-bottom:8px;}
+    .node-entry{background:rgba(11,22,36,0.9);border:1px solid rgba(110,160,255,0.28);border-radius:14px;padding:12px 14px;margin-bottom:10px;}
+    .node-entry strong{display:block;font-size:14px;margin-bottom:4px;}
+    .node-entry span{display:block;font-size:12px;color:rgba(214,233,255,0.7);}
+
+    .connection-flow{display:grid;grid-template-rows:auto auto 1fr;gap:22px;}
+    .flow-header{display:flex;justify-content:space-between;align-items:center;}
+    .flow-header .badge{padding:8px 12px;border-radius:999px;background:var(--accent-soft);border:1px solid rgba(100,240,255,0.4);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;}
+    .stack{display:flex;flex-direction:column;gap:18px;}
+    .link-card{background:rgba(7,16,29,0.9);border:1px solid rgba(100,150,255,0.3);border-radius:18px;padding:16px 18px;display:grid;grid-template-columns:1.4fr 0.9fr 1.4fr;gap:18px;align-items:center;}
+    .link-card h3{margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(174,226,255,0.9);}
+    .link-card ul{margin:0;padding-left:16px;font-size:12px;color:rgba(214,233,255,0.8);}
+    .arrow{justify-self:center;font-size:24px;color:rgba(159,240,255,0.7);}
+
+    .matrix{background:rgba(7,14,24,0.85);border:1px solid rgba(120,200,255,0.3);border-radius:18px;padding:18px;}
+    .matrix table{width:100%;border-collapse:collapse;font-size:12px;}
+    .matrix th, .matrix td{padding:10px;border-bottom:1px solid rgba(120,200,255,0.12);text-align:left;}
+    .matrix th{text-transform:uppercase;letter-spacing:0.1em;color:rgba(159,226,255,0.9);}
+    .matrix td.tag{text-transform:uppercase;letter-spacing:0.08em;font-size:11px;color:rgba(112,230,255,0.85);}
+
+    .inspector-card{background:rgba(7,15,26,0.92);border:1px solid rgba(140,210,255,0.35);border-radius:18px;padding:18px;margin-bottom:20px;}
+    .inspector-card h3{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(175,233,255,0.85);}
+    .inspector-card .row{display:flex;justify-content:space-between;font-size:12px;margin:6px 0;}
+    .path-diagram{margin-top:10px;padding:14px;border-radius:12px;background:rgba(10,20,36,0.9);border:1px dashed rgba(120,190,255,0.35);font-size:12px;line-height:1.5;}
+    .path-diagram strong{color:var(--accent);}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cluster Relationship Lens</h1>
+    <div class="filters">
+      <span>Cluster: Omni Constructor Mesh</span>
+      <span>Scenario: Caretaker Feed</span>
+      <span>Updated: 09:21</span>
+    </div>
+  </header>
+  <main>
+    <aside>
+      <div class="panel cluster-outline">
+        <h2>Nodes by Role</h2>
+        <div class="group">
+          <div class="group-title">Supply Nodes</div>
+          <div class="node-entry">
+            <strong>Synapse Node · SN2</strong>
+            <span>Outputs: nerve_thread → Omni Bioforge NW-1</span>
+            <span>Connections: 1 output, 0 inputs</span>
+          </div>
+          <div class="node-entry">
+            <strong>Bloodwell Node · B1</strong>
+            <span>Outputs: blood_vial → Omni Bioforge NW-1</span>
+            <span>Connections: 1 output, 0 inputs</span>
+          </div>
+          <div class="node-entry">
+            <strong>Dermal Node · D1</strong>
+            <span>Outputs: skin_patch → Omni Bioforge SF-1</span>
+            <span>Connections: 1 output, 0 inputs</span>
+          </div>
+          <div class="node-entry">
+            <strong>Osteo Node · O4</strong>
+            <span>Outputs: bone_fragment → Omni Bioforge SF-1</span>
+            <span>Connections: 1 output, 0 inputs</span>
+          </div>
+        </div>
+        <div class="group">
+          <div class="group-title">Bioforges</div>
+          <div class="node-entry">
+            <strong>Omni Bioforge NW-1</strong>
+            <span>Inputs: nerve_thread (SN2), blood_vial (B1)</span>
+            <span>Outputs: neural_weave → Constructor C1</span>
+          </div>
+          <div class="node-entry">
+            <strong>Omni Bioforge SF-1</strong>
+            <span>Inputs: bone_fragment (O4), skin_patch (D1)</span>
+            <span>Outputs: skeletal_frame → Constructor C1</span>
+          </div>
+        </div>
+        <div class="group">
+          <div class="group-title">Constructors</div>
+          <div class="node-entry">
+            <strong>Constructor C1</strong>
+            <span>Inputs: neural_weave (Bioforge N), skeletal_frame (Bioforge F)</span>
+            <span>Output: caretaker_drone → Vault V1</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <section>
+      <div class="connection-flow">
+        <div class="flow-header">
+          <h2 style="margin:0;font-size:15px;text-transform:uppercase;letter-spacing:0.12em;color:var(--accent);">Flowboard</h2>
+          <div class="badge">Caretaker drone pipeline</div>
+        </div>
+        <div class="stack">
+          <div class="link-card">
+            <div>
+              <h3>Supply Nodes</h3>
+              <ul>
+                <li>Synapse Node · SN2</li>
+                <li>Bloodwell Node · B1</li>
+                <li>Dermal Node · D1</li>
+                <li>Osteo Node · O4</li>
+              </ul>
+            </div>
+            <div class="arrow">⟶</div>
+            <div>
+              <h3>Bioforge Inputs</h3>
+              <ul>
+                <li>Omni Bioforge NW-1 — receiving nerve_thread, blood_vial</li>
+                <li>Omni Bioforge SF-1 — receiving bone_fragment, skin_patch</li>
+              </ul>
+            </div>
+          </div>
+          <div class="link-card">
+            <div>
+              <h3>Bioforge Outputs</h3>
+              <ul>
+                <li>Omni Bioforge NW-1 → neural_weave → Constructor C1</li>
+                <li>Omni Bioforge SF-1 → skeletal_frame → Constructor C1</li>
+              </ul>
+            </div>
+            <div class="arrow">⟶</div>
+            <div>
+              <h3>Constructor Inputs</h3>
+              <ul>
+                <li>C1 intake A: neural_weave (0.07/s)</li>
+                <li>C1 intake B: skeletal_frame (0.07/s)</li>
+              </ul>
+            </div>
+          </div>
+          <div class="link-card">
+            <div>
+              <h3>Constructor Output</h3>
+              <ul>
+                <li>C1 producing caretaker_drone (0.07/s)</li>
+              </ul>
+            </div>
+            <div class="arrow">⟶</div>
+            <div>
+              <h3>Downstream</h3>
+              <ul>
+                <li>Caretaker Drone → Vault V1</li>
+                <li>Fallback route (inactive) → Human Shell Queue</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="matrix">
+          <table>
+            <thead>
+              <tr>
+                <th>Source Node</th>
+                <th>Material</th>
+                <th>Target Node</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Omni Bioforge NW-1</td>
+                <td class="tag">neural_weave</td>
+                <td>Constructor C1 · Intake A</td>
+                <td>Flow 0.07 /s · matched</td>
+              </tr>
+              <tr>
+                <td>Omni Bioforge SF-1</td>
+                <td class="tag">skeletal_frame</td>
+                <td>Constructor C1 · Intake B</td>
+                <td>Flow 0.07 /s · matched</td>
+              </tr>
+              <tr>
+                <td>Omni Bioforge BS-2</td>
+                <td class="tag">body_system</td>
+                <td>Constructor C2 · Intake A</td>
+                <td>Idle · fallback</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <aside>
+      <div class="inspector-card">
+        <h3>Selected Constructor C1</h3>
+        <div class="row"><span>Active Blueprint</span><strong>caretaker_drone</strong></div>
+        <div class="row"><span>Fallback Blueprint</span><strong>human_shell</strong></div>
+        <div class="row"><span>Confidence</span><strong>100%</strong></div>
+        <div class="row"><span>Output</span><strong>0.07 /s to Vault V1</strong></div>
+        <div class="path-diagram">
+          <strong>Path Trace</strong><br>
+          Synapse Node SN2<br>
+          → Omni Bioforge NW-1 (producing neural_weave)<br>
+          → Constructor C1 Intake A<br>
+          &amp;<br>
+          Osteo Node O4 + Dermal Node D1<br>
+          → Omni Bioforge SF-1 (producing skeletal_frame)<br>
+          → Constructor C1 Intake B<br>
+          ⇒ Output caretaker_drone to Vault V1
+        </div>
+      </div>
+      <div class="inspector-card">
+        <h3>Bioforge Focus</h3>
+        <div class="row"><span>Omni Bioforge NW-1</span><strong>neural_weave</strong></div>
+        <div class="row"><span>Inputs</span><strong>nerve_thread, blood_vial</strong></div>
+        <div class="row"><span>Output linked to</span><strong>C1 Intake A</strong></div>
+      </div>
+      <div class="inspector-card">
+        <h3>Monitoring</h3>
+        <div class="row"><span>Intake Match</span><strong>2 / 2</strong></div>
+        <div class="row"><span>Unlinked Outputs</span><strong>0</strong></div>
+        <div class="row"><span>Alerts</span><strong>None</strong></div>
+      </div>
+    </aside>
+  </main>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Split View Workspace</title>
+  <style>
+    :root{
+      color-scheme: dark;
+      --bg:#02060f;
+      --panel:#0c1424;
+      --accent:#4cd0ff;
+    }
+    body{margin:0;background:var(--bg);font-family:"Inter",Arial,sans-serif;color:#f1f6ff;}
+    header{padding:18px 26px;display:flex;justify-content:space-between;align-items:center;background:#0f1d36;border-bottom:1px solid rgba(76,208,255,0.35);}
+    header h1{margin:0;font-size:20px;letter-spacing:0.08em;text-transform:uppercase;}
+    header .extras{display:flex;gap:12px;}
+    .extras button{background:rgba(76,208,255,0.12);border:1px solid rgba(76,208,255,0.55);color:#dff6ff;padding:6px 12px;border-radius:8px;font-size:12px;text-transform:uppercase;cursor:pointer;}
+    main{display:grid;grid-template-columns:280px 1fr 360px;height:calc(100vh - 66px);}
+    nav{background:#0b1422;border-right:1px solid rgba(255,255,255,0.03);overflow-y:auto;}
+    nav h2{margin:18px 20px;font-size:14px;color:var(--accent);letter-spacing:0.05em;text-transform:uppercase;}
+    nav ul{list-style:none;padding:0 0 22px;margin:0;}
+    nav li{padding:10px 20px;font-size:13px;border-left:3px solid transparent;cursor:pointer;}
+    nav li.active{background:rgba(76,208,255,0.09);border-color:var(--accent);}
+    .canvas{position:relative;background:radial-gradient(circle at 20% 20%,rgba(76,208,255,0.08),rgba(2,6,15,0.9));}
+    .canvas .view-controls{position:absolute;top:24px;left:24px;display:flex;gap:6px;}
+    .view-controls button{background:#0f1b2f;border:1px solid rgba(76,208,255,0.4);color:#d8f1ff;border-radius:8px;font-size:12px;padding:6px 10px;cursor:pointer;}
+    .canvas .grid{position:absolute;top:0;left:0;right:0;bottom:0;margin:32px;border-radius:18px;background:rgba(6,12,22,0.85);border:1px dashed rgba(86,180,255,0.4);}
+    .canvas .grid::after{content:"Graph Pane";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:22px;letter-spacing:0.12em;color:rgba(76,208,255,0.35);}
+    aside{background:var(--panel);border-left:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;}
+    .inspector{padding:22px 26px;flex:1;overflow:auto;}
+    .inspector h2{margin:0 0 18px;font-size:15px;text-transform:uppercase;letter-spacing:0.08em;color:#73e0ff;}
+    .card{background:#050b16;border:1px solid rgba(62,142,255,0.25);border-radius:14px;padding:16px 18px;margin-bottom:16px;}
+    .card h3{margin:0 0 10px;font-size:14px;text-transform:uppercase;letter-spacing:0.05em;color:#9cd8ff;}
+    .field{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px;}
+    .timeline{padding:18px 26px;background:#0b192d;border-top:1px solid rgba(255,255,255,0.04);}
+    .timeline h2{margin:0 0 10px;font-size:14px;color:#6dd8ff;text-transform:uppercase;}
+    .timeline .event{font-size:12px;margin:6px 0;color:#a7c8f0;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Split View Cluster Console</h1>
+    <div class="extras">
+      <button>Switch Theme</button>
+      <button>Save Snapshot</button>
+      <button>Export Schema</button>
+    </div>
+  </header>
+  <main>
+    <nav>
+      <h2>Cluster Sets</h2>
+      <ul>
+        <li class="active">Caretaker Production</li>
+        <li>Emissary Relay</li>
+        <li>Bioforge Benchmarks</li>
+        <li>Sandbox / Drafts</li>
+      </ul>
+      <h2>Painting Tools</h2>
+      <ul>
+        <li>Link Cable</li>
+        <li>Balanced Splitter</li>
+        <li>Priority Gate</li>
+        <li>Throughput Probe</li>
+      </ul>
+    </nav>
+    <section class="canvas">
+      <div class="view-controls">
+        <button>Zoom In</button>
+        <button>Zoom Out</button>
+        <button>Reset View</button>
+        <button>Heatmap</button>
+      </div>
+      <div class="grid"></div>
+    </section>
+    <aside>
+      <div class="inspector">
+        <h2>Constructor · Sector A5</h2>
+        <div class="card">
+          <h3>Blueprint Selection</h3>
+          <div class="field"><span>Active</span><strong>Caretaker Drone</strong></div>
+          <div class="field"><span>Auto Switch</span><strong>On</strong></div>
+          <div class="field"><span>Fallback</span><strong>Human Shell</strong></div>
+        </div>
+        <div class="card">
+          <h3>Live Inputs</h3>
+          <div class="field"><span>Neural Weave</span><strong>0.07/s</strong></div>
+          <div class="field"><span>Skeletal Frame</span><strong>0.07/s</strong></div>
+          <div class="field"><span>Bio Systems</span><strong>0.00/s</strong></div>
+        </div>
+        <div class="card">
+          <h3>Output Channels</h3>
+          <div class="field"><span>Caretaker Drone</span><strong>0.07/s</strong></div>
+          <div class="field"><span>Queue Depth</span><strong>2 units</strong></div>
+          <div class="field"><span>Worker Assist</span><strong>Enabled</strong></div>
+        </div>
+      </div>
+      <div class="timeline">
+        <h2>Recent Activity</h2>
+        <div class="event">08:41 — Blueprint auto-switched to caretaker_drone</div>
+        <div class="event">08:39 — Connected Neural Weave Bioforge</div>
+        <div class="event">08:37 — Constructor throughput normalized</div>
+      </div>
+    </aside>
+  </main>
+</body>
+</html>

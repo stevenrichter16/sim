@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Kanban Ops Board</title>
+  <style>
+    body{margin:0;background:#0a101b;font-family:"Roboto",Arial,sans-serif;color:#f5fbff;}
+    header{padding:24px 32px;background:#152238;display:flex;justify-content:space-between;align-items:center;box-shadow:0 10px 26px rgba(0,0,0,0.45);}
+    header h1{margin:0;font-size:22px;text-transform:uppercase;letter-spacing:0.1em;}
+    header .filters{display:flex;gap:16px;}
+    header select{background:#0b172a;color:#e1eeff;border:1px solid rgba(140,180,255,0.4);border-radius:8px;padding:6px 12px;font-size:13px;}
+    main{display:flex;gap:18px;padding:28px;height:calc(100vh - 104px);box-sizing:border-box;}
+    .lane{flex:1;background:rgba(17,32,58,0.72);border:1px solid rgba(121,156,255,0.25);border-radius:18px;padding:18px;display:flex;flex-direction:column;min-width:220px;}
+    .lane h2{margin:0 0 14px;font-size:15px;text-transform:uppercase;letter-spacing:0.08em;color:#78c8ff;}
+    .card{background:#0f1c31;border-radius:14px;padding:14px 16px;margin-bottom:12px;border:1px solid rgba(102,141,255,0.28);box-shadow:0 12px 22px rgba(6,11,20,0.6);}
+    .card h3{margin:0 0 6px;font-size:14px;}
+    .meta{display:flex;justify-content:space-between;font-size:12px;color:#9db8e6;}
+    .chips{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;}
+    .chip{padding:4px 8px;border-radius:999px;background:rgba(122,200,255,0.18);border:1px solid rgba(122,200,255,0.45);font-size:11px;}
+    .canvas-preview{margin-top:auto;background:rgba(5,12,22,0.85);border-radius:12px;height:180px;border:1px dashed rgba(120,170,255,0.4);position:relative;display:flex;align-items:center;justify-content:center;color:#577faf;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;}
+    .legend{position:absolute;bottom:22px;left:32px;background:rgba(4,9,18,0.88);padding:8px 14px;border-radius:10px;border:1px solid rgba(124,164,255,0.25);font-size:11px;display:flex;gap:14px;}
+    .legend span{display:flex;align-items:center;gap:6px;}
+    .legend i{width:10px;height:10px;border-radius:50%;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cluster Operations Kanban</h1>
+    <div class="filters">
+      <label>Team
+        <select>
+          <option>Automation</option>
+          <option>Diagnostics</option>
+          <option>R&amp;D</option>
+        </select>
+      </label>
+      <label>Scenario
+        <select>
+          <option>Caretaker Supply Lines</option>
+          <option>Emissary Handoff</option>
+          <option>Hazard Drill</option>
+        </select>
+      </label>
+    </div>
+  </header>
+  <main>
+    <section class="lane">
+      <h2>Backlog</h2>
+      <article class="card">
+        <h3>Add Automated Gate Balancer</h3>
+        <div class="meta">
+          <span>Priority Medium</span>
+          <span>Links 0</span>
+        </div>
+        <div class="chips">
+          <span class="chip">Suggested nodes</span>
+          <span class="chip">Auto-wiring</span>
+        </div>
+      </article>
+      <article class="card">
+        <h3>Fire Risk HUD Concept</h3>
+        <div class="meta">
+          <span>Priority Low</span>
+          <span>Telemetry Mock</span>
+        </div>
+        <div class="chips">
+          <span class="chip">Visual</span>
+        </div>
+      </article>
+      <div class="canvas-preview">Prototype Space</div>
+    </section>
+    <section class="lane">
+      <h2>In Progress</h2>
+      <article class="card">
+        <h3>Constructor Blueprint Switcher</h3>
+        <div class="meta">
+          <span>Owner Ava</span>
+          <span>ETA 2h</span>
+        </div>
+        <div class="chips">
+          <span class="chip">Auto-detect</span>
+          <span class="chip">Caretaker drone</span>
+        </div>
+      </article>
+      <article class="card">
+        <h3>Cluster Mini-Map Mock</h3>
+        <div class="meta">
+          <span>Owner Lee</span>
+          <span>ETA 4h</span>
+        </div>
+        <div class="chips">
+          <span class="chip">Overlay</span>
+          <span class="chip">Zoom</span>
+        </div>
+      </article>
+      <div class="canvas-preview">Wireframe Kit</div>
+    </section>
+    <section class="lane">
+      <h2>Review</h2>
+      <article class="card">
+        <h3>Palette Quick Search</h3>
+        <div class="meta">
+          <span>Owner Ren</span>
+          <span>ETA done</span>
+        </div>
+        <div class="chips">
+          <span class="chip">Search</span>
+          <span class="chip">Keyboard</span>
+        </div>
+      </article>
+      <article class="card">
+        <h3>Heatband Telemetry Strip</h3>
+        <div class="meta">
+          <span>Owner Sol</span>
+          <span>ETA done</span>
+        </div>
+        <div class="chips">
+          <span class="chip">Telemetry</span>
+        </div>
+      </article>
+      <div class="canvas-preview">Review Board</div>
+    </section>
+    <section class="lane">
+      <h2>Deployed</h2>
+      <article class="card">
+        <h3>Streamlined Sidebar</h3>
+        <div class="meta">
+          <span>Owner Kim</span>
+          <span>Shipped</span>
+        </div>
+        <div class="chips">
+          <span class="chip">UX</span>
+        </div>
+      </article>
+      <article class="card">
+        <h3>Link Analytics Summary</h3>
+        <div class="meta">
+          <span>Owner Dia</span>
+          <span>Shipped</span>
+        </div>
+        <div class="chips">
+          <span class="chip">Metrics</span>
+        </div>
+      </article>
+      <div class="canvas-preview">Success Metrics</div>
+    </section>
+  </main>
+  <div class="legend">
+    <span><i style="background:#78c8ff;"></i>Status</span>
+    <span><i style="background:#49f2c8;"></i>Automation</span>
+    <span><i style="background:#ffb347;"></i>Alerts</span>
+  </div>
+</body>
+</html>

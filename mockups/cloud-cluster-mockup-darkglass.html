@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Dark Glass Concept</title>
+  <style>
+    body{margin:0;background:linear-gradient(160deg,#05060d 0%,#101927 50%,#05060d 100%);font-family:"Poppins",Arial,sans-serif;color:#f8fbff;}
+    header{padding:32px 48px;display:flex;justify-content:space-between;align-items:center;backdrop-filter:blur(18px);background:rgba(0,10,28,0.55);position:sticky;top:0;z-index:10;border-bottom:1px solid rgba(132,178,255,0.2);}
+    header h1{margin:0;font-size:24px;text-transform:uppercase;letter-spacing:0.3em;color:#8ec9ff;}
+    header .actions{display:flex;gap:18px;}
+    .actions button{background:rgba(78,146,255,0.12);color:#e7f4ff;border:1px solid rgba(118,180,255,0.45);padding:10px 18px;border-radius:999px;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;}
+    main{display:grid;grid-template-columns:360px 1fr 320px;gap:28px;padding:28px 48px 48px;}
+    .glass{background:rgba(9,20,42,0.55);border:1px solid rgba(136,182,255,0.25);border-radius:24px;backdrop-filter:blur(20px);box-shadow:0 30px 60px rgba(0,0,0,0.55);}
+    .panel-title{padding:22px 26px;font-size:13px;text-transform:uppercase;letter-spacing:0.12em;color:#7ecaff;border-bottom:1px solid rgba(128,170,255,0.18);}
+    .clusters{max-height:calc(100vh - 180px);overflow:auto;}
+    .cluster-entry{margin:18px 22px;padding:18px;border-radius:16px;background:rgba(12,26,54,0.85);border:1px solid transparent;transition:border-color 0.2s;}
+    .cluster-entry.active{border-color:rgba(125,214,255,0.8);box-shadow:0 18px 40px rgba(74,140,255,0.25);}
+    .cluster-entry h3{margin:0 0 6px;font-size:18px;}
+    .cluster-entry p{margin:4px 0;color:#9eb8de;font-size:13px;}
+    .builder{padding:30px 32px;display:flex;flex-direction:column;gap:26px;}
+    .builder-controls{display:flex;justify-content:space-between;align-items:center;}
+    .mode-toggle{display:flex;gap:10px;}
+    .mode-toggle button{background:rgba(20,44,84,0.8);border:1px solid rgba(142,199,255,0.3);color:#d9ecff;padding:10px 14px;border-radius:12px;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;}
+    .grid-stage{flex:1;min-height:420px;border-radius:18px;border:1px dashed rgba(150,205,255,0.35);background:radial-gradient(circle at 30% 20%,rgba(120,196,255,0.15),rgba(3,9,22,0.9));position:relative;display:flex;align-items:center;justify-content:center;font-size:18px;letter-spacing:0.2em;color:rgba(127,200,255,0.6);}
+    .palette{display:flex;gap:12px;flex-wrap:wrap;}
+    .palette button{background:rgba(7,22,50,0.7);border:1px solid rgba(155,212,255,0.35);color:#f2f8ff;border-radius:14px;padding:10px 18px;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;}
+    .inspector{padding:24px 26px;display:flex;flex-direction:column;gap:18px;}
+    .inspector section{border-radius:18px;background:rgba(12,28,58,0.78);border:1px solid rgba(115,172,255,0.25);padding:18px 20px;}
+    .inspector h2{margin:0 0 12px;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:#8fcbff;}
+    .inspector .row{display:flex;justify-content:space-between;font-size:13px;margin:6px 0;color:#c3ddff;}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(90,196,255,0.2);border:1px solid rgba(90,196,255,0.45);font-size:11px;margin-right:6px;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dark Glass Cluster</h1>
+    <div class="actions">
+      <button>Command Palette</button>
+      <button>Scenario Switch</button>
+      <button>Share Concept</button>
+    </div>
+  </header>
+  <main>
+    <aside class="glass clusters">
+      <div class="panel-title">Cluster Library</div>
+      <div class="cluster-entry active">
+        <h3>Omni Constructor Mesh</h3>
+        <p>Auto-switching constructors tuned for caretaker drone output.</p>
+        <p><span class="badge">Nodes 21</span><span class="badge">Links 48</span></p>
+      </div>
+      <div class="cluster-entry">
+        <h3>Bioforge Spine</h3>
+        <p>Pipeline delivering neural weave + skeletal frame to mesh.</p>
+        <p><span class="badge">Nodes 15</span><span class="badge">Links 33</span></p>
+      </div>
+      <div class="cluster-entry">
+        <h3>Diagnostics Grid</h3>
+        <p>Minimal layout for thermal load testing.</p>
+        <p><span class="badge">Nodes 7</span><span class="badge">Links 12</span></p>
+      </div>
+    </aside>
+    <section class="glass builder">
+      <div class="builder-controls">
+        <div class="mode-toggle">
+          <button>Graph</button>
+          <button>Map</button>
+          <button>Signals</button>
+        </div>
+        <div class="palette">
+          <button>Dermal Node</button>
+          <button>Omni Bioforge</button>
+          <button>Constructor</button>
+          <button>Vault</button>
+        </div>
+      </div>
+      <div class="grid-stage">Glass Canvas</div>
+    </section>
+    <aside class="glass inspector">
+      <section>
+        <h2>Constructor Intake</h2>
+        <div class="row"><span>Neural Weave</span><strong>0.07 /s</strong></div>
+        <div class="row"><span>Skeletal Frame</span><strong>0.07 /s</strong></div>
+        <div class="row"><span>Body System</span><strong>0.00 /s</strong></div>
+      </section>
+      <section>
+        <h2>Blueprint Status</h2>
+        <div class="row"><span>Active Recipe</span><strong>Caretaker Drone</strong></div>
+        <div class="row"><span>Fallback</span><strong>Human Shell</strong></div>
+        <div class="row"><span>Confidence</span><strong>Matched 100%</strong></div>
+      </section>
+      <section>
+        <h2>Telemetry Pulse</h2>
+        <div class="row"><span>Output Rate</span><strong>0.07 /s</strong></div>
+        <div class="row"><span>Cycle Time</span><strong>45s</strong></div>
+        <div class="row"><span>Queue</span><strong>2 units</strong></div>
+      </section>
+    </aside>
+  </main>
+</body>
+</html>

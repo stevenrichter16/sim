@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Command Dashboard</title>
+  <style>
+    body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:#0e1628;color:#e8f2ff;}
+    header{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;background:#192742;box-shadow:0 6px 18px rgba(0,0,0,0.4);}
+    header h1{margin:0;font-size:21px;letter-spacing:0.04em;text-transform:uppercase;}
+    header nav{display:flex;gap:14px;}
+    header nav button{background:rgba(92,121,217,0.18);color:#fff;border:1px solid rgba(137,168,255,0.45);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer;}
+    .layout{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:auto 1fr;height:calc(100vh - 72px);}
+    .sidebar{background:#121d33;border-right:1px solid rgba(255,255,255,0.06);overflow:auto;}
+    .sidebar h2{padding:20px 24px 10px;margin:0;font-size:15px;color:#8bb8ff;text-transform:uppercase;letter-spacing:0.08em;}
+    .cluster-card{margin:0 18px 14px;padding:14px 16px;border-radius:12px;background:#1a2843;border:1px solid rgba(138,171,255,0.2);cursor:pointer;}
+    .cluster-card.active{background:linear-gradient(140deg,rgba(86,140,255,0.4),rgba(25,48,90,0.9));border-color:rgba(173,204,255,0.6);}
+    .cluster-card h3{margin:0 0 4px;font-size:16px;}
+    .cluster-card .stats{display:flex;gap:12px;font-size:12px;color:#9fb8e6;}
+    .workspace{display:grid;grid-template-rows:260px 1fr;background:#0e1526;}
+    .workspace .scenario{padding:20px 24px;background:#16223a;border-bottom:1px solid rgba(255,255,255,0.05);display:grid;grid-template-columns:1fr 220px;gap:24px;}
+    .scenario h2{margin:0;font-size:18px;}
+    .scenario .glance{display:flex;gap:22px;margin-top:18px;}
+    .scenario .tile{background:rgba(9,14,28,0.9);border-radius:12px;padding:14px 18px;border:1px solid rgba(94,131,235,0.28);width:140px;}
+    .scenario .tile span{display:block;font-size:26px;font-weight:600;color:#82d1ff;}
+    .grid-preview{background:radial-gradient(circle at top,#1b3055,#0b1121);display:flex;align-items:center;justify-content:center;}
+    .grid-preview canvas{background:#060a12;border:1px solid rgba(255,255,255,0.04);width:380px;height:180px;box-shadow:0 16px 40px rgba(0,0,0,0.55);}
+    .workflow{display:grid;grid-template-columns:3fr 2fr;grid-template-rows:1fr;gap:0;}
+    .workflow .graph{background:#07111f;padding:24px;position:relative;}
+    .workflow .graph h3{margin:0 0 12px;font-size:16px;color:#8cb4ff;letter-spacing:0.05em;text-transform:uppercase;}
+    .workflow .graph .canvas{border-radius:14px;border:1px dashed rgba(132,167,255,0.35);height:100%;background:repeating-linear-gradient(135deg,rgba(94,131,188,0.15) 0,rgba(94,131,188,0.15) 20px,rgba(9,15,27,0.6) 20px,rgba(9,15,27,0.6) 40px);}
+    .workflow .graph .node-palette{position:absolute;top:32px;right:32px;display:flex;flex-direction:column;gap:10px;}
+    .node-palette button{background:rgba(45,69,124,0.78);color:#fff;border:0;border-radius:10px;padding:8px 14px;font-size:12px;cursor:pointer;}
+    .inspector{background:#111a2f;border-left:1px solid rgba(255,255,255,0.06);padding:24px;display:flex;flex-direction:column;gap:28px;}
+    .inspector section{background:#0b1324;border-radius:14px;padding:18px 22px;border:1px solid rgba(111,147,230,0.25);}
+    .inspector h3{margin:0 0 10px;font-size:15px;color:#9bcaff;text-transform:uppercase;letter-spacing:0.06em;}
+    .inspector .field{display:flex;justify-content:space-between;font-size:13px;margin:6px 0;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:8px;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cloud Cluster Editor · Command Dashboard</h1>
+    <nav>
+      <button>All Clusters</button>
+      <button>Blueprint Library</button>
+      <button>Telemetry Stream</button>
+      <button>Help &amp; Shortcuts</button>
+    </nav>
+  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <h2>Active Clusters</h2>
+      <div class="cluster-card active">
+        <h3>Omni Refinery</h3>
+        <div class="stats">
+          <span>Nodes 18</span>
+          <span>Links 42</span>
+          <span>Status Stable</span>
+        </div>
+      </div>
+      <div class="cluster-card">
+        <h3>Atlas Bioforge</h3>
+        <div class="stats">
+          <span>Nodes 12</span>
+          <span>Links 29</span>
+          <span>Status Warning</span>
+        </div>
+      </div>
+      <div class="cluster-card">
+        <h3>Fog Echelon</h3>
+        <div class="stats">
+          <span>Nodes 9</span>
+          <span>Links 18</span>
+          <span>Status Draft</span>
+        </div>
+      </div>
+    </aside>
+    <main class="workspace">
+      <section class="scenario">
+        <div>
+          <h2>Cluster Pulse · Omni Refinery</h2>
+          <div class="glance">
+            <div class="tile">
+              Throughput
+              <span>82%</span>
+              <small>Target 92%</small>
+            </div>
+            <div class="tile">
+              Offline Nodes
+              <span>02</span>
+              <small>Last reset 4m</small>
+            </div>
+            <div class="tile">
+              Fire Risk
+              <span>Low</span>
+              <small>Last alert 13m</small>
+            </div>
+          </div>
+        </div>
+        <div class="grid-preview">
+          <canvas></canvas>
+        </div>
+      </section>
+      <section class="workflow">
+        <div class="graph">
+          <h3>Spatial Graph Composer</h3>
+          <div class="canvas"></div>
+          <div class="node-palette">
+            <button>+ Dermal Node</button>
+            <button>+ Omni Bioforge</button>
+            <button>+ Synth Constructor</button>
+            <button>+ Cradle Vault</button>
+          </div>
+        </div>
+        <aside class="inspector">
+          <section>
+            <h3>Node Inspector</h3>
+            <div class="field"><span>Selected</span><strong>Constructor · Sector B</strong></div>
+            <div class="field"><span>Recipe</span><strong>Caretaker Drone</strong></div>
+            <div class="field"><span>Cycle Time</span><strong>45s</strong></div>
+            <div class="field"><span>Queue</span><strong>2 jobs</strong></div>
+          </section>
+          <section>
+            <h3>Live Intakes</h3>
+            <div class="field"><span>Neural Weave</span><strong>0.07/s</strong></div>
+            <div class="field"><span>Skeletal Frame</span><strong>0.07/s</strong></div>
+            <div class="field"><span>Body Systems</span><strong>0.00/s</strong></div>
+          </section>
+          <section>
+            <h3>Automation</h3>
+            <div class="field"><span>Auto-Balance</span><strong>Enabled</strong></div>
+            <div class="field"><span>Scripted Fallback</span><strong>body-system</strong></div>
+            <div class="field"><span>Audit Trail</span><strong>Updated 08:22</strong></div>
+          </section>
+        </aside>
+      </section>
+    </main>
+    <aside class="sidebar">
+      <h2>Quick Actions</h2>
+      <div class="cluster-card">
+        <h3>Blueprint Matrix</h3>
+        <div class="stats"><span>4 active recipes</span></div>
+      </div>
+      <div class="cluster-card">
+        <h3>Supply Routes</h3>
+        <div class="stats"><span>3 inbound belts</span></div>
+      </div>
+      <div class="cluster-card">
+        <h3>Diagnostics</h3>
+        <div class="stats"><span>No blocking issues</span></div>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

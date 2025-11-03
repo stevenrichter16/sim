@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Analytics Console</title>
+  <style>
+    body{margin:0;background:#0d111a;font-family:"IBM Plex Sans",Arial,sans-serif;color:#ecf2ff;}
+    header{padding:24px 36px;display:flex;justify-content:space-between;align-items:center;background:#131b2b;border-bottom:1px solid rgba(94,140,255,0.25);}
+    header h1{margin:0;font-size:20px;text-transform:uppercase;letter-spacing:0.14em;color:#93b3ff;}
+    header .filters{display:flex;gap:16px;}
+    .filters select{background:#0f1626;border:1px solid rgba(94,140,255,0.4);color:#cfe0ff;padding:8px 12px;border-radius:8px;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;}
+    main{display:grid;grid-template-columns:340px 1fr 380px;height:calc(100vh - 84px);}
+    nav{background:#101724;border-right:1px solid rgba(94,140,255,0.2);padding:24px 20px;overflow-y:auto;}
+    nav h2{margin:0 0 14px;font-size:13px;color:#7ca8ff;text-transform:uppercase;letter-spacing:0.1em;}
+    nav .card{background:#0d1420;border:1px solid rgba(94,140,255,0.2);border-radius:14px;padding:14px 16px;margin-bottom:12px;}
+    nav .card strong{display:block;font-size:14px;margin-bottom:6px;}
+    section{background:#0d111a;display:grid;grid-template-rows:260px 1fr;gap:20px;padding:24px 26px;}
+    .chart-area{border-radius:18px;background:#0a121e;border:1px solid rgba(94,140,255,0.22);display:flex;flex-direction:column;padding:20px;}
+    .chart-area h3{margin:0 0 12px;font-size:14px;letter-spacing:0.1em;text-transform:uppercase;color:#88aefc;}
+    .chart-placeholder{flex:1;border-radius:14px;border:1px dashed rgba(120,170,255,0.35);background:repeating-linear-gradient(135deg,rgba(118,164,255,0.08) 0,rgba(118,164,255,0.08) 12px,transparent 12px,transparent 24px);display:flex;align-items:center;justify-content:center;font-size:12px;color:#6c89c8;letter-spacing:0.08em;text-transform:uppercase;}
+    .flow-table{border-radius:18px;background:#0a121e;border:1px solid rgba(94,140,255,0.22);padding:20px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+    .flow-table h3{grid-column:1 / -1;margin:0 0 10px;font-size:14px;letter-spacing:0.1em;text-transform:uppercase;color:#88aefc;}
+    .flow-card{background:#0d1424;border:1px solid rgba(118,164,255,0.25);border-radius:12px;padding:14px;}
+    .flow-card strong{display:block;font-size:16px;margin-bottom:6px;color:#bcd7ff;}
+    .flow-card span{display:block;font-size:12px;color:#8ca2d7;}
+    aside{background:#101724;border-left:1px solid rgba(94,140,255,0.2);padding:24px 20px;overflow-y:auto;}
+    .inspector{background:#0d1420;border:1px solid rgba(94,140,255,0.22);border-radius:16px;padding:16px 18px;margin-bottom:18px;}
+    .inspector h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:0.1em;color:#82a3ff;}
+    .inspector .row{display:flex;justify-content:space-between;font-size:12px;margin:6px 0;}
+    footer{padding:16px 20px;background:#0a101a;border-top:1px solid rgba(94,140,255,0.2);font-size:11px;color:#6f89bf;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Analytics Console</h1>
+    <div class="filters">
+      <label>
+        Cluster
+        <select>
+          <option>Omni Constructor Mesh</option>
+          <option>Bioforge Supply Chain</option>
+          <option>Diagnostics Sandbox</option>
+        </select>
+      </label>
+      <label>
+        Timeframe
+        <select>
+          <option>Last 15 minutes</option>
+          <option>Last hour</option>
+          <option>Last day</option>
+        </select>
+      </label>
+    </div>
+  </header>
+  <main>
+    <nav>
+      <h2>Highlights</h2>
+      <div class="card">
+        <strong>Blueprint Switch Success</strong>
+        <span>Auto-switch triggered 3 times in 15 minutes, all matched caretaker drone.</span>
+      </div>
+      <div class="card">
+        <strong>Throughput</strong>
+        <span>Average 0.068 /s, target 0.07 /s. Variance within tolerance.</span>
+      </div>
+      <h2>Watchlist</h2>
+      <div class="card">
+        <strong>Body System Flow</strong>
+        <span>No flow detected in caretaker line (expected).</span>
+      </div>
+      <div class="card">
+        <strong>Queue Depth</strong>
+        <span>2 units waiting; monitor if above 4.</span>
+      </div>
+    </nav>
+    <section>
+      <div class="chart-area">
+        <h3>Constructor Output Intensity</h3>
+        <div class="chart-placeholder">line chart placeholder</div>
+      </div>
+      <div class="flow-table">
+        <h3>Live Flow Summary</h3>
+        <div class="flow-card">
+          <strong>Neural Weave</strong>
+          <span>0.07 /s intake</span>
+          <span>100% match with blueprint inputs</span>
+        </div>
+        <div class="flow-card">
+          <strong>Skeletal Frame</strong>
+          <span>0.07 /s intake</span>
+          <span>Automation verifying supply</span>
+        </div>
+        <div class="flow-card">
+          <strong>Caretaker Drone</strong>
+          <span>0.07 /s output</span>
+          <span>Projection 24 units / 6m</span>
+        </div>
+      </div>
+    </section>
+    <aside>
+      <div class="inspector">
+        <h3>Constructor Inspector</h3>
+        <div class="row"><span>Recipe</span><strong>caretaker_drone</strong></div>
+        <div class="row"><span>Fallback</span><strong>human_shell</strong></div>
+        <div class="row"><span>Confidence</span><strong>100%</strong></div>
+      </div>
+      <div class="inspector">
+        <h3>Automation Rules</h3>
+        <div class="row"><span>Rule 1</span><strong>Switch when weave &amp; frame present</strong></div>
+        <div class="row"><span>Rule 2</span><strong>Fallback after 30s inactivity</strong></div>
+      </div>
+      <div class="inspector">
+        <h3>Alerts</h3>
+        <div class="row"><span>Active</span><strong>None</strong></div>
+        <div class="row"><span>Last</span><strong>Queue spike (cleared)</strong></div>
+      </div>
+    </aside>
+  </main>
+  <footer>Analytics-first mockup — emphasise data flow and blueprint accuracy alongside automation rules.</footer>
+</body>
+</html>

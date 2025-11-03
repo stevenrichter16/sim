@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Executive Overview</title>
+  <style>
+    body{margin:0;background:#f4f7fb;font-family:"Nunito",Arial,sans-serif;color:#1f2933;}
+    header{padding:28px 44px;background:#ffffff;border-bottom:1px solid #d8e2ef;display:flex;justify-content:space-between;align-items:center;}
+    header h1{margin:0;font-size:24px;text-transform:uppercase;letter-spacing:0.16em;color:#233249;}
+    header .meta{display:flex;gap:18px;font-size:13px;color:#526177;}
+    main{display:grid;grid-template-columns:420px 1fr;height:calc(100vh - 96px);}
+    aside{background:#ffffff;border-right:1px solid #d8e2ef;padding:30px 36px;overflow-y:auto;}
+    aside h2{margin:0 0 18px;font-size:16px;text-transform:uppercase;letter-spacing:0.12em;color:#4f5d73;}
+    .snapshot{display:grid;grid-template-columns:repeat(2,150px);gap:16px;margin-bottom:26px;}
+    .snapshot .tile{background:#f5fbff;border:1px solid #cde4ff;border-radius:14px;padding:14px 18px;font-size:13px;}
+    .snapshot .tile strong{display:block;font-size:26px;color:#2a7cd9;margin-top:6px;}
+    .list{list-style:none;margin:0;padding:0;}
+    .list li{padding:16px 18px;border-radius:14px;border:1px solid #d8e2ef;background:#fdfefe;margin-bottom:14px;}
+    .list li strong{display:block;font-size:15px;margin-bottom:6px;}
+    section{padding:30px 36px;display:grid;grid-template-rows:240px 1fr;gap:24px;}
+    .overview-grid{display:grid;grid-template-columns:2fr 3fr;gap:24px;}
+    .card{background:#ffffff;border-radius:18px;border:1px solid #d8e2ef;padding:24px;}
+    .card h3{margin:0 0 14px;font-size:16px;text-transform:uppercase;letter-spacing:0.1em;color:#375273;}
+    .heatmap{height:180px;border-radius:14px;background:linear-gradient(120deg,#c7e2ff,#eff6ff);display:flex;align-items:center;justify-content:center;color:#4f6b8b;text-transform:uppercase;letter-spacing:0.12em;}
+    .streams{display:flex;flex-direction:column;gap:12px;}
+    .streams .row{display:flex;justify-content:space-between;padding:12px 16px;border-radius:12px;background:#f6f9ff;border:1px solid #d6e4f5;font-size:13px;}
+    .detail{background:#ffffff;border-radius:18px;border:1px solid #d8e2ef;padding:24px;display:grid;grid-template-columns:260px 1fr;gap:24px;}
+    .detail h3{margin:0 0 12px;font-size:15px;text-transform:uppercase;color:#4a607c;}
+    .detail .info{display:flex;flex-direction:column;gap:10px;}
+    .detail .info span{display:flex;justify-content:space-between;border-radius:10px;background:#f6f9ff;padding:10px 14px;font-size:13px;}
+    .detail .chart{border-radius:12px;border:1px dashed #c5d8f4;background:#f9fbff;display:flex;align-items:center;justify-content:center;font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#7990af;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cloud Cluster Overview</h1>
+    <div class="meta">
+      <span>Scenario: Caretaker Production</span>
+      <span>Last sync: 09:18</span>
+      <span>Status: Stable</span>
+    </div>
+  </header>
+  <main>
+    <aside>
+      <h2>Executive Snapshot</h2>
+      <div class="snapshot">
+        <div class="tile">Clusters<strong>04</strong></div>
+        <div class="tile">Constructors<strong>06</strong></div>
+        <div class="tile">Throughput<strong>82%</strong></div>
+        <div class="tile">Alerts<strong>01</strong></div>
+      </div>
+      <h2>Key Clusters</h2>
+      <ul class="list">
+        <li>
+          <strong>Omni Constructor Mesh</strong>
+          Caretaker drones auto-switch correctly; monitor fallback threshold.
+        </li>
+        <li>
+          <strong>Bioforge Supply Chain</strong>
+          Neural weave / skeletal frame supply trending stable.
+        </li>
+        <li>
+          <strong>Diagnostic Sandbox</strong>
+          Use for scenario rehearsal and heat stress testing.
+        </li>
+      </ul>
+    </aside>
+    <section>
+      <div class="overview-grid">
+        <article class="card">
+          <h3>Intake Heatmap</h3>
+          <div class="heatmap">Intake Coverage Mock</div>
+        </article>
+        <article class="card streams">
+          <h3>Caretaker Constructor Intake Streams</h3>
+          <div class="row"><span>Neural Weave</span><strong>0.07 /s</strong></div>
+          <div class="row"><span>Skeletal Frame</span><strong>0.07 /s</strong></div>
+          <div class="row"><span>Body System</span><strong>0.00 /s</strong></div>
+        </article>
+      </div>
+      <article class="detail">
+        <div>
+          <h3>Constructor Blueprint Status</h3>
+          <div class="info">
+            <span><em>Active Blueprint</em><strong>caretaker_drone</strong></span>
+            <span><em>Fallback</em><strong>human_shell</strong></span>
+            <span><em>Confidence</em><strong>100%</strong></span>
+            <span><em>Auto Switch</em><strong>Enabled</strong></span>
+          </div>
+        </div>
+        <div class="chart">Output Trend Mock</div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

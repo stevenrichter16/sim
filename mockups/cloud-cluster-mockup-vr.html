@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Immersive HUD</title>
+  <style>
+    body{margin:0;background:#01020a;font-family:"Orbitron","Segoe UI",sans-serif;color:#dffcff;}
+    header{padding:26px 32px;background:linear-gradient(90deg,#01142c,#031b40);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(82,180,255,0.4);}
+    header h1{margin:0;font-size:20px;letter-spacing:0.3em;text-transform:uppercase;color:#64d2ff;}
+    header .hud-controls{display:flex;gap:12px;}
+    .hud-controls button{background:rgba(15,120,210,0.15);border:1px solid rgba(100,210,255,0.4);color:#dffcff;padding:8px 14px;border-radius:8px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;}
+    main{display:grid;grid-template-columns:320px 1fr 320px;height:calc(100vh - 78px);}
+    nav{background:#020a18;border-right:1px solid rgba(82,180,255,0.2);padding:24px 20px;overflow-y:auto;}
+    nav h2{margin:0 0 16px;font-size:13px;text-transform:uppercase;letter-spacing:0.18em;color:#64d2ff;}
+    nav .module{margin-bottom:20px;padding:12px;border-radius:10px;background:rgba(7,24,45,0.6);border:1px solid rgba(100,210,255,0.2);}
+    nav .module strong{display:block;font-size:14px;margin-bottom:8px;}
+    section{position:relative;background:#040816;display:flex;flex-direction:column;}
+    .vr-grid{flex:1;margin:24px;border-radius:18px;border:1px solid rgba(100,210,255,0.25);background:radial-gradient(circle at center,rgba(16,80,140,0.25),rgba(4,8,22,0.9));position:relative;overflow:hidden;}
+    .vr-grid::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(100,210,255,0.1) 1px,transparent 1px),linear-gradient(90deg,rgba(100,210,255,0.1) 1px,transparent 1px);background-size:60px 60px;opacity:0.35;}
+    .vr-grid::after{content:"Immersive Cluster Space";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:22px;letter-spacing:0.35em;text-transform:uppercase;color:rgba(100,210,255,0.4);}
+    .overlay{position:absolute;top:24px;left:24px;display:flex;gap:12px;}
+    .overlay .badge{background:rgba(7,40,72,0.7);padding:10px 16px;border:1px solid rgba(100,210,255,0.4);border-radius:10px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;}
+    aside{background:#020a18;border-left:1px solid rgba(82,180,255,0.2);padding:22px 24px;display:flex;flex-direction:column;gap:16px;overflow:auto;}
+    .panel{background:rgba(7,24,45,0.7);border:1px solid rgba(100,210,255,0.25);border-radius:12px;padding:16px;}
+    .panel h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:0.18em;color:#8ff0ff;}
+    .panel .row{display:flex;justify-content:space-between;font-size:12px;margin:6px 0;}
+    footer{padding:16px 32px;background:#010915;border-top:1px solid rgba(82,180,255,0.25);display:flex;justify-content:space-between;font-size:11px;color:#7ac8ef;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Immersive Cluster HUD</h1>
+    <div class="hud-controls">
+      <button>Cycle Views</button>
+      <button>Anchor Constructor</button>
+      <button>Record Session</button>
+    </div>
+  </header>
+  <main>
+    <nav>
+      <h2>Scene Layers</h2>
+      <div class="module">
+        <strong>Graph Mesh</strong>
+        <span>Show nodes, links, anchor points.</span>
+      </div>
+      <div class="module">
+        <strong>Intake Streams</strong>
+        <span>Color-coded beam intensity.</span>
+      </div>
+      <div class="module">
+        <strong>Automation Scripts</strong>
+        <span>Blueprint auto-switch monitors.</span>
+      </div>
+      <h2>Palette</h2>
+      <div class="module">
+        <strong>Constructor</strong>
+        <span>Caretaker drone profile.</span>
+      </div>
+      <div class="module">
+        <strong>Neural Bioforge</strong>
+        <span>Outputs neural weave.</span>
+      </div>
+      <div class="module">
+        <strong>Frame Bioforge</strong>
+        <span>Outputs skeletal frame.</span>
+      </div>
+    </nav>
+    <section>
+      <div class="vr-grid">
+        <div class="overlay">
+          <div class="badge">Throughput 0.07 /s</div>
+          <div class="badge">Blueprint Caretaker Drone</div>
+          <div class="badge">Confidence 100%</div>
+        </div>
+      </div>
+    </section>
+    <aside>
+      <div class="panel">
+        <h3>Live Intakes</h3>
+        <div class="row"><span>Neural Weave</span><strong>0.07 /s</strong></div>
+        <div class="row"><span>Skeletal Frame</span><strong>0.07 /s</strong></div>
+        <div class="row"><span>Body Systems</span><strong>0.00 /s</strong></div>
+      </div>
+      <div class="panel">
+        <h3>Blueprint Engine</h3>
+        <div class="row"><span>Active</span><strong>caretaker_drone</strong></div>
+        <div class="row"><span>Fallback</span><strong>human_shell</strong></div>
+        <div class="row"><span>Auto-switch</span><strong>Enabled</strong></div>
+      </div>
+      <div class="panel">
+        <h3>Telemetry Pulse</h3>
+        <div class="row"><span>Output Rate</span><strong>0.07 /s</strong></div>
+        <div class="row"><span>Cycle Time</span><strong>45 s</strong></div>
+        <div class="row"><span>Jobs Queued</span><strong>2</strong></div>
+      </div>
+    </aside>
+  </main>
+  <footer>
+    <span>Immersive design mock — VR/HUD emphasis for readability.</span>
+    <span>Focus: highlight blueprint confidence, reduce clutter.</span>
+  </footer>
+</body>
+</html>

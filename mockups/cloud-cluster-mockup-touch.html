@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Cluster Editor — Touch Tablet Layout</title>
+  <style>
+    html,body{margin:0;height:100%;background:#101820;font-family:"SF Pro Display",Arial,sans-serif;color:#f7fbff;}
+    header{padding:18px 22px;background:#1c2835;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);}
+    header h1{margin:0;font-size:20px;text-transform:uppercase;letter-spacing:0.22em;color:#8fe5ff;}
+    header .touch-actions{display:flex;gap:12px;}
+    .touch-actions button{background:#233343;border:1px solid rgba(143,229,255,0.35);color:#dff6ff;padding:12px 18px;border-radius:12px;font-size:13px;letter-spacing:0.08em;cursor:pointer;}
+    main{display:grid;grid-template-rows:160px 1fr;grid-template-columns:1fr;height:calc(100% - 60px);}
+    .toolbar{background:#15222f;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;gap:18px;align-items:center;padding:16px 22px;overflow-x:auto;}
+    .tool{min-width:140px;background:#0f1823;border:1px solid rgba(143,229,255,0.25);border-radius:14px;padding:12px;text-align:center;font-size:12px;text-transform:uppercase;}
+    .workspace{display:grid;grid-template-columns:320px 1fr 320px;}
+    .side-panel{background:#131f2c;border-right:1px solid rgba(255,255,255,0.05);padding:18px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+    .side-panel h2{margin:12px 0 8px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#73daff;}
+    .side-panel button{padding:14px;border-radius:12px;border:1px solid rgba(115,219,255,0.25);background:#0f1a26;color:#dff6ff;font-size:13px;text-align:left;}
+    .canvas{background:#0b141f;display:flex;flex-direction:column;}
+    .canvas .status{padding:16px 22px;display:flex;gap:12px;}
+    .badge{padding:10px 14px;border-radius:12px;background:#132436;border:1px solid rgba(143,229,255,0.3);font-size:12px;letter-spacing:0.05em;text-transform:uppercase;}
+    .canvas-area{flex:1;margin:18px;border-radius:18px;border:2px dashed rgba(143,229,255,0.3);background:repeating-linear-gradient(135deg,rgba(120,188,255,0.12) 0,rgba(120,188,255,0.12) 40px,rgba(8,14,22,0.9) 40px,rgba(8,14,22,0.9) 80px);position:relative;}
+    .canvas-area::after{content:"Touch Canvas";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:22px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(143,229,255,0.5);}
+    .inspector{background:#131f2c;border-left:1px solid rgba(255,255,255,0.05);padding:18px;display:flex;flex-direction:column;gap:18px;overflow-y:auto;}
+    .info-card{background:#101924;border:1px solid rgba(143,229,255,0.25);border-radius:16px;padding:16px;}
+    .info-card h3{margin:0 0 12px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#77d9ff;}
+    .info-row{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+    .info-row:last-child{border-bottom:0;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Touch Cluster Layout</h1>
+    <div class="touch-actions">
+      <button>Undo</button>
+      <button>Redo</button>
+      <button>Save</button>
+    </div>
+  </header>
+  <main>
+    <div class="toolbar">
+      <div class="tool">Constructor</div>
+      <div class="tool">Bioforge</div>
+      <div class="tool">Node</div>
+      <div class="tool">Link</div>
+      <div class="tool">Auto Blueprints</div>
+      <div class="tool">Telemetry</div>
+      <div class="tool">Heatmap</div>
+      <div class="tool">Reset</div>
+    </div>
+    <div class="workspace">
+      <aside class="side-panel">
+        <h2>Scenarios</h2>
+        <button>Caretaker Drone Supply</button>
+        <button>Body System Primer</button>
+        <button>Emissary Prep</button>
+        <h2>Nodes</h2>
+        <button>Constructor · Sector A5</button>
+        <button>Synapse Node · SN2</button>
+        <button>Frame Forge · N4</button>
+      </aside>
+      <section class="canvas">
+        <div class="status">
+          <span class="badge">Active: caretaker_drone</span>
+          <span class="badge">Fallback: human_shell</span>
+          <span class="badge">Intake match: 100%</span>
+        </div>
+        <div class="canvas-area"></div>
+      </section>
+      <aside class="inspector">
+        <div class="info-card">
+          <h3>Live Intake</h3>
+          <div class="info-row"><span>Neural Weave</span><strong>0.07 /s</strong></div>
+          <div class="info-row"><span>Skeletal Frame</span><strong>0.07 /s</strong></div>
+          <div class="info-row"><span>Body System</span><strong>0.00 /s</strong></div>
+        </div>
+        <div class="info-card">
+          <h3>Blueprint Controls</h3>
+          <div class="info-row"><span>Auto Switch</span><strong>Enabled</strong></div>
+          <div class="info-row"><span>Fallback Delay</span><strong>30 s</strong></div>
+          <div class="info-row"><span>Confidence</span><strong>1.00</strong></div>
+        </div>
+        <div class="info-card">
+          <h3>Output</h3>
+          <div class="info-row"><span>Caretaker Drone</span><strong>0.07 /s</strong></div>
+          <div class="info-row"><span>Queue</span><strong>2 units</strong></div>
+        </div>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

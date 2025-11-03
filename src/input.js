@@ -475,7 +475,7 @@ export function initInput({ canvas, draw }){
         telemetryByNode = null;
       }
     }
-    for(const node of graph.nodes){
+    /* for(const node of graph.nodes){
       const nodeEl = document.createElement('div');
       nodeEl.className = 'cloud-cluster-node';
       if(node.selected){
@@ -622,7 +622,7 @@ export function initInput({ canvas, draw }){
         nodeEl.append(portsList);
       }
       cloudClusterGraph.append(nodeEl);
-    }
+    } */
     // Temporarily hide legacy link list in favour of visual graph workflow.
     // if(Array.isArray(graph.links) && graph.links.length){
     //   const linksContainer = document.createElement('div');
@@ -683,7 +683,7 @@ export function initInput({ canvas, draw }){
       desc.textContent = inspector.description;
       cloudClusterInspector.append(desc);
     }
-    if(Array.isArray(inspector.issues) && inspector.issues.length){
+    /* if(Array.isArray(inspector.issues) && inspector.issues.length){
       const issues = document.createElement('div');
       issues.className = 'cloud-cluster-issues';
       for(const issue of inspector.issues){
@@ -692,8 +692,8 @@ export function initInput({ canvas, draw }){
         issues.append(item);
       }
       cloudClusterInspector.append(issues);
-    }
-    const totals = Array.isArray(inspector.totals) ? inspector.totals : [];
+    } */
+    /* const totals = Array.isArray(inspector.totals) ? inspector.totals : [];
     if(totals.length){
       const totalsList = document.createElement('div');
       totalsList.className = 'cloud-cluster-totals';
@@ -858,6 +858,230 @@ export function initInput({ canvas, draw }){
         objectList.append(row);
       }
       cloudClusterInspector.append(objectList);
+    } */
+
+    const graph = cloudEditor.getGraph();
+    if(graph){
+      const nodesById = new Map(graph.nodes.map((entry) => [entry.id, entry]));
+      const linksById = new Map(Array.isArray(graph.links) ? graph.links.map((entry) => [entry.id, entry]) : []);
+      let telemetryByNode = null;
+      try {
+        const inspectorSnapshot = cloudEditor.getInspector(graph.clusterId);
+        if(inspectorSnapshot && Array.isArray(inspectorSnapshot.objects)){
+          telemetryByNode = new Map(inspectorSnapshot.objects.map((entry) => [entry.id, entry]));
+        }
+      } catch (error){
+        telemetryByNode = null;
+      }
+
+      const createNodeCard = (node) => {
+        const nodeEl = document.createElement('div');
+        nodeEl.className = 'cloud-cluster-node';
+        if(node.selected){
+          nodeEl.classList.add('selected');
+        }
+        const title = document.createElement('div');
+        title.className = 'cloud-cluster-node-title';
+        title.textContent = node.label ?? node.id;
+        title.tabIndex = 0;
+        title.addEventListener('click', () => {
+          cloudEditor.selectObject(node.id);
+          refreshCloudClusterUI();
+        });
+        title.addEventListener('keydown', (evt) => {
+          if(evt.key === 'Enter' || evt.key === ' '){
+            evt.preventDefault();
+            cloudEditor.selectObject(node.id);
+            refreshCloudClusterUI();
+          }
+        });
+        nodeEl.append(title);
+
+        if(node.description){
+          const meta = document.createElement('div');
+          meta.className = 'cloud-cluster-node-meta';
+          meta.textContent = node.description;
+          nodeEl.append(meta);
+        }
+
+        if(Array.isArray(node.ports) && node.ports.length){
+          const portsList = document.createElement('div');
+          portsList.className = 'cloud-cluster-ports';
+          for(const port of node.ports){
+            const row = document.createElement('div');
+            row.className = 'cloud-cluster-port';
+            const info = document.createElement('div');
+            info.className = 'cloud-cluster-port-info';
+            const label = document.createElement('span');
+            label.className = 'cloud-cluster-port-label';
+            const dirIcon = port.direction === 'input' ? '⬅' : '➡';
+            label.textContent = `${dirIcon} ${port.label ?? port.id}`;
+            info.append(label);
+            if(node.kind === FactoryKind.SMELTER || node.kind === FactoryKind.CONSTRUCTOR){
+              let materialKey = null;
+              if(port.direction === 'input'){
+                materialKey = inferMaterialForLinkedPort(nodesById, linksById, node, port, telemetryByNode);
+              } else if(port.direction === 'output'){
+                materialKey = inferPortOutputItem(node, port, telemetryByNode);
+              }
+              if(materialKey){
+                const badge = document.createElement('span');
+                badge.className = 'cloud-cluster-port-material';
+                badge.textContent = `• ${formatFactoryItemName(materialKey)}`;
+                info.append(badge);
+              }
+            }
+            row.append(info);
+            const actions = document.createElement('div');
+            actions.className = 'cloud-cluster-port-actions';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn';
+            if(port.direction === 'output'){
+              btn.textContent = port.linked ? 'Linked' : 'Link →';
+              btn.disabled = port.linked;
+              btn.title = port.linked ? 'Already linked' : 'Start link from this output port';
+              btn.addEventListener('click', () => {
+                try {
+                  cloudEditor.beginLink(node.id, port.id);
+                } catch (error){
+                  console.error('Failed to start link', error);
+                }
+                refreshCloudClusterUI();
+              });
+              if(port.linked && port.linkId){
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn';
+                removeBtn.textContent = 'Remove link';
+                removeBtn.addEventListener('click', () => {
+                  try {
+                    cloudEditor.removeLink(port.linkId);
+                  } catch (error){
+                    console.error('Failed to remove link', error);
+                  }
+                  refreshCloudClusterUI();
+                });
+                actions.append(removeBtn);
+              }
+            } else {
+              const isLinked = port.linked;
+              btn.textContent = isLinked ? 'Linked' : (graph.pendingLink ? 'Complete link' : '← Link');
+              btn.title = isLinked
+                ? 'Already linked'
+                : graph.pendingLink
+                  ? 'Complete link to this input port'
+                  : 'Select an output port before linking';
+              btn.disabled = isLinked || !graph.pendingLink;
+              btn.addEventListener('click', () => {
+                if(btn.disabled) return;
+                try {
+                  cloudEditor.completeLink(node.id, port.id);
+                } catch (error){
+                  console.error('Failed to complete link', error);
+                }
+                refreshCloudClusterUI();
+              });
+              if(isLinked && port.linkId){
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn';
+                removeBtn.textContent = 'Remove link';
+                removeBtn.addEventListener('click', () => {
+                  try {
+                    cloudEditor.removeLink(port.linkId);
+                  } catch (error){
+                    console.error('Failed to remove link', error);
+                  }
+                  refreshCloudClusterUI();
+                });
+                actions.append(removeBtn);
+              }
+            }
+            actions.append(btn);
+            row.append(actions);
+            portsList.append(row);
+          }
+          nodeEl.append(portsList);
+        }
+
+        const telemetryEntry = telemetryByNode?.get(node.id) ?? null;
+        if(node.kind === FactoryKind.SMELTER){
+          let primaryOutput = null;
+          if(telemetryEntry && Array.isArray(telemetryEntry.outputs)){
+            for(const entry of telemetryEntry.outputs){
+              if(!entry || entry.item == null) continue;
+              const rate = Number(entry.rate ?? 0);
+              if(!primaryOutput || rate > Number(primaryOutput.rate ?? 0)){
+                primaryOutput = entry;
+              }
+            }
+          }
+          if(primaryOutput && Math.abs(Number(primaryOutput.rate ?? 0)) > RATE_EPSILON){
+            const outputInfo = document.createElement('div');
+            outputInfo.className = 'cloud-cluster-node-meta';
+            const rateLabel = Number(primaryOutput.rate ?? 0).toFixed(2);
+            const totalLabel = Number(primaryOutput.total ?? 0).toFixed(2);
+            outputInfo.textContent = `Output: ${formatFactoryItemName(primaryOutput.item)} @ ${rateLabel}/s · total ${totalLabel}`;
+            nodeEl.append(outputInfo);
+          }
+        } else if(node.kind === FactoryKind.CONSTRUCTOR){
+          if(telemetryEntry && Array.isArray(telemetryEntry.outputs) && telemetryEntry.outputs.length){
+            const primaryOutput = telemetryEntry.outputs.reduce((best, current)=>{
+              if(!current || current.item == null) return best;
+              const rate = Number(current.rate ?? 0);
+              if(Math.abs(rate) <= RATE_EPSILON) return best;
+              if(!best) return current;
+              return rate > Number(best.rate ?? 0) ? current : best;
+            }, null);
+            if(primaryOutput){
+              const outputInfo = document.createElement('div');
+              outputInfo.className = 'cloud-cluster-node-meta';
+              const rateLabel = Number(primaryOutput.rate ?? 0).toFixed(2);
+              const totalLabel = Number(primaryOutput.total ?? 0).toFixed(2);
+              outputInfo.textContent = `Output: ${formatFactoryItemName(primaryOutput.item)} @ ${rateLabel}/s · total ${totalLabel}`;
+              nodeEl.append(outputInfo);
+            }
+          }
+        }
+
+        return nodeEl;
+      };
+
+      const groupSpecs = [
+        { label: 'Supply Nodes', matcher: (node) => node.kind === FactoryKind.NODE },
+        { label: 'Bioforges', matcher: (node) => node.kind === FactoryKind.SMELTER },
+        { label: 'Constructors', matcher: (node) => node.kind === FactoryKind.CONSTRUCTOR },
+      ];
+      const assigned = new Set();
+      for(const spec of groupSpecs){
+        const nodes = graph.nodes.filter((node) => !assigned.has(node.id) && spec.matcher(node));
+        if(!nodes.length) continue;
+        const groupEl = document.createElement('div');
+        groupEl.className = 'cloud-cluster-node-group';
+        const heading = document.createElement('div');
+        heading.className = 'cloud-cluster-node-group-title';
+        heading.textContent = spec.label;
+        groupEl.append(heading);
+        for(const node of nodes){
+          assigned.add(node.id);
+          groupEl.append(createNodeCard(node));
+        }
+        cloudClusterInspector.append(groupEl);
+      }
+      const remaining = graph.nodes.filter((node) => !assigned.has(node.id));
+      if(remaining.length){
+        const groupEl = document.createElement('div');
+        groupEl.className = 'cloud-cluster-node-group';
+        const heading = document.createElement('div');
+        heading.className = 'cloud-cluster-node-group-title';
+        heading.textContent = 'Other Objects';
+        groupEl.append(heading);
+        for(const node of remaining){
+          groupEl.append(createNodeCard(node));
+        }
+        cloudClusterInspector.append(groupEl);
+      }
     }
   }
 
