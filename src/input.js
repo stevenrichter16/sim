@@ -1,7 +1,7 @@
 import { Mode, TAU, clamp01 } from './constants.js';
 import { debugConfig, setDebugFlag } from './debug.js';
 import { materialLegend, GLOBAL_EFFECTS } from './materialLegend.js';
-import { setCustomCanvasSize } from './render.js';
+import { setCustomCanvasSize, getCustomCanvasSize } from './render.js';
 import {
   world,
   idx,
@@ -43,6 +43,8 @@ import {
   getFactoryTelemetry,
   FactoryKind,
   FactoryItem,
+  getBioforgeRecipeDefinition,
+  getConstructorBlueprintDefinition,
 } from './factory.js';
 import { createCloudClusterEditor } from './cloudCluster/ui/index.js';
 
@@ -52,6 +54,106 @@ const MODE_LABEL = Object.fromEntries(
     return [value, label.replace(/\b\w/g, ch => ch.toUpperCase())];
   })
 );
+
+const RATE_EPSILON = 1e-5;
+
+function formatFactoryItemName(item){
+  if(typeof item === 'string' && item.length){
+    return item.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }
+  return String(item ?? 'Item');
+}
+
+function resolveBioforgeRecipe(metadata = {}){
+  const key = typeof metadata.recipeKey === 'string'
+    ? metadata.recipeKey
+    : typeof metadata.recipe === 'string'
+      ? metadata.recipe
+      : typeof metadata.recipe?.key === 'string'
+        ? metadata.recipe.key
+        : null;
+  return getBioforgeRecipeDefinition(key) ?? null;
+}
+
+function resolveConstructorBlueprint(metadata = {}){
+  const key = typeof metadata.blueprintKey === 'string'
+    ? metadata.blueprintKey
+    : typeof metadata.recipeKey === 'string'
+      ? metadata.recipeKey
+      : typeof metadata.blueprint === 'string'
+        ? metadata.blueprint
+        : typeof metadata.blueprint?.key === 'string'
+          ? metadata.blueprint.key
+          : typeof metadata.recipe?.key === 'string'
+            ? metadata.recipe.key
+            : null;
+  return getConstructorBlueprintDefinition(key) ?? null;
+}
+
+function inferPortOutputItem(node, port, telemetryMap = null){
+  if(!node) return null;
+  if(telemetryMap && telemetryMap.has(node.id)){
+    const telemetry = telemetryMap.get(node.id);
+    if(telemetry && Array.isArray(telemetry.outputs) && telemetry.outputs.length){
+      let best = null;
+      for(const entry of telemetry.outputs){
+        if(!entry || !entry.item) continue;
+        if(!best || (entry.rate ?? 0) > (best.rate ?? 0)){
+          best = entry;
+        }
+      }
+      if(best?.item){
+        return best.item;
+      }
+    }
+  }
+  const metadata = node.metadata ?? {};
+  switch(node.kind){
+    case FactoryKind.NODE: {
+      if(Array.isArray(metadata.outputItems) && metadata.outputItems.length === 1){
+        return metadata.outputItems[0];
+      }
+      break;
+    }
+    case FactoryKind.MINER:
+      if(metadata.resource) return metadata.resource;
+      break;
+    case FactoryKind.SMELTER: {
+      const recipe = resolveBioforgeRecipe(metadata);
+      if(recipe?.output) return recipe.output;
+      break;
+    }
+    case FactoryKind.CONSTRUCTOR: {
+      const blueprint = resolveConstructorBlueprint(metadata);
+      if(blueprint?.output) return blueprint.output;
+      break;
+    }
+    case FactoryKind.STORAGE:
+      if(Array.isArray(metadata.allowedItems) && metadata.allowedItems.length === 1){
+        return metadata.allowedItems[0];
+      }
+      break;
+    default:
+      break;
+  }
+  if(port && Array.isArray(port.itemKeys) && port.itemKeys.length){
+    return port.itemKeys[0];
+  }
+  return null;
+}
+
+function inferMaterialForLinkedPort(nodeMap, linkMap, node, port, telemetryMap = null){
+  if(!node || !port?.linkId) return null;
+  const link = linkMap.get(port.linkId);
+  if(!link) return null;
+  if(link.target?.objectId !== node.id || link.target?.portId !== port.id){
+    return null;
+  }
+  const sourceNode = nodeMap.get(link.source?.objectId);
+  if(!sourceNode) return null;
+  const sourcePort = sourceNode.ports?.find((entry) => entry.id === link.source?.portId) ?? null;
+  return inferPortOutputItem(sourceNode, sourcePort, telemetryMap);
+}
 
 export function initInput({ canvas, draw }){
   const brushGrid = document.getElementById('brushGrid');
@@ -327,8 +429,9 @@ export function initInput({ canvas, draw }){
     }
   }
 
-  function renderCloudClusterGraph(){
-    if(!cloudClusterGraph) return;
+  function renderCloudClusterGraph(sharedInspector = null){
+    const inspectorProvided = arguments.length > 0;
+    if(!cloudClusterGraph) return sharedInspector ?? null;
     const graph = cloudEditor.getGraph();
     cloudClusterGraph.innerHTML = '';
     if(!graph){
@@ -336,7 +439,7 @@ export function initInput({ canvas, draw }){
       empty.className = 'cloud-cluster-graph-empty';
       empty.textContent = 'Select or create a cloud cluster to edit.';
       cloudClusterGraph.append(empty);
-      return;
+      return sharedInspector ?? null;
     }
     if(graph.pendingLink){
       const pending = document.createElement('div');
@@ -349,6 +452,28 @@ export function initInput({ canvas, draw }){
       emptyNodes.className = 'cloud-cluster-graph-empty';
       emptyNodes.textContent = 'No factory objects in this cluster yet. Use the palette to add nodes.';
       cloudClusterGraph.append(emptyNodes);
+    }
+    const nodesById = new Map(graph.nodes.map((entry) => [entry.id, entry]));
+    const linksById = new Map(Array.isArray(graph.links) ? graph.links.map((entry) => [entry.id, entry]) : []);
+    let telemetryByNode = null;
+    const inspectorSource = sharedInspector && sharedInspector.clusterId === graph.clusterId
+      ? sharedInspector
+      : null;
+    let inspectorUsed = inspectorSource ?? null;
+    if(inspectorSource && Array.isArray(inspectorSource.objects)){
+      telemetryByNode = new Map(inspectorSource.objects.map((entry) => [entry.id, entry]));
+    } else if(!inspectorSource && !inspectorProvided){
+      try {
+        const inspector = cloudEditor.getInspector(graph.clusterId);
+        if(inspector && Array.isArray(inspector.objects)){
+          telemetryByNode = new Map(inspector.objects.map((entry) => [entry.id, entry]));
+        }
+        if(inspector){
+          inspectorUsed = inspector;
+        }
+      } catch (error){
+        telemetryByNode = null;
+      }
     }
     for(const node of graph.nodes){
       const nodeEl = document.createElement('div');
@@ -400,10 +525,32 @@ export function initInput({ canvas, draw }){
         for(const port of node.ports){
           const row = document.createElement('div');
           row.className = 'cloud-cluster-port';
+          const info = document.createElement('div');
+          info.className = 'cloud-cluster-port-info';
           const label = document.createElement('span');
+          label.className = 'cloud-cluster-port-label';
           const dirIcon = port.direction === 'input' ? '⬅' : '➡';
           label.textContent = `${dirIcon} ${port.label ?? port.id}`;
-          row.append(label);
+          info.append(label);
+          const isSmelter = node.kind === FactoryKind.SMELTER;
+          const isConstructor = node.kind === FactoryKind.CONSTRUCTOR;
+          if(isSmelter || isConstructor){
+            let materialKey = null;
+            if(port.direction === 'input'){
+              materialKey = inferMaterialForLinkedPort(nodesById, linksById, node, port, telemetryByNode);
+            } else if(port.direction === 'output'){
+              materialKey = inferPortOutputItem(node, port, telemetryByNode);
+            }
+            if(materialKey){
+              const badge = document.createElement('span');
+              badge.className = 'cloud-cluster-port-material';
+              badge.textContent = `• ${formatFactoryItemName(materialKey)}`;
+              info.append(badge);
+            }
+          }
+          row.append(info);
+          const actions = document.createElement('div');
+          actions.className = 'cloud-cluster-port-actions';
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'btn';
@@ -432,7 +579,7 @@ export function initInput({ canvas, draw }){
                 }
                 refreshCloudClusterUI();
               });
-              row.append(removeBtn);
+              actions.append(removeBtn);
             }
           } else {
             const isLinked = port.linked;
@@ -465,10 +612,11 @@ export function initInput({ canvas, draw }){
                 }
                 refreshCloudClusterUI();
               });
-              row.append(removeBtn);
+              actions.append(removeBtn);
             }
           }
-          row.append(btn);
+          actions.append(btn);
+          row.append(actions);
           portsList.append(row);
         }
         nodeEl.append(portsList);
@@ -502,11 +650,13 @@ export function initInput({ canvas, draw }){
     //   }
     //   cloudClusterGraph.append(linksContainer);
     // }
+    return inspectorUsed ?? sharedInspector ?? null;
   }
 
-  function renderCloudClusterInspector(){
+  function renderCloudClusterInspector(sharedInspector = null){
+    const inspectorProvided = arguments.length > 0;
     if(!cloudClusterInspector) return;
-    const inspector = cloudEditor.getInspector();
+    const inspector = inspectorProvided ? sharedInspector : cloudEditor.getInspector();
     cloudClusterInspector.innerHTML = '';
     if(!inspector){
       const empty = document.createElement('div');
@@ -597,14 +747,17 @@ export function initInput({ canvas, draw }){
         title.className = 'cloud-cluster-rate-heading';
         title.textContent = titleText;
         section.append(title);
-        if(!Array.isArray(entries) || entries.length === 0){
+        const filteredEntries = Array.isArray(entries)
+          ? entries.filter((entry) => Number.isFinite(entry?.rate) && Math.abs(entry.rate) > RATE_EPSILON)
+          : [];
+        if(filteredEntries.length === 0){
           const empty = document.createElement('div');
           empty.className = 'cloud-cluster-rate-empty';
           empty.textContent = '—';
           section.append(empty);
           return section;
         }
-        for(const entry of entries){
+        for(const entry of filteredEntries){
           const itemRow = document.createElement('div');
           itemRow.className = 'cloud-cluster-rate-item';
           const name = document.createElement('div');
@@ -2528,10 +2681,18 @@ function toggleScenarioDiagPanel(force){
     if(typeof cloudEditor.stepSimulation === 'function'){
       cloudEditor.stepSimulation();
     }
+    if(typeof cloudEditor.autoSelectConstructorBlueprints === 'function'){
+      try {
+        cloudEditor.autoSelectConstructorBlueprints();
+      } catch (error){
+        console.error('Failed to auto-select constructor blueprint', error);
+      }
+    }
     renderCloudClusterSelect();
     renderCloudClusterPalette();
-    renderCloudClusterGraph();
-    renderCloudClusterInspector();
+    const inspectorData = cloudEditor.getInspector();
+    const inspectorUsed = renderCloudClusterGraph(inspectorData);
+    renderCloudClusterInspector(inspectorUsed ?? inspectorData);
     renderCloudClusterVisualGraph();
     renderCloudClusterGlossary();
     renderCloudClusterTelemetry();
@@ -3651,6 +3812,13 @@ function toggleScenarioDiagPanel(force){
         }
       }
     });
+    if(!getCustomCanvasSize()){
+      const defaultValue = '1600x900';
+      canvasSizeSelect.value = defaultValue;
+      if(canvasSizeSelect.value === defaultValue){
+        setCustomCanvasSize({ width: 1600, height: 900 });
+      }
+    }
   }
 
   if(simSpeedSlider){

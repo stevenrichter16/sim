@@ -7,6 +7,7 @@ import {
 import {
   CloudFactoryPortDirection,
   getPortById,
+  serialiseFactoryObject,
 } from '../domain/factoryObject.js';
 import {
   createCluster as createClusterModel,
@@ -75,35 +76,11 @@ const DEFAULT_PORT_TEMPLATES = Object.freeze({
     { direction: CloudFactoryPortDirection.OUTPUT, label: 'Output' },
   ],
   [FactoryKind.CONSTRUCTOR]: [
-    {
-      direction: CloudFactoryPortDirection.INPUT,
-      label: 'Body System Intake',
-      itemKeys: [FactoryItem.BODY_SYSTEM],
-    },
-    {
-      direction: CloudFactoryPortDirection.INPUT,
-      label: 'Neural Weave Intake',
-      itemKeys: [FactoryItem.NEURAL_WEAVE],
-    },
-    {
-      direction: CloudFactoryPortDirection.INPUT,
-      label: 'Skeletal Frame Intake',
-      itemKeys: [FactoryItem.SKELETAL_FRAME],
-    },
-    {
-      direction: CloudFactoryPortDirection.INPUT,
-      label: 'Glandular Network Intake',
-      itemKeys: [FactoryItem.GLANDULAR_NETWORK],
-    },
-    {
-      direction: CloudFactoryPortDirection.OUTPUT,
-      label: 'Construct Output',
-      itemKeys: [
-        FactoryItem.HUMAN_SHELL,
-        FactoryItem.CARETAKER_DRONE,
-        FactoryItem.EMISSARY_AVATAR,
-      ],
-    },
+    { direction: CloudFactoryPortDirection.INPUT, label: 'Intake A' },
+    { direction: CloudFactoryPortDirection.INPUT, label: 'Intake B' },
+    { direction: CloudFactoryPortDirection.INPUT, label: 'Intake C' },
+    { direction: CloudFactoryPortDirection.INPUT, label: 'Intake D' },
+    { direction: CloudFactoryPortDirection.OUTPUT, label: 'Output' },
   ],
   [FactoryKind.STORAGE]: [
     { direction: CloudFactoryPortDirection.INPUT, label: 'Input' },
@@ -292,34 +269,14 @@ const PALETTE_ENTRIES = Object.freeze([
       blueprintKeys: CONSTRUCTOR_BLUEPRINT_KEYS,
     },
     ports: [
+      { id: 'in-a', direction: CloudFactoryPortDirection.INPUT, label: 'Intake A' },
+      { id: 'in-b', direction: CloudFactoryPortDirection.INPUT, label: 'Intake B' },
+      { id: 'in-c', direction: CloudFactoryPortDirection.INPUT, label: 'Intake C' },
+      { id: 'in-d', direction: CloudFactoryPortDirection.INPUT, label: 'Intake D' },
       {
-        id: 'in-body',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Body System Intake',
-        itemKeys: [FactoryItem.BODY_SYSTEM],
-      },
-      {
-        id: 'in-neural',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Neural Weave Intake',
-        itemKeys: [FactoryItem.NEURAL_WEAVE],
-      },
-      {
-        id: 'in-frame',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Skeletal Frame Intake',
-        itemKeys: [FactoryItem.SKELETAL_FRAME],
-      },
-      {
-        id: 'in-gland',
-        direction: CloudFactoryPortDirection.INPUT,
-        label: 'Glandular Network Intake',
-        itemKeys: [FactoryItem.GLANDULAR_NETWORK],
-      },
-      {
-        id: 'out-construct',
+        id: 'out-products',
         direction: CloudFactoryPortDirection.OUTPUT,
-        label: 'Construct Output',
+        label: 'Constructor Output',
         itemKeys: [
           FactoryItem.HUMAN_SHELL,
           FactoryItem.CARETAKER_DRONE,
@@ -440,6 +397,98 @@ function formatRecipeItemName(item){
     return item.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
   }
   return String(item ?? 'Item');
+}
+
+const RATE_EPSILON = 1e-5;
+
+function selectPrimaryOutputEntry(telemetryEntry){
+  if(!telemetryEntry || !Array.isArray(telemetryEntry.outputs) || !telemetryEntry.outputs.length){
+    return null;
+  }
+  let best = null;
+  for(const entry of telemetryEntry.outputs){
+    if(!entry || !entry.item) continue;
+    if(!best || (entry.rate ?? 0) > (best.rate ?? 0)){
+      best = entry;
+    }
+  }
+  if(!best || (best.rate ?? 0) <= RATE_EPSILON){
+    return null;
+  }
+  return best;
+}
+
+function inferObjectOutputItem(object){
+  if(!object) return null;
+  const metadata = object.metadata ?? {};
+  switch(object.kind){
+    case FactoryKind.NODE:
+      if(Array.isArray(metadata.outputItems) && metadata.outputItems.length){
+        return metadata.outputItems[0];
+      }
+      return null;
+    case FactoryKind.MINER:
+      return metadata.resource ?? null;
+    case FactoryKind.SMELTER: {
+      const key = typeof metadata.recipeKey === 'string'
+        ? metadata.recipeKey
+        : typeof metadata.recipe === 'string'
+          ? metadata.recipe
+          : typeof metadata.recipe?.key === 'string'
+            ? metadata.recipe.key
+            : null;
+      const recipe = getBioforgeRecipeDefinition(key);
+      return recipe?.output ?? null;
+    }
+    case FactoryKind.CONSTRUCTOR: {
+      const key = typeof metadata.blueprintKey === 'string'
+        ? metadata.blueprintKey
+        : typeof metadata.blueprint === 'string'
+          ? metadata.blueprint
+          : typeof metadata.blueprint?.key === 'string'
+            ? metadata.blueprint.key
+            : null;
+      const blueprint = getConstructorBlueprintDefinition(key);
+      return blueprint?.output ?? null;
+    }
+    case FactoryKind.STORAGE:
+      if(Array.isArray(metadata.allowedItems) && metadata.allowedItems.length){
+        return metadata.allowedItems[0];
+      }
+      return null;
+    default:
+      return null;
+  }
+}
+
+function collectInboundItems(cluster, objectId, telemetryByNode = null){
+  const items = new Map();
+  if(!cluster || !objectId) return items;
+  for(const link of cluster.links.values()){
+    if(link?.target?.objectId !== objectId) continue;
+    const sourceId = link.source?.objectId;
+    if(!sourceId) continue;
+    const source = cluster.objects.get(sourceId);
+    if(!source) continue;
+    let item = null;
+    let rate = 0;
+    if(telemetryByNode && telemetryByNode.has(sourceId)){
+      const primary = selectPrimaryOutputEntry(telemetryByNode.get(sourceId));
+      if(primary){
+        item = primary.item;
+        rate = primary.rate ?? 0;
+      }
+    }
+    if(!item){
+      item = inferObjectOutputItem(source);
+      rate = 0;
+    }
+    if(item){
+      const prev = items.get(item) ?? 0;
+      items.set(item, Math.max(prev, rate));
+    }
+  }
+  return items;
 }
 
 export function getSmelterRecipeSummaries(){
@@ -623,6 +672,96 @@ export function createCloudClusterEditor(options = {}){
     commit(nextRegistry);
     updateClusterAccumulatorMembership(clusterId, { added, removed });
     return result;
+  }
+
+  function maybeAutoSelectConstructorBlueprint(clusterId, objectId, { telemetryByNode = null, clusterOverride = null } = {}){
+    if(!clusterId || !objectId) return;
+    const registry = state.registry;
+    if(!registry.byId.has(clusterId)) return;
+    const cluster = clusterOverride ?? registry.byId.get(clusterId);
+    ensureCluster(cluster);
+    const object = cluster.objects.get(objectId);
+    if(!object || object.kind !== FactoryKind.CONSTRUCTOR) return;
+
+    let telemetryMap = telemetryByNode;
+    if(!telemetryMap){
+      const inspector = getInspector(clusterId);
+      telemetryMap = inspector && Array.isArray(inspector.objects)
+        ? new Map(inspector.objects.map((entry) => [entry.id, entry]))
+        : null;
+    }
+
+    const inboundItems = collectInboundItems(cluster, objectId, telemetryMap);
+    const metadata = object.metadata ?? {};
+    const blueprintCandidates = Array.isArray(metadata.blueprintKeys) && metadata.blueprintKeys.length
+      ? metadata.blueprintKeys
+      : CONSTRUCTOR_BLUEPRINT_KEYS;
+
+    let bestKey = null;
+    let bestScore = -1;
+    for(const key of blueprintCandidates){
+      const blueprint = getConstructorBlueprintDefinition(key);
+      if(!blueprint) continue;
+      const requiredItems = new Set((blueprint.inputs ?? []).map((entry) => entry?.item).filter(Boolean));
+      if(requiredItems.size === 0){
+        if(bestKey == null){
+          bestKey = key;
+          bestScore = 0;
+        }
+        continue;
+      }
+      const satisfied = Array.from(requiredItems).every((item) => {
+        const rate = inboundItems.get(item) ?? 0;
+        return rate > RATE_EPSILON;
+      });
+      if(!satisfied) continue;
+      const score = Array.from(requiredItems).reduce((sum, item) => sum + (inboundItems.get(item) ?? 0), 0);
+      if(score > bestScore){
+        bestKey = key;
+        bestScore = score;
+      }
+    }
+
+    if(!bestKey){
+      bestKey = metadata.blueprintKey ?? blueprintCandidates[0] ?? null;
+    }
+
+    if(!bestKey || bestKey === metadata.blueprintKey) return;
+
+    updateCluster(clusterId, (draft) => {
+      const existing = draft.objects.get(objectId);
+      if(!existing) return null;
+      const definition = serialiseFactoryObject(existing);
+      definition.metadata = {
+        ...definition.metadata,
+        blueprintKey: bestKey,
+      };
+      upsertFactoryObject(draft, definition);
+      return null;
+    });
+  }
+
+  function autoSelectConstructorBlueprints(clusterId = state.selectedClusterId, telemetryByNode = null){
+    if(!clusterId) return;
+    const registry = state.registry;
+    if(!registry.byId.has(clusterId)) return;
+    const cluster = registry.byId.get(clusterId);
+    ensureCluster(cluster);
+    let telemetryMap = telemetryByNode;
+    if(!telemetryMap){
+      const inspector = getInspector(clusterId);
+      telemetryMap = inspector && Array.isArray(inspector.objects)
+        ? new Map(inspector.objects.map((entry) => [entry.id, entry]))
+        : null;
+    }
+    for(const object of cluster.objects.values()){
+      if(object.kind === FactoryKind.CONSTRUCTOR){
+        maybeAutoSelectConstructorBlueprint(clusterId, object.id, {
+          telemetryByNode: telemetryMap,
+          clusterOverride: cluster,
+        });
+      }
+    }
   }
 
   function generateObjectId(cluster, kind){
@@ -858,6 +997,9 @@ export function createCloudClusterEditor(options = {}){
       metadata: options.metadata ?? {},
     }));
     state.pendingLink = null;
+    if(link?.target?.objectId){
+      maybeAutoSelectConstructorBlueprint(cluster.id, link.target.objectId);
+    }
     return link;
   }
 
@@ -868,7 +1010,12 @@ export function createCloudClusterEditor(options = {}){
   function removeLink(linkId){
     const cluster = getSelectedCluster();
     if(!cluster) return false;
+    const link = cluster.links.get(linkId);
+    const targetObjectId = link?.target?.objectId ?? null;
     const removed = updateCluster(cluster.id, (draft) => removeClusterLink(draft, linkId));
+    if(removed && targetObjectId){
+      maybeAutoSelectConstructorBlueprint(cluster.id, targetObjectId);
+    }
     return removed;
   }
 
@@ -1013,6 +1160,7 @@ export function createCloudClusterEditor(options = {}){
     stepSimulation: advanceSimulation,
     getSmelterRecipes,
     getConstructorBlueprints,
+    autoSelectConstructorBlueprints,
   };
 }
 
