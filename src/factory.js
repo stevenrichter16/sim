@@ -4,6 +4,7 @@ import { FACTIONS } from './factions.js';
 import { baseStringFor } from './materials.js';
 import { createCloudClusterRegistry } from './cloudCluster/registry.js';
 import { stepCloudClusterSimulation } from './cloudCluster/sim/index.js';
+import { createFactoryOwnershipManager } from './factoryOwnership.js';
 
 export const FactoryKind = Object.freeze({
   NODE: 'node',
@@ -605,6 +606,23 @@ function createFactoryState(){
   };
   return state;
 }
+
+const {
+  refreshFactoryOwnership,
+  getFactoryOwnership,
+} = createFactoryOwnershipManager({
+  ensureFactoryState,
+  factoryKindMeta,
+  factoryItemLabel,
+  getRecipeInputMap,
+  getBioforgeRecipe,
+  defaultBioforgeRecipe: DEFAULT_BIOFORGE_RECIPE,
+  getConstructorBlueprint,
+  defaultConstructorBlueprint: DEFAULT_CONSTRUCTOR_BLUEPRINT,
+  FactoryKind,
+});
+
+export { getFactoryOwnership };
 
 export function resetFactoryState(){
   world.factory = createFactoryState();
@@ -1382,8 +1400,6 @@ export function getFactoryOwnership(){
   };
 }
 
-export function isFactoryBrush(brush){
-  return Object.prototype.hasOwnProperty.call(BRUSH_SPEC, brush);
 }
 
 export function getFactoryBrushKeys(){

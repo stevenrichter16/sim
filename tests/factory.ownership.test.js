@@ -66,4 +66,65 @@ describe('factory ownership influence tracking', () => {
     unassigned = ownership.unassigned.find((entry) => entry.tileIdx === tile && entry.kind === FactoryKind.BELT);
     expect(unassigned).toBeUndefined();
   });
+
+  it('adds controlled nodes and bioforges to faction cloud clusters with auto links', () => {
+    const factionId = 1;
+    const skinTile = idx(8, 8);
+    const forgeTile = idx(9, 8);
+
+    expect(placeFactoryStructure(skinTile, 'factory-node-skin').ok).toBe(true);
+    expect(placeFactoryStructure(forgeTile, 'factory-smelter-omni', orient('north')).ok).toBe(true);
+
+    world.dominantFaction[skinTile] = factionId;
+    world.controlLevel[skinTile] = 0.7;
+    world.dominantFaction[forgeTile] = factionId;
+    world.controlLevel[forgeTile] = 0.72;
+
+    stepFactory();
+
+    const clusterId = `faction-${factionId}-cloud`;
+    const registry = world.factory.cloudClusters;
+    expect(registry.byId.has(clusterId)).toBe(true);
+    expect(registry.order).toContain(clusterId);
+    const cluster = registry.byId.get(clusterId);
+    const nodeObjectId = `node-${FactoryKind.NODE}-${skinTile}`;
+    const smelterObjectId = `structure-${FactoryKind.SMELTER}-${forgeTile}`;
+    expect(cluster.objects.has(nodeObjectId)).toBe(true);
+    expect(cluster.objects.has(smelterObjectId)).toBe(true);
+
+    const smelter = cluster.objects.get(smelterObjectId);
+    const intake = smelter.ports.find((port) => port.id === 'in');
+    expect(intake).toBeTruthy();
+    expect(intake.itemKeys).toEqual(expect.arrayContaining([
+      FactoryItem.SKIN_PATCH,
+      FactoryItem.BLOOD_VIAL,
+      FactoryItem.ORGAN_MASS,
+    ]));
+
+    const linkId = `auto:faction:${clusterId}:${nodeObjectId}->${smelterObjectId}:${FactoryItem.SKIN_PATCH}`;
+    expect(cluster.links.has(linkId)).toBe(true);
+    expect(cluster.links.get(linkId)?.metadata?.auto).toBe(true);
+  });
+
+  it('removes objects from faction cloud clusters when influence is lost', () => {
+    const factionId = 2;
+    const nodeTile = idx(11, 5);
+    expect(placeFactoryStructure(nodeTile, 'factory-node-blood').ok).toBe(true);
+    world.dominantFaction[nodeTile] = factionId;
+    world.controlLevel[nodeTile] = 0.51;
+    stepFactory();
+
+    const clusterId = `faction-${factionId}-cloud`;
+    const registry = world.factory.cloudClusters;
+    let cluster = registry.byId.get(clusterId);
+    const nodeObjectId = `node-${FactoryKind.NODE}-${nodeTile}`;
+    expect(cluster?.objects.has(nodeObjectId)).toBe(true);
+
+    world.controlLevel[nodeTile] = 0.01;
+    stepFactory();
+
+    cluster = registry.byId.get(clusterId);
+    expect(cluster).toBeUndefined();
+    expect(registry.order.includes(clusterId)).toBe(false);
+  });
 });
