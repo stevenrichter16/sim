@@ -99,6 +99,13 @@ describe('factory ownership influence tracking', () => {
     expect(intakeItems.has(FactoryItem.SKIN_PATCH)).toBe(true);
     expect(intakeItems.has(FactoryItem.BLOOD_VIAL)).toBe(true);
     expect(intakeItems.has(FactoryItem.ORGAN_MASS)).toBe(true);
+    expect(Array.isArray(smelter.metadata.recipeKeys)).toBe(true);
+    expect(smelter.metadata.recipeKeys).toEqual(expect.arrayContaining([
+      'body_system',
+      'neural_weave',
+      'skeletal_frame',
+      'glandular_network',
+    ]));
 
     const linkId = `auto:faction:${clusterId}:${nodeObjectId}->${smelterObjectId}:${FactoryItem.SKIN_PATCH}`;
     expect(cluster.links.has(linkId)).toBe(true);

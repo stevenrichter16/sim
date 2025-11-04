@@ -286,6 +286,11 @@ export function createFactoryOwnershipManager({
     const requiredItems = Array.from(getRecipeInputMap(recipe).keys());
     const outputItems = recipe?.output ? [recipe.output] : [];
     const meta = factoryKindMeta(FactoryKind.SMELTER);
+    const recipeKeys = Array.isArray(structure?.availableRecipeKeys)
+      ? structure.availableRecipeKeys.slice()
+      : structure?.recipeKey
+        ? [structure.recipeKey]
+        : [];
     const inputPorts = [];
     const requirementUnits = [];
     if(requiredItems.length){
@@ -327,6 +332,7 @@ export function createFactoryOwnershipManager({
         factionId: entry.factionId,
         recipeKey: recipe?.key ?? null,
         output: recipe?.output ?? null,
+        recipeKeys,
         control: entry.control ?? 0,
         auto: true,
       },
