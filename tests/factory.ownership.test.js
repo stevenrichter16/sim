@@ -93,13 +93,12 @@ describe('factory ownership influence tracking', () => {
     expect(cluster.objects.has(smelterObjectId)).toBe(true);
 
     const smelter = cluster.objects.get(smelterObjectId);
-    const intake = smelter.ports.find((port) => port.id === 'in');
-    expect(intake).toBeTruthy();
-    expect(intake.itemKeys).toEqual(expect.arrayContaining([
-      FactoryItem.SKIN_PATCH,
-      FactoryItem.BLOOD_VIAL,
-      FactoryItem.ORGAN_MASS,
-    ]));
+    const intakeItems = new Map(smelter.ports
+      .filter((port) => port.direction === 'input')
+      .map((port) => [port.metadata?.item ?? port.itemKeys?.[0], port]));
+    expect(intakeItems.has(FactoryItem.SKIN_PATCH)).toBe(true);
+    expect(intakeItems.has(FactoryItem.BLOOD_VIAL)).toBe(true);
+    expect(intakeItems.has(FactoryItem.ORGAN_MASS)).toBe(true);
 
     const linkId = `auto:faction:${clusterId}:${nodeObjectId}->${smelterObjectId}:${FactoryItem.SKIN_PATCH}`;
     expect(cluster.links.has(linkId)).toBe(true);

@@ -286,6 +286,37 @@ export function createFactoryOwnershipManager({
     const requiredItems = Array.from(getRecipeInputMap(recipe).keys());
     const outputItems = recipe?.output ? [recipe.output] : [];
     const meta = factoryKindMeta(FactoryKind.SMELTER);
+    const inputPorts = [];
+    const requirementUnits = [];
+    if(requiredItems.length){
+      for(const item of requiredItems){
+        const amount = Math.max(1, Math.round(getRecipeInputMap(recipe).get(item) ?? 1));
+        for(let i = 0; i < amount; i += 1){
+          requirementUnits.push(item);
+        }
+      }
+      requirementUnits.forEach((item, index) => {
+        const letter = String.fromCharCode(65 + index);
+        const suffix = index === 0 ? '' : `-${index}`;
+        inputPorts.push({
+          id: `${SMELTER_INPUT_PORT_ID}${suffix}`,
+          direction: CloudFactoryPortDirection.INPUT,
+          label: `Intake ${letter}`,
+          itemKeys: item ? [item] : [],
+          metadata: {
+            item,
+          },
+        });
+      });
+    } else {
+      inputPorts.push({
+        id: SMELTER_INPUT_PORT_ID,
+        direction: CloudFactoryPortDirection.INPUT,
+        label: 'Intake',
+        itemKeys: [],
+      });
+    }
+
     return {
       id: clusterObjectIdForEntry(entry),
       kind: FactoryKind.SMELTER,
@@ -300,12 +331,7 @@ export function createFactoryOwnershipManager({
         auto: true,
       },
       ports: [
-        {
-          id: SMELTER_INPUT_PORT_ID,
-          direction: CloudFactoryPortDirection.INPUT,
-          label: 'Bioforge Intake',
-          itemKeys: requiredItems,
-        },
+        ...inputPorts,
         {
           id: SMELTER_OUTPUT_PORT_ID,
           direction: CloudFactoryPortDirection.OUTPUT,
@@ -427,6 +453,68 @@ export function createFactoryOwnershipManager({
     }
   }
 
+  function selectSmelterRecipeFromCounts(structure, counts){
+    if(!structure || structure.kind !== FactoryKind.SMELTER) return;
+    const keys = Array.isArray(structure.availableRecipeKeys) && structure.availableRecipeKeys.length
+      ? structure.availableRecipeKeys
+      : structure.recipeKey ? [structure.recipeKey] : [];
+    if(!keys.length) return;
+    let bestKey = structure.recipeKey ?? keys[0];
+    let bestScore = -Infinity;
+    let bestSatisfied = false;
+    for(let i = 0; i < keys.length; i += 1){
+      const key = keys[i];
+      const recipe = getBioforgeRecipe(key);
+      if(!recipe) continue;
+      const requirements = getRecipeInputMap(recipe);
+      if(!requirements.size){
+        if(bestKey == null){
+          bestKey = key;
+        }
+        continue;
+      }
+      let satisfied = true;
+      let score = 0;
+      for(const [item, amount] of requirements.entries()){
+        const available = counts.get(item) ?? 0;
+        if(amount > 0){
+          if(available < amount){
+            satisfied = false;
+          }
+          const ratio = available / amount;
+          score += Math.min(ratio, 1);
+        }
+      }
+      const normalised = score / requirements.size;
+      if(satisfied){
+        if(!bestSatisfied || normalised > bestScore){
+          bestSatisfied = true;
+          bestScore = normalised;
+          bestKey = key;
+        }
+        if(normalised >= 1){
+          break;
+        }
+        continue;
+      }
+      if(!bestSatisfied && normalised > bestScore){
+        bestScore = normalised;
+        bestKey = key;
+      }
+    }
+    if(bestSatisfied && bestKey){
+      const recipe = getBioforgeRecipe(bestKey);
+      if(recipe){
+        structure.recipe = recipe;
+        structure.recipeKey = recipe.key;
+        if(Array.isArray(structure.availableRecipeKeys)){
+          const idx = structure.availableRecipeKeys.indexOf(recipe.key);
+          if(idx >= 0) structure.activeRecipeIndex = idx;
+        }
+      }
+    }
+  }
+
   function rebuildFactionClusterLinks(cluster, entries, factory){
     const existingAutoLinks = new Map();
     for(const [linkId, link] of cluster.links.entries()){
@@ -445,7 +533,23 @@ export function createFactoryOwnershipManager({
         list = [];
         providersByItem.set(item, list);
       }
-      list.push(provider);
+      list.push({
+        item,
+        objectId: provider.objectId,
+        portId: provider.portId,
+      });
+    };
+    const releaseProvider = (provider) => {
+      if(!provider?.item) return;
+      const list = providersByItem.get(provider.item);
+      if(!list) return;
+      const index = list.findIndex((entry) => entry.objectId === provider.objectId && entry.portId === provider.portId);
+      if(index >= 0){
+        list.splice(index, 1);
+      }
+      if(list.length === 0){
+        providersByItem.delete(provider.item);
+      }
     };
     for(const entry of entries){
       if(entry.kind === FactoryKind.NODE){
@@ -472,24 +576,83 @@ export function createFactoryOwnershipManager({
       const structure = factory?.structures?.get(entry.tileIdx);
       const recipe = resolveSmelterRecipe(structure);
       if(!recipe) continue;
-      const requiredItems = Array.from(getRecipeInputMap(recipe).keys());
-      const allowedItems = structure?.allowedInputItems instanceof Set
-        ? Array.from(structure.allowedInputItems)
-        : [];
-      const candidateItems = new Set([...requiredItems, ...allowedItems]);
-      if(candidateItems.size === 0) continue;
       const smelterObjectId = clusterObjectIdForEntry(entry);
       if(!cluster.objects.has(smelterObjectId)) continue;
-      for(const item of candidateItems){
-        const providers = providersByItem.get(item);
-        if(!providers) continue;
-        for(const provider of providers){
-          const linkKey = `${provider.objectId}:${provider.portId}->${smelterObjectId}:${SMELTER_INPUT_PORT_ID}:${item}`;
+
+      const baseProviderPool = new Map();
+      for(const [item, list] of providersByItem.entries()){
+        if(!Array.isArray(list) || list.length === 0) continue;
+        baseProviderPool.set(item, list.map((provider) => ({ ...provider })));
+      }
+
+      const counts = new Map();
+      for(const [item, list] of baseProviderPool.entries()){
+        counts.set(item, list.length);
+      }
+      selectSmelterRecipeFromCounts(structure, counts);
+
+      if(cluster.objects.has(smelterObjectId)){
+        const updatedObject = buildSmelterClusterObject(entry, factory);
+        upsertCloudFactoryObject(cluster, updatedObject);
+      }
+
+      const smelterObject = cluster.objects.get(smelterObjectId);
+      const inputPorts = Array.isArray(smelterObject?.ports)
+        ? smelterObject.ports.filter((port) => port.direction === CloudFactoryPortDirection.INPUT)
+        : [];
+
+      const assignmentsByPort = new Map(inputPorts.map((port) => [port.id, []]));
+
+      const providerPool = new Map();
+      for(const [item, list] of baseProviderPool.entries()){
+        providerPool.set(item, list.map((provider) => ({ ...provider })));
+      }
+
+      const takeProvider = (preferredItem = null) => {
+        if(preferredItem && providerPool.has(preferredItem)){
+          const list = providerPool.get(preferredItem);
+          if(list.length){
+            const provider = list.shift();
+            if(list.length === 0){
+              providerPool.delete(preferredItem);
+            }
+            return provider;
+          }
+          return null;
+        }
+        if(preferredItem == null){
+          for(const [item, list] of providerPool.entries()){
+            if(!list.length) continue;
+            const provider = list.shift();
+            if(list.length === 0){
+              providerPool.delete(item);
+            }
+            return provider;
+          }
+        }
+        return null;
+      };
+
+      for(const port of inputPorts){
+        const preferredItem = port.metadata?.item ?? null;
+        const provider = takeProvider(preferredItem);
+        if(!provider) continue;
+        if(!assignmentsByPort.has(port.id)){
+          assignmentsByPort.set(port.id, []);
+        }
+        assignmentsByPort.get(port.id).push(provider);
+      }
+
+      for(const [portId, assignedProviders] of assignmentsByPort.entries()){
+        for(const provider of assignedProviders){
+          if(!provider) continue;
+          releaseProvider(provider);
+          const linkKey = `${provider.objectId}:${provider.portId}->${smelterObjectId}:${portId}:${provider.item}`;
           if(!desiredLinks.has(linkKey)){
             desiredLinks.set(linkKey, {
               source: { objectId: provider.objectId, portId: provider.portId },
-              target: { objectId: smelterObjectId, portId: SMELTER_INPUT_PORT_ID },
-              item,
+              target: { objectId: smelterObjectId, portId },
+              item: provider.item,
             });
           }
         }

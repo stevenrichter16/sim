@@ -156,6 +156,21 @@ function inferMaterialForLinkedPort(nodeMap, linkMap, node, port, telemetryMap =
   return inferPortOutputItem(sourceNode, sourcePort, telemetryMap);
 }
 
+function collectMaterialsForLinkedPort(nodeMap, linkMap, node, port, telemetryMap = null){
+  const counts = new Map();
+  if(!node || !port) return counts;
+  for(const link of linkMap.values()){
+    if(link?.target?.objectId !== node.id || link?.target?.portId !== port.id) continue;
+    const sourceNode = nodeMap.get(link.source?.objectId);
+    if(!sourceNode) continue;
+    const sourcePort = sourceNode.ports?.find((entry) => entry.id === link.source?.portId) ?? null;
+    const material = inferPortOutputItem(sourceNode, sourcePort, telemetryMap);
+    if(!material) continue;
+    counts.set(material, (counts.get(material) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export function initInput({ canvas, draw }){
   const brushGrid = document.getElementById('brushGrid');
   const factoryBrushGrid = document.getElementById('factoryBrushGrid');
@@ -972,27 +987,45 @@ export function initInput({ canvas, draw }){
           for(const port of node.ports){
             const row = document.createElement('div');
             row.className = 'cloud-cluster-port';
-            const info = document.createElement('div');
-            info.className = 'cloud-cluster-port-info';
-            const label = document.createElement('span');
-            label.className = 'cloud-cluster-port-label';
-            const dirIcon = port.direction === 'input' ? '⬅' : '➡';
-            label.textContent = `${dirIcon} ${port.label ?? port.id}`;
-            info.append(label);
-            if(node.kind === FactoryKind.SMELTER || node.kind === FactoryKind.CONSTRUCTOR){
-              let materialKey = null;
-              if(port.direction === 'input'){
-                materialKey = inferMaterialForLinkedPort(nodesById, linksById, node, port, telemetryByNode);
-              } else if(port.direction === 'output'){
-                materialKey = inferPortOutputItem(node, port, telemetryByNode);
-              }
-              if(materialKey){
+        const info = document.createElement('div');
+        info.className = 'cloud-cluster-port-info';
+        const label = document.createElement('span');
+        label.className = 'cloud-cluster-port-label';
+        const dirIcon = port.direction === 'input' ? '⬅' : '➡';
+        label.textContent = `${dirIcon} ${port.label ?? port.id}`;
+        info.append(label);
+        if(node.kind === FactoryKind.SMELTER || node.kind === FactoryKind.CONSTRUCTOR){
+          if(port.direction === 'input'){
+            const materialCounts = collectMaterialsForLinkedPort(nodesById, linksById, node, port, telemetryByNode);
+            if(materialCounts.size){
+              for(const [materialKey, count] of materialCounts.entries()){
                 const badge = document.createElement('span');
                 badge.className = 'cloud-cluster-port-material';
-                badge.textContent = `• ${formatFactoryItemName(materialKey)}`;
+                const labelText = formatFactoryItemName(materialKey);
+                badge.textContent = count > 1 ? `• ${labelText} ×${count}` : `• ${labelText}`;
+                info.append(badge);
+              }
+            } else {
+              const fallbackMaterial = port.metadata?.item
+                ?? (Array.isArray(port.itemKeys) && port.itemKeys[0])
+                ?? inferMaterialForLinkedPort(nodesById, linksById, node, port, telemetryByNode);
+              if(fallbackMaterial){
+                const badge = document.createElement('span');
+                badge.className = 'cloud-cluster-port-material';
+                badge.textContent = `• ${formatFactoryItemName(fallbackMaterial)}`;
                 info.append(badge);
               }
             }
+          } else if(port.direction === 'output'){
+            const materialKey = inferPortOutputItem(node, port, telemetryByNode);
+            if(materialKey){
+              const badge = document.createElement('span');
+              badge.className = 'cloud-cluster-port-material';
+              badge.textContent = `• ${formatFactoryItemName(materialKey)}`;
+              info.append(badge);
+            }
+          }
+        }
             row.append(info);
             const actions = document.createElement('div');
             actions.className = 'cloud-cluster-port-actions';
