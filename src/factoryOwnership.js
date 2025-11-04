@@ -1,10 +1,7 @@
 import { clamp01 } from './constants.js';
 import { world } from './state.js';
 import { FACTIONS } from './factions.js';
-import {
-  createCloudClusterRegistry,
-  ensureRegistry as ensureCloudClusterRegistry,
-} from './cloudCluster/registry.js';
+import { createCloudClusterRegistry, ensureRegistry as ensureCloudClusterRegistry } from './cloudCluster/registry.js';
 import { CloudFactoryPortDirection } from './cloudCluster/domain/factoryObject.js';
 import {
   createCluster as createCloudCluster,
@@ -14,6 +11,7 @@ import {
   removeLink as removeCloudClusterLink,
 } from './cloudCluster/domain/cluster.js';
 import { updateClusterAccumulatorMembership } from './cloudCluster/sim/index.js';
+import { getCloudClusterRegistry, setCloudClusterRegistry } from './cloudCluster/state/index.js';
 
 const FACTORY_INFLUENCE_THRESHOLD = 0.05;
 const CLOUD_CLUSTER_AUTO_LINK_PREFIX = 'auto:faction:';
@@ -91,11 +89,31 @@ export function createFactoryOwnershipManager({
   }
 
   function ensureFactoryCloudRegistry(factory){
-    const registry = ensureCloudClusterRegistry(factory?.cloudClusters);
-    if(factory){
-      factory.cloudClusters = registry;
+    const factoryRegistry = ensureCloudClusterRegistry(factory?.cloudClusters);
+    const stateRegistry = getCloudClusterRegistry();
+    const targetRegistry = stateRegistry;
+
+    if(factoryRegistry !== stateRegistry){
+      for(const [id, cluster] of factoryRegistry.byId.entries()){
+        targetRegistry.byId.set(id, cluster);
+        if(!targetRegistry.order.includes(id)){
+          targetRegistry.order.push(id);
+        }
+      }
+      const seen = new Set();
+      targetRegistry.order = targetRegistry.order.filter((id) => {
+        if(seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
     }
-    return registry;
+
+    if(factory){
+      factory.cloudClusters = targetRegistry;
+    }
+
+    setCloudClusterRegistry(targetRegistry);
+    return targetRegistry;
   }
 
   function clusterIdForFaction(factionId){
@@ -410,63 +428,103 @@ export function createFactoryOwnershipManager({
   }
 
   function rebuildFactionClusterLinks(cluster, entries, factory){
-    const autoLinkIds = [];
+    const existingAutoLinks = new Map();
     for(const [linkId, link] of cluster.links.entries()){
-      if(typeof linkId === 'string' && linkId.startsWith(CLOUD_CLUSTER_AUTO_LINK_PREFIX)){
-        autoLinkIds.push(linkId);
+      const isAutoId = typeof linkId === 'string' && linkId.startsWith(CLOUD_CLUSTER_AUTO_LINK_PREFIX);
+      const isAutoMeta = link?.metadata?.auto === true;
+      if(!isAutoId && !isAutoMeta) continue;
+      const key = `${link?.source?.objectId ?? ''}:${link?.source?.portId ?? ''}->${link?.target?.objectId ?? ''}:${link?.target?.portId ?? ''}:${link?.metadata?.item ?? ''}`;
+      existingAutoLinks.set(key, linkId);
+    }
+
+    const providersByItem = new Map();
+    const registerProvider = (item, provider) => {
+      if(!item || !provider) return;
+      let list = providersByItem.get(item);
+      if(!list){
+        list = [];
+        providersByItem.set(item, list);
+      }
+      list.push(provider);
+    };
+    for(const entry of entries){
+      if(entry.kind === FactoryKind.NODE){
+        const resource = resolveNodeResource(factory, entry);
+        if(!resource) continue;
+        const objectId = clusterObjectIdForEntry(entry);
+        if(!cluster.objects.has(objectId)) continue;
+        registerProvider(resource, { objectId, portId: NODE_OUTPUT_PORT_ID });
         continue;
       }
-      if(link?.metadata?.auto){
-        autoLinkIds.push(linkId);
+      if(entry.kind === FactoryKind.MINER){
+        const node = factory?.nodes?.get(entry.tileIdx);
+        const resource = node?.resource ?? null;
+        if(!resource) continue;
+        const objectId = clusterObjectIdForEntry(entry);
+        if(!cluster.objects.has(objectId)) continue;
+        registerProvider(resource, { objectId, portId: DEFAULT_OUTPUT_PORT_ID });
+        continue;
       }
     }
-    for(const linkId of autoLinkIds){
-      removeCloudClusterLink(cluster, linkId);
-    }
-
-    const nodesByItem = new Map();
-    for(const entry of entries){
-      if(entry.kind !== FactoryKind.NODE) continue;
-      const resource = resolveNodeResource(factory, entry);
-      if(!resource) continue;
-      const objectId = clusterObjectIdForEntry(entry);
-      if(!cluster.objects.has(objectId)) continue;
-      if(!nodesByItem.has(resource)){
-        nodesByItem.set(resource, []);
-      }
-      nodesByItem.get(resource).push({ objectId, portId: NODE_OUTPUT_PORT_ID });
-    }
-
+    const desiredLinks = new Map();
     for(const entry of entries){
       if(entry.kind !== FactoryKind.SMELTER) continue;
       const structure = factory?.structures?.get(entry.tileIdx);
       const recipe = resolveSmelterRecipe(structure);
       if(!recipe) continue;
       const requiredItems = Array.from(getRecipeInputMap(recipe).keys());
-      if(requiredItems.length === 0) continue;
+      const allowedItems = structure?.allowedInputItems instanceof Set
+        ? Array.from(structure.allowedInputItems)
+        : [];
+      const candidateItems = new Set([...requiredItems, ...allowedItems]);
+      if(candidateItems.size === 0) continue;
       const smelterObjectId = clusterObjectIdForEntry(entry);
       if(!cluster.objects.has(smelterObjectId)) continue;
-      for(const item of requiredItems){
-        const providers = nodesByItem.get(item);
+      for(const item of candidateItems){
+        const providers = providersByItem.get(item);
         if(!providers) continue;
         for(const provider of providers){
-          const linkId = `${CLOUD_CLUSTER_AUTO_LINK_PREFIX}${cluster.id}:${provider.objectId}->${smelterObjectId}:${item}`;
-          upsertCloudClusterLink(cluster, {
-            id: linkId,
-            source: { objectId: provider.objectId, portId: provider.portId },
-            target: { objectId: smelterObjectId, portId: SMELTER_INPUT_PORT_ID },
-            metadata: {
-              auto: true,
-              factionClusterId: cluster.id,
+          const linkKey = `${provider.objectId}:${provider.portId}->${smelterObjectId}:${SMELTER_INPUT_PORT_ID}:${item}`;
+          if(!desiredLinks.has(linkKey)){
+            desiredLinks.set(linkKey, {
+              source: { objectId: provider.objectId, portId: provider.portId },
+              target: { objectId: smelterObjectId, portId: SMELTER_INPUT_PORT_ID },
               item,
-            },
-          });
+            });
+          }
         }
       }
     }
+
+    let changed = false;
+    for(const [key, linkId] of existingAutoLinks.entries()){
+      if(desiredLinks.has(key)){
+        desiredLinks.delete(key);
+        continue;
+      }
+      removeCloudClusterLink(cluster, linkId);
+      changed = true;
+    }
+
+    for(const [key, def] of desiredLinks.entries()){
+      const linkId = `${CLOUD_CLUSTER_AUTO_LINK_PREFIX}${cluster.id}:${def.source.objectId}->${def.target.objectId}:${def.item}`;
+      upsertCloudClusterLink(cluster, {
+        id: linkId,
+        source: def.source,
+        target: def.target,
+        metadata: {
+          auto: true,
+          factionClusterId: cluster.id,
+          item: def.item,
+        },
+      });
+      changed = true;
+    }
+
+    return changed;
   }
 
-  function updateFactionCluster(cluster, entries, factory){
+  function updateFactionCluster(cluster, entries, factory, registry){
     const desired = new Map();
     for(const entry of entries){
       const objectDef = buildClusterObjectForOwnership(entry, factory);
@@ -476,10 +534,14 @@ export function createFactoryOwnershipManager({
 
     const removed = [];
     for(const objectId of Array.from(cluster.objects.keys())){
-      if(!desired.has(objectId)){
-        removeCloudFactoryObject(cluster, objectId);
-        removed.push(objectId);
+      if(desired.has(objectId)) continue;
+      const existing = cluster.objects.get(objectId);
+      const autoManaged = existing?.metadata?.auto === true;
+      if(!autoManaged){
+        continue;
       }
+      removeCloudFactoryObject(cluster, objectId);
+      removed.push(objectId);
     }
 
     const added = [];
@@ -495,7 +557,11 @@ export function createFactoryOwnershipManager({
       updateClusterAccumulatorMembership(cluster.id, { added, removed });
     }
 
-    rebuildFactionClusterLinks(cluster, entries, factory);
+    const linksChanged = rebuildFactionClusterLinks(cluster, entries, factory);
+
+    if(registry && (added.length || removed.length || linksChanged)){
+      setCloudClusterRegistry(registry);
+    }
   }
 
   function syncFactionCloudClusters(factory, ownershipByFaction){
@@ -510,11 +576,11 @@ export function createFactoryOwnershipManager({
       let cluster = registry.byId.get(clusterId);
       if(entries.length > 0){
         cluster = ensureFactionCloudCluster(factory, faction, registry);
-        updateFactionCluster(cluster, entries, factory);
+        updateFactionCluster(cluster, entries, factory, registry);
         continue;
       }
       if(!cluster) continue;
-      updateFactionCluster(cluster, [], factory);
+      updateFactionCluster(cluster, [], factory, registry);
       const hasObjects = (cluster.objects?.size ?? 0) > 0;
       const hasLinks = (cluster.links?.size ?? 0) > 0;
       if(!hasObjects && !hasLinks){
@@ -640,4 +706,3 @@ export function initialiseFactoryOwnership(factory){
   }
   return registry;
 }
-

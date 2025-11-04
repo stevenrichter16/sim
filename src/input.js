@@ -47,6 +47,7 @@ import {
   getConstructorBlueprintDefinition,
 } from './factory.js';
 import { createCloudClusterEditor } from './cloudCluster/ui/index.js';
+import { addCloudClusterRegistryListener } from './cloudCluster/state/index.js';
 
 const MODE_LABEL = Object.fromEntries(
   Object.entries(Mode).map(([name, value])=>{
@@ -257,6 +258,67 @@ export function initInput({ canvas, draw }){
   overlayToggleKeys.KeyC = 'control';
 
   const cloudEditor = createCloudClusterEditor();
+  let suppressCloudClusterRefresh = false;
+  let pendingCloudClusterRefresh = false;
+  let cloudClusterRefreshScheduled = false;
+  let allowSelectFocusedRefresh = false;
+
+  const requestFrame = typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame
+    : (fn) => setTimeout(fn, 0);
+
+  const scheduleCloudClusterRefresh = () => {
+    const isSelectFocused = cloudClusterSelect
+      && typeof document !== 'undefined'
+      && document.activeElement === cloudClusterSelect;
+    if(suppressCloudClusterRefresh || (isSelectFocused && !allowSelectFocusedRefresh)){
+      pendingCloudClusterRefresh = true;
+      return;
+    }
+    if(cloudClusterRefreshScheduled){
+      pendingCloudClusterRefresh = true;
+      return;
+    }
+    cloudClusterRefreshScheduled = true;
+    pendingCloudClusterRefresh = false;
+    requestFrame(() => {
+      cloudClusterRefreshScheduled = false;
+      const selectFocused = cloudClusterSelect
+        && typeof document !== 'undefined'
+        && document.activeElement === cloudClusterSelect;
+      if(suppressCloudClusterRefresh || (selectFocused && !allowSelectFocusedRefresh)){
+        pendingCloudClusterRefresh = true;
+        return;
+      }
+      allowSelectFocusedRefresh = false;
+      refreshCloudClusterUI();
+    });
+  };
+
+  const resumeCloudClusterRefresh = () => {
+    if(!suppressCloudClusterRefresh){
+      if(pendingCloudClusterRefresh){
+        pendingCloudClusterRefresh = false;
+        scheduleCloudClusterRefresh();
+      }
+      return;
+    }
+    suppressCloudClusterRefresh = false;
+    if(pendingCloudClusterRefresh){
+      pendingCloudClusterRefresh = false;
+      scheduleCloudClusterRefresh();
+    }
+  };
+
+  const suspendCloudClusterRefresh = () => {
+    suppressCloudClusterRefresh = true;
+  };
+
+  if(typeof addCloudClusterRegistryListener === 'function'){
+    addCloudClusterRegistryListener(() => {
+      scheduleCloudClusterRefresh();
+    });
+  }
   const getSmelterRecipes = () => (typeof cloudEditor.getSmelterRecipes === 'function' ? cloudEditor.getSmelterRecipes() : []);
   const getConstructorBlueprints = () => (typeof cloudEditor.getConstructorBlueprints === 'function' ? cloudEditor.getConstructorBlueprints() : []);
 
@@ -499,19 +561,19 @@ export function initInput({ canvas, draw }){
         }
       });
       header.append(title);
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'btn';
-      removeBtn.textContent = 'Remove';
-      removeBtn.addEventListener('click', () => {
-        try {
-          cloudEditor.removeObject(node.id);
-        } catch (error){
-          console.error('Failed to remove cloud object', error);
-        }
-        refreshCloudClusterUI();
-      });
-      header.append(removeBtn);
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', () => {
+          try {
+            cloudEditor.removeObject(node.id);
+          } catch (error){
+            console.error('Failed to remove cloud object', error);
+          }
+          refreshCloudClusterUI();
+        });
+        header.append(removeBtn);
       nodeEl.append(header);
       if(node.description){
         const meta = document.createElement('div');
@@ -2774,7 +2836,24 @@ function toggleScenarioDiagPanel(force){
       } catch (error){
         console.error('Failed to select cloud cluster', error);
       }
-      refreshCloudClusterUI();
+      allowSelectFocusedRefresh = true;
+      scheduleCloudClusterRefresh();
+    });
+    cloudClusterSelect.addEventListener('blur', () => {
+      resumeCloudClusterRefresh();
+    });
+  }
+
+  if(cloudClusterPanel){
+    const handlePointerUp = () => {
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+      resumeCloudClusterRefresh();
+    };
+    cloudClusterPanel.addEventListener('pointerdown', () => {
+      suspendCloudClusterRefresh();
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
     });
   }
 

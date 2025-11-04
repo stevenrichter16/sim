@@ -1251,159 +1251,18 @@ export function stepFactory(){
   refreshFactoryOwnership();
 }
 
-function resolveFactoryOwnershipAtTile(tileIdx){
-  if(!Number.isFinite(tileIdx) || tileIdx < 0) return { factionId: null, dominantFactionId: null, control: 0 };
-  const dom = world.dominantFaction;
-  const ctrl = world.controlLevel;
-  if(!dom || !ctrl || tileIdx >= dom.length || tileIdx >= ctrl.length){
-    return { factionId: null, dominantFactionId: null, control: 0 };
-  }
-  const dominantFactionId = dom[tileIdx];
-  const control = clamp01(ctrl[tileIdx] ?? 0);
-  const validDominant = typeof dominantFactionId === 'number' && dominantFactionId >= 0;
-  const hasOwnership = validDominant && control > FACTORY_INFLUENCE_THRESHOLD;
-  return {
-    factionId: hasOwnership ? dominantFactionId : null,
-    dominantFactionId: validDominant ? dominantFactionId : null,
-    control,
-  };
-}
-
-function createOwnershipEntry({ tileIdx, type, kind, control, factionId, dominantFactionId, resource = null, orientation = null }){
-  const coords = tileIdxToPoint(tileIdx);
-  const entry = {
-    id: `${type}:${tileIdx}:${kind ?? 'unknown'}`,
-    tileIdx,
-    coords,
-    type,
-    kind,
-    control,
-    factionId,
-    dominantFactionId,
-  };
-  if(resource != null) entry.resource = resource;
-  if(orientation != null) entry.orientation = orientation;
-  return entry;
-}
-
-function sortOwnershipEntries(list){
-  if(!Array.isArray(list)) return list;
-  list.sort((a, b) => {
-    const tileDelta = (a?.tileIdx ?? 0) - (b?.tileIdx ?? 0);
-    if(tileDelta !== 0) return tileDelta;
-    const typeDelta = String(a?.type ?? '').localeCompare(String(b?.type ?? ''));
-    if(typeDelta !== 0) return typeDelta;
-    return String(a?.kind ?? '').localeCompare(String(b?.kind ?? ''));
-  });
-  return list;
-}
-
-function refreshFactoryOwnership(){
-  const factory = ensureFactoryState();
-  const byFaction = new Map();
-  const unassigned = [];
-  const entries = [];
-
-  const registerEntry = (entry) => {
-    if(!entry) return;
-    entries.push(entry);
-    if(entry.factionId != null){
-      let list = byFaction.get(entry.factionId);
-      if(!list){
-        list = [];
-        byFaction.set(entry.factionId, list);
-      }
-      list.push(entry);
-    } else {
-      unassigned.push(entry);
-    }
-  };
-
-  for(const [key, node] of factory.nodes.entries()){
-    const tileIdx = Number(key);
-    if(!Number.isFinite(tileIdx) || tileIdx < 0) continue;
-    const { factionId, dominantFactionId, control } = resolveFactoryOwnershipAtTile(tileIdx);
-    const entry = createOwnershipEntry({
-      tileIdx,
-      type: 'node',
-      kind: FactoryKind.NODE,
-      control,
-      factionId,
-      dominantFactionId,
-      resource: node?.resource ?? null,
-    });
-    registerEntry(entry);
-  }
-
-  for(const [key, structure] of factory.structures.entries()){
-    const tileIdx = Number(key);
-    if(!Number.isFinite(tileIdx) || tileIdx < 0) continue;
-    const { factionId, dominantFactionId, control } = resolveFactoryOwnershipAtTile(tileIdx);
-    const entry = createOwnershipEntry({
-      tileIdx,
-      type: 'structure',
-      kind: structure?.kind ?? null,
-      control,
-      factionId,
-      dominantFactionId,
-      orientation: structure?.orientation ?? null,
-    });
-    registerEntry(entry);
-  }
-
-  sortOwnershipEntries(entries);
-  sortOwnershipEntries(unassigned);
-  for(const list of byFaction.values()){
-    sortOwnershipEntries(list);
-  }
-
-  factory.ownershipRecords = entries;
-  factory.ownershipByFaction = byFaction;
-  factory.unassignedOwnership = unassigned;
-}
-
-function cloneOwnershipEntry(entry){
-  if(!entry) return null;
-  const clone = {
-    id: entry.id,
-    tileIdx: entry.tileIdx,
-    type: entry.type,
-    kind: entry.kind,
-    control: entry.control,
-    factionId: entry.factionId,
-    dominantFactionId: entry.dominantFactionId ?? null,
-  };
-  if(entry.coords){
-    clone.coords = { ...entry.coords };
-  }
-  if(entry.resource != null) clone.resource = entry.resource;
-  if(entry.orientation != null) clone.orientation = entry.orientation;
-  return clone;
-}
-
-export function getFactoryOwnership(){
-  refreshFactoryOwnership();
-  const factory = ensureFactoryState();
-  const byFactionMap = factory.ownershipByFaction instanceof Map ? factory.ownershipByFaction : new Map();
-  const allEntries = Array.isArray(factory.ownershipRecords) ? factory.ownershipRecords : [];
-  const unassigned = Array.isArray(factory.unassignedOwnership) ? factory.unassignedOwnership : [];
-  const byFaction = FACTIONS.map((faction) => ({
-    factionId: faction.id,
-    factionKey: faction.key,
-    color: faction.color,
-    objects: (byFactionMap.get(faction.id) ?? []).map(cloneOwnershipEntry).filter(Boolean),
-  }));
-  return {
-    byFaction,
-    unassigned: unassigned.map(cloneOwnershipEntry).filter(Boolean),
-    all: allEntries.map(cloneOwnershipEntry).filter(Boolean),
-  };
-}
-
-}
+/* Ownership helpers were moved into factoryOwnership.js.
+ * createFactoryOwnershipManager now supplies refreshFactoryOwnership/getFactoryOwnership. */
 
 export function getFactoryBrushKeys(){
   return Object.keys(BRUSH_SPEC);
+}
+
+export function isFactoryBrush(value){
+  if(typeof value !== 'string' || !value.length){
+    return false;
+  }
+  return Object.prototype.hasOwnProperty.call(BRUSH_SPEC, value);
 }
 
 export function placeFactoryStructure(tileIdx, brush, { orientation } = {}){

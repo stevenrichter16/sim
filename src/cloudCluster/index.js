@@ -30,6 +30,7 @@ export {
   resetCloudClusterState,
   getCloudClusterRegistry,
   setCloudClusterRegistry,
+  addCloudClusterRegistryListener,
   clearCloudClusterDiagnostics,
 } from './state/index.js';
 export {

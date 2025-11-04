@@ -106,6 +106,42 @@ describe('factory ownership influence tracking', () => {
     expect(cluster.links.get(linkId)?.metadata?.auto).toBe(true);
   });
 
+  it('links multiple resource providers required by a bioforge recipe', () => {
+    const factionId = 1;
+    const nerveTiles = [idx(14, 6), idx(15, 6)];
+    const bloodTile = idx(16, 6);
+    const forgeTile = idx(17, 6);
+
+    expect(placeFactoryStructure(nerveTiles[0], 'factory-node-nerve').ok).toBe(true);
+    expect(placeFactoryStructure(nerveTiles[1], 'factory-node-nerve').ok).toBe(true);
+    expect(placeFactoryStructure(bloodTile, 'factory-node-blood').ok).toBe(true);
+    expect(placeFactoryStructure(forgeTile, 'factory-smelter-omni', orient('east')).ok).toBe(true);
+
+    for(const tile of [...nerveTiles, bloodTile, forgeTile]){
+      world.dominantFaction[tile] = factionId;
+      world.controlLevel[tile] = 0.6;
+    }
+
+    stepFactory();
+
+    const clusterId = `faction-${factionId}-cloud`;
+    const registry = world.factory.cloudClusters;
+    const cluster = registry.byId.get(clusterId);
+    expect(cluster).toBeTruthy();
+
+    const smelterObjectId = `structure-${FactoryKind.SMELTER}-${forgeTile}`;
+    const autoLinks = Array.from(cluster.links.values()).filter((link) => link?.metadata?.auto && link?.target?.objectId === smelterObjectId);
+
+    const nerveLinks = autoLinks.filter((link) => link.metadata?.item === FactoryItem.NERVE_THREAD);
+    const bloodLinks = autoLinks.filter((link) => link.metadata?.item === FactoryItem.BLOOD_VIAL);
+
+    const expectedNerveSources = new Set(nerveTiles.map((tile) => `node-${FactoryKind.NODE}-${tile}`));
+    expect(new Set(nerveLinks.map((link) => link.source.objectId))).toEqual(expectedNerveSources);
+
+    const expectedBloodSource = `node-${FactoryKind.NODE}-${bloodTile}`;
+    expect(bloodLinks.some((link) => link.source.objectId === expectedBloodSource)).toBe(true);
+  });
+
   it('removes objects from faction cloud clusters when influence is lost', () => {
     const factionId = 2;
     const nodeTile = idx(11, 5);

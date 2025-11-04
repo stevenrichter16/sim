@@ -666,6 +666,9 @@ export function createCloudClusterEditor(options = {}){
         added.push(id);
       }
     }
+    if(added.length || removed.length){
+      // cluster composition changed; accumulator updated below
+    }
     if(!nextRegistry.order.includes(clusterId)){
       nextRegistry.order.push(clusterId);
     }
