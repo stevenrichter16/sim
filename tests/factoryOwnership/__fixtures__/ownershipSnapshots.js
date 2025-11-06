@@ -19,14 +19,30 @@ export function makeBasicOwnershipSnapshot(){
   world.dominantFaction[forgeTile] = 1;
   world.controlLevel[forgeTile] = 0.72;
 
+  const nodes = [
+    { tileIdx: nodeTile, resource: 'blood_vial' },
+  ];
+  const nodesByTile = new Map(nodes.map((node) => [node.tileIdx, node]));
+
+  const structures = [
+    {
+      tileIdx: forgeTile,
+      kind: 'smelter',
+      orientation: 'north',
+      recipeKey: 'body_system',
+      availableRecipeKeys: ['body_system'],
+      activeRecipeIndex: 0,
+    },
+  ];
+  const structuresByTile = new Map(structures.map((structure) => [structure.tileIdx, structure]));
+
   return {
     world,
-    nodes: [
-      { tileIdx: nodeTile, resource: 'blood_vial' },
-    ],
-    structures: [
-      { tileIdx: forgeTile, kind: 'factory-smelter-omni', orientation: 'north' },
-    ],
+    nodes,
+    nodesByTile,
+    structures,
+    structuresByTile,
+    registrySnapshot: { clustersById: new Map() },
   };
 }
 
@@ -41,13 +57,26 @@ export function makeContestedOwnershipSnapshot(){
   world.dominantFaction[claimedStructure] = 3;
   world.controlLevel[claimedStructure] = 0.6;
 
+  const nodes = [
+    { tileIdx: contestedNode, resource: 'nerve_thread' },
+  ];
+  const nodesByTile = new Map(nodes.map((node) => [node.tileIdx, node]));
+
+  const structures = [
+    {
+      tileIdx: claimedStructure,
+      kind: 'belt',
+      orientation: 'east',
+    },
+  ];
+  const structuresByTile = new Map(structures.map((structure) => [structure.tileIdx, structure]));
+
   return {
     world,
-    nodes: [
-      { tileIdx: contestedNode, resource: 'nerve_thread' },
-    ],
-    structures: [
-      { tileIdx: claimedStructure, kind: 'factory-belt', orientation: 'east' },
-    ],
+    nodes,
+    nodesByTile,
+    structures,
+    structuresByTile,
+    registrySnapshot: { clustersById: new Map() },
   };
 }

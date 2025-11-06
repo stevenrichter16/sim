@@ -20,14 +20,14 @@ describe('computeOwnershipEntries', () => {
 
     expect(result.entries.map((entry) => entry.id)).toEqual([
       'node:14:node',
-      'structure:26:factory-smelter-omni',
+      'structure:26:smelter',
     ]);
 
     expect(byFactionToObject(result.byFaction)).toEqual({
-      1: ['node:14:node', 'structure:26:factory-smelter-omni'],
+      1: ['node:14:node', 'structure:26:smelter'],
     });
 
-    const smelter = result.entries.find((entry) => entry.id === 'structure:26:factory-smelter-omni');
+    const smelter = result.entries.find((entry) => entry.id === 'structure:26:smelter');
     expect(smelter.orientation).toBe('north');
     expect(smelter.control).toBeCloseTo(0.72, 5);
   });
