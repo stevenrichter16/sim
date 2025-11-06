@@ -1,4 +1,3 @@
-import { clamp01 } from './constants.js';
 import { world } from './state.js';
 import { FACTIONS } from './factions.js';
 import { createCloudClusterRegistry, ensureRegistry as ensureCloudClusterRegistry } from './cloudCluster/registry.js';
@@ -12,21 +11,14 @@ import {
 } from './cloudCluster/domain/cluster.js';
 import { updateClusterAccumulatorMembership } from './cloudCluster/sim/index.js';
 import { getCloudClusterRegistry, setCloudClusterRegistry } from './cloudCluster/state/index.js';
+import { computeOwnershipEntries } from './factoryOwnership/transform/ownershipSnapshot.js';
 
-const FACTORY_INFLUENCE_THRESHOLD = 0.05;
 const CLOUD_CLUSTER_AUTO_LINK_PREFIX = 'auto:faction:';
 const NODE_OUTPUT_PORT_ID = 'out';
 const SMELTER_INPUT_PORT_ID = 'in';
 const SMELTER_OUTPUT_PORT_ID = 'out';
 const DEFAULT_INPUT_PORT_ID = 'in';
 const DEFAULT_OUTPUT_PORT_ID = 'out';
-
-function tileIdxToPoint(tileIdx){
-  return {
-    x: tileIdx % world.W,
-    y: (tileIdx / world.W) | 0,
-  };
-}
 
 export function createFactoryOwnershipManager({
   ensureFactoryState,
@@ -39,53 +31,39 @@ export function createFactoryOwnershipManager({
   defaultConstructorBlueprint,
   FactoryKind,
 }){
-  function resolveFactoryOwnershipAtTile(tileIdx){
-    if(!Number.isFinite(tileIdx) || tileIdx < 0){
-      return { factionId: null, dominantFactionId: null, control: 0 };
-    }
-    const dom = world.dominantFaction;
-    const ctrl = world.controlLevel;
-    if(!dom || !ctrl || tileIdx >= dom.length || tileIdx >= ctrl.length){
-      return { factionId: null, dominantFactionId: null, control: 0 };
-    }
-    const dominantFactionId = dom[tileIdx];
-    const control = clamp01(ctrl[tileIdx] ?? 0);
-    const validDominant = typeof dominantFactionId === 'number' && dominantFactionId >= 0;
-    const hasOwnership = validDominant && control > FACTORY_INFLUENCE_THRESHOLD;
-    return {
-      factionId: hasOwnership ? dominantFactionId : null,
-      dominantFactionId: validDominant ? dominantFactionId : null,
-      control,
+  function captureOwnershipInputs(factory){
+    const worldSnapshot = {
+      width: Number.isFinite(world?.W) ? world.W : 0,
+      dominantFaction: world?.dominantFaction ?? [],
+      controlLevel: world?.controlLevel ?? [],
     };
-  }
 
-  function createOwnershipEntry({ tileIdx, type, kind, control, factionId, dominantFactionId, resource = null, orientation = null }){
-    const coords = tileIdxToPoint(tileIdx);
-    const entry = {
-      id: `${type}:${tileIdx}:${kind ?? 'unknown'}`,
-      tileIdx,
-      coords,
-      type,
-      kind,
-      control,
-      factionId,
-      dominantFactionId,
-    };
-    if(resource != null) entry.resource = resource;
-    if(orientation != null) entry.orientation = orientation;
-    return entry;
-  }
+    const nodes = [];
+    if(factory?.nodes instanceof Map){
+      for(const [key, node] of factory.nodes.entries()){
+        const tileIdx = Number(key);
+        if(!Number.isFinite(tileIdx) || tileIdx < 0) continue;
+        nodes.push({
+          tileIdx,
+          resource: node?.resource ?? null,
+        });
+      }
+    }
 
-  function sortOwnershipEntries(list){
-    if(!Array.isArray(list)) return list;
-    list.sort((a, b) => {
-      const tileDelta = (a?.tileIdx ?? 0) - (b?.tileIdx ?? 0);
-      if(tileDelta !== 0) return tileDelta;
-      const typeDelta = String(a?.type ?? '').localeCompare(String(b?.type ?? ''));
-      if(typeDelta !== 0) return typeDelta;
-      return String(a?.kind ?? '').localeCompare(String(b?.kind ?? ''));
-    });
-    return list;
+    const structures = [];
+    if(factory?.structures instanceof Map){
+      for(const [key, structure] of factory.structures.entries()){
+        const tileIdx = Number(key);
+        if(!Number.isFinite(tileIdx) || tileIdx < 0) continue;
+        structures.push({
+          tileIdx,
+          kind: structure?.kind ?? null,
+          orientation: structure?.orientation ?? null,
+        });
+      }
+    }
+
+    return { world: worldSnapshot, nodes, structures };
   }
 
   function ensureFactoryCloudRegistry(factory){
@@ -763,62 +741,8 @@ export function createFactoryOwnershipManager({
 
   function refreshFactoryOwnership(){
     const factory = ensureFactoryState();
-    const byFaction = new Map();
-    const unassigned = [];
-    const entries = [];
-
-    const registerEntry = (entry) => {
-      if(!entry) return;
-      entries.push(entry);
-      if(entry.factionId != null){
-        let list = byFaction.get(entry.factionId);
-        if(!list){
-          list = [];
-          byFaction.set(entry.factionId, list);
-        }
-        list.push(entry);
-      } else {
-        unassigned.push(entry);
-      }
-    };
-
-    for(const [key, node] of factory.nodes.entries()){
-      const tileIdx = Number(key);
-      if(!Number.isFinite(tileIdx) || tileIdx < 0) continue;
-      const { factionId, dominantFactionId, control } = resolveFactoryOwnershipAtTile(tileIdx);
-      const entry = createOwnershipEntry({
-        tileIdx,
-        type: 'node',
-        kind: FactoryKind.NODE,
-        control,
-        factionId,
-        dominantFactionId,
-        resource: node?.resource ?? null,
-      });
-      registerEntry(entry);
-    }
-
-    for(const [key, structure] of factory.structures.entries()){
-      const tileIdx = Number(key);
-      if(!Number.isFinite(tileIdx) || tileIdx < 0) continue;
-      const { factionId, dominantFactionId, control } = resolveFactoryOwnershipAtTile(tileIdx);
-      const entry = createOwnershipEntry({
-        tileIdx,
-        type: 'structure',
-        kind: structure?.kind ?? null,
-        control,
-        factionId,
-        dominantFactionId,
-        orientation: structure?.orientation ?? null,
-      });
-      registerEntry(entry);
-    }
-
-    sortOwnershipEntries(entries);
-    sortOwnershipEntries(unassigned);
-    for(const list of byFaction.values()){
-      sortOwnershipEntries(list);
-    }
+    const snapshot = captureOwnershipInputs(factory);
+    const { entries, byFaction, unassigned } = computeOwnershipEntries(snapshot);
 
     factory.ownershipRecords = entries;
     factory.ownershipByFaction = byFaction;
