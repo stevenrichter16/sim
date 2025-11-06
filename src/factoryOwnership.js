@@ -694,6 +694,9 @@ export function createFactoryOwnershipManager({
   }
 
   function updateFactionCluster(cluster, entries, factory, registry){
+    // TODO(Phase1): replace direct cluster mutation with pure transform outputs.
+    // The plan is to move object/link derivation into src/factoryOwnership/transform/
+    // and have this runtime layer apply the resulting intents.
     const desired = new Map();
     for(const entry of entries){
       const objectDef = buildClusterObjectForOwnership(entry, factory);

@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "allowJs": true,
+    "checkJs": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@factoryOwnership/*": ["src/factoryOwnership/*"]
+    },
+    "types": ["vite/client", "node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.js",
+    "tests/**/*.ts",
+    "tests/**/*.js",
+    "scripts/**/*.ts",
+    "mockups/**/*.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "vitest.factory-ownership.config.ts"
+  ],
+  "exclude": [
+    "dist",
+    "build",
+    "coverage",
+    "node_modules"
+  ]
+}

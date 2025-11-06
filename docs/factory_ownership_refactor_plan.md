@@ -1,7 +1,7 @@
 # Factory Ownership Refactoring Plan
 
 ## Context for Codex implementers
-- **Language & toolchain.** The current repository is vanilla ESM JavaScript executed directly in the browser (see `package.json` scripts). Phase 0 of this roadmap introduces any TypeScript definitions, build tooling, or lint/test scripts that the later phases rely on. Until those scaffolds land, lean on the existing `npm test` / `npm run dev` flows and stage new commands in separate commits so CI changes remain reviewable.
+- **Language & toolchain.** We are standardising on a TypeScript + Vite toolchain. Phase 0 delivers the foundational scaffolding—`tsconfig.json`, Vite build config, ESLint/Prettier rules, Vitest aliases, and updated `package.json` scripts (`npm run lint:factory-ownership`, `npm run test:factory-ownership`, `npm run trace:factory-ownership`). New modules ship in TypeScript immediately; legacy JavaScript stays valid during the transition via `allowJs` and incremental typing, with follow-up tasks to tighten compiler settings once coverage improves.
 - **Primary entry points.** The current orchestration lives in `src/factoryOwnership.js`. Snapshot capture touches `src/factory/state/index.js`, while the cluster UI consumes data from `src/cloudCluster/ui/index.js` and state glue in `src/cloudCluster/state/index.js`.
 - **Existing bugs to guard against.** Manual links being duplicated, recipe metadata desyncing, and registry churn that drops faction clusters are active regressions motivating this refactor. Tests and tracing should explicitly call these out.
 - **Collaboration contract.** Treat the DTO contracts in `src/factoryOwnership/model/` (introduced during Phase 0–1) as the shared language with UI and gameplay systems. Update the accompanying schema + docs whenever a field changes, and keep identifier names descriptive and intent-driven so downstream Codex agents can follow along without tribal knowledge.
@@ -19,12 +19,11 @@
 - `src/factoryOwnership/devtools/` – optional tracing subscribers, diff visualisers, and debug helpers that can be excluded from production bundles.
 - All modules must adopt descriptive names for variables, classes, and functions so intent is obvious without cross-referencing implementation details; prefer `allocatedBloodProviderCount` over generic identifiers like `num` or `tmp`.
 
-## Gap closure checklist (post-Codex review)
-- **Tooling confirmation.** Add a tracked task to either (a) adopt TypeScript + Vite and wire dedicated lint/test scripts (e.g., `npm run lint:factory-ownership`, `npm run test:factory-ownership`), or (b) stay on vanilla ESM and scope the roadmap accordingly. Do not begin Phase 1 until the decision is made and the supporting scripts (tsconfig, Vitest aliases, ESLint config) are in place.
-- **Transitional adapter plan.** Draft how `createFactoryOwnershipManager` will delegate to the new `transform/` module without breaking current imports (notably `src/factory.js` and any tests that mock the manager). Document this adapter in code comments to ease review.
-- **Declarative intent alignment.** Identify every mutation currently performed inside `syncFactionCloudClusters`, `updateFactionCluster`, and the linker (`rebuildFactionClusterLinks`, lines 524-694) and classify whether it should become an "intent" output or remain a runtime side effect.
-- **Registry lifecycle audit.** Map the call flow from `ensureFactoryCloudRegistry` (lines 91-117) through `setCloudClusterRegistry` and flag where the new diff-driven `commitRegistryDiff()` should intercept mutations. Capture these diagrams in the devdocs so reviewers can trace how data flows today versus post-refactor.
-- **Testing footprint expansion.** Update the engineering plan and CI checklist to account for the broader test suite (snapshot approvals, property fuzzing, mutation harness). Make sure reviewers expect the extra runtime.
+## Solo developer checkpoints
+- **Tooling baseline.** TypeScript/Vite configs, lint/test/typecheck scripts, and the factory-ownership DTO contracts (`contracts.ts` + schema helper) are present. Keep `allowJs` on while the rest of the codebase remains JavaScript.
+- **Adapter note.** Leave yourself a brief comment/TODO in `src/factoryOwnership.js` describing how the future transform layer will plug in so Phase 1 starts smoothly.
+- **Mutation TODO.** Maintain a personal checklist of the side effects in `syncFactionCloudClusters`, `updateFactionCluster`, and `rebuildFactionClusterLinks` that need to become declarative intents.
+- **Testing focus.** Plan on adding golden snapshot tests and allocator fuzzing once transforms are extracted. Defer heavier tooling (Storybook, mutation testing) unless a concrete bug demands it.
 
 ## Refactoring steps for testability & observability
 1. **Split orchestration from pure transforms.**
@@ -109,7 +108,7 @@ export interface RegistryDiffV1 {
 - Generate API docs from the contracts so downstream consumers (e.g., UI layer, external tooling) can rely on stable field names and types.
 
 ## Implementation roadmap
-- **Phase 0 – Tooling & contract scaffolding.** Decide on the TypeScript/Vite adoption path, land shared ESLint rules for naming, wire Vitest aliases for the new module layout, and publish the initial DTO contract files (even if they only wrap existing JS shapes). Ship `npm run lint:factory-ownership`, `npm run test:factory-ownership`, and `npm run trace:factory-ownership` scripts—even as placeholders—so downstream phases can fill them in.
+- **Phase 0 – Tooling & contract scaffolding.** Stand up the TypeScript/Vite toolchain (compiler config, Vite build entry, ESLint/Prettier presets, Vitest aliases), add the new npm scripts, and publish the initial DTO contract files (typed, even if they wrap existing JS shapes). Include migration notes for mixed TS/JS usage and CI jobs that exercise the new scripts so later phases build on a typed foundation. Contracts live in `src/factoryOwnership/model/contracts.ts` with a companion JSON schema (`contracts.schema.json`) and `schemas.ts` helper for runtime validation wiring.
 - **Phase 1 – Extract pure transforms.** Land module splits, the snapshot capture helper, and fixture builders together so subsequent phases can rely on the new APIs. Ensure existing integration tests continue to pass by retaining the orchestration shim.
 - **Phase 2 – Allocation engine & invariants.** Replace the current linker logic with the allocator, wiring invariant checks behind a debug flag initially, then defaulting them on after burn-in. Include manual reservation support in this phase so tests confirm a blood node cannot serve two vats.
 - **Phase 3 – Schema-driven builders.** Introduce shared templates and migrate smelter/constructor builders over one at a time, accompanied by golden snapshot updates and naming audits.
@@ -119,35 +118,21 @@ export interface RegistryDiffV1 {
 - **Phase 7 – Rollout governance & fallback paths.** Ship the refactor behind faction-specific feature flags and preserve adapters that can translate between the new diff outputs and the legacy registry format. Document an explicit rollback playbook (reverting to the adapter while retaining telemetry) so on-call engineers can stabilise production quickly if unforeseen edge cases emerge.
 - **Phase 8 – Post-launch hardening.** After the new stack is live, schedule a hardening phase focused on perf tuning, invariant coverage audits, and removing deprecated compatibility layers. Capture learnings in the runbook and backlog any follow-up schema or tooling gaps surfaced during rollout.
 
-## Additional critical considerations
-- **Client/UI contract alignment.** Coordinate with the cloud cluster UI owners to adopt the new DTOs and diff payloads in lockstep. Provide stubbed stories (e.g., in Storybook) that feed the UI with recorded diffs and snapshots so front-end regressions surface before full integration. Include acceptance criteria that verify manual link preservation, recipe listings, and allocator audits render as expected.
-- **Feature-flag instrumentation.** Track feature flag adoption metrics (percentage of factions using the new allocator, number of diffs emitted per tick) and alert on anomalous spikes. Incorporate these counters into the tracing subscriber so QA and telemetry dashboards can observe rollout health in real time.
-- **Runtime concurrency safeguards.** If multiple async systems can trigger ownership syncs, introduce a debounced executor or mutex to ensure only one `commitRegistryDiff()` runs at a time. Document these guardrails and add stress tests that simulate rapid palette edits concurrent with auto-link ticks to confirm idempotency.
-- **Data provenance & audit trails.** Persist diff metadata with actor/context information (e.g., `triggeredBy: 'manualLinkEdit'`, `sourceTick`) so future debugging efforts can trace which user or simulation event drove a change. Provide a sanitised export flow for these logs to support QA bug reports without exposing player-sensitive data.
-- **Training & documentation.** Expand the developer onboarding guide with a refactor FAQ, architecture diagrams of the new module layout, and a migration checklist for teams extending the allocator or schemas. Host internal walkthroughs to familiarise stakeholders with the diff viewer and snapshot-based testing so the new tooling becomes part of daily workflows.
-- **Continuous verification hooks.** Add CI gates that ensure new recipes or node types include schema entries, allocator capacity tests, and golden snapshot updates. Require pull requests touching factory ownership code to attach diff subscriber output for at least one representative scenario, giving reviewers immediate visibility into behavioural changes.
+## Optional future polish
+- Add diff subscribers, telemetry, or visualisers if debugging needs more visibility once the allocator is live.
+- Introduce concurrency guards (`commitRegistryDiff()` mutex/debounce) only if overlapping updates show up in practice.
+- Layer in audit logs or sanitised exports if you start sharing traces externally.
+- Revisit mutation testing, Storybook scenarios, or schema migration tooling after the core transform work stabilises.
 
 ## Testing & verification strategy
-- Maintain a suite of golden snapshots under `tests/factoryOwnership/golden/` and add an approval workflow (CI job requiring explicit ack when diffs change) to prevent accidental churn.
-- Augment CI with targeted property tests that randomise provider/consumer graphs, ensuring invariants (single-use providers, respect manual links) are enforced.
-- Provide a smoke-test harness that runs the allocation engine against live world saves captured from QA, comparing emitted diffs against known-good baselines.
-- Capture performance metrics for each phase to confirm the purer transforms, reservation logic, and diff layer do not regress tick times; if they do, document and profile with the new tracing hooks.
-- Add contract tests that instantiate historical world saves and assert that the diff output remains compatible (schema version, field presence) before rolling out to QA.
-- Introduce mutation tests (using tools like Stryker or a lightweight custom harness) on the allocator to ensure invariants truly guard against double-consumption bugs, including manual reservation edge cases.
-- Publish example devtools scripts that consume the diff subscriber API and render allocation graphs, validating end-to-end that the tracing layer surfaces actionable information.
+- Start with targeted unit tests for the extracted transforms and allocator. Layer golden snapshots once the DTO pipeline is in place.
+- Use property/fuzz tests for provider/consumer graphs to guard the “one blood node per vat” invariant when you have time.
+- Keep an eye on performance by logging before/after timings locally; formal benchmarking can wait until you see regressions.
 
 ## Risks & mitigations
-- **Risk: refactor stalls due to wide surface area.** Mitigation: land Phase 1 with feature flags and maintain backwards-compatible adapters so parallel workstreams can adopt the new APIs gradually.
-- **Risk: performance regressions from additional allocations or diff calculations.** Mitigation: benchmark the pure transforms and diff engine against recorded workloads; cache invariant results when inputs are unchanged within a tick.
-- **Risk: schema churn breaks saved fixtures.** Mitigation: version JSON schemas and provide migration scripts; enforce approval on schema bumps via CI.
-- **Risk: developers bypass pure transforms and mutate runtime state directly.** Mitigation: enforce lint rules/import restrictions that forbid runtime modules from importing pure transform internals without going through public entry points.
-
-## Developer workflow updates
-- Document a "writing tests" guide demonstrating how to build fixtures, invoke transforms, and assert on diffs.
-- Update the PR checklist to include items for snapshot approvals, schema migrations, and diff-subscriber verification.
-- Provide VS Code snippets / tasks that run the golden tests and launch the diff visualiser, lowering the barrier to using the new tooling.
-- Add a naming appendix that enumerates preferred prefixes/suffixes (e.g., `Snapshot`, `Allocation`, `Diff`) and illustrates poor vs. strong identifier examples so contributions stay self-documenting.
-- Embed the naming guidelines into lint rules (e.g., ESLint custom rule set) and pre-commit hooks that scan for ambiguous identifiers in the factory ownership modules. Pair the automation with reviewer checklists that call out descriptive naming as a hard requirement before merging.
+- **Refactor scope creep.** Keep the focus on the ownership bugs (manual link duplication, recipe desync, registry churn). Defer unrelated feature ideas.
+- **Performance regressions.** Compare old vs. new snapshots periodically; roll back or profile if the diff layer adds noticeable cost.
+- **Schema drift.** Update `contracts.ts` and the JSON schema together; the TypeScript compiler will flag mismatches as you convert callers.
 
 ## Naming conventions for self-documenting code
 - Use descriptive, domain-specific identifiers for variables, classes, and functions—avoid single-letter or legacy abbreviations unless the domain mandates them.
