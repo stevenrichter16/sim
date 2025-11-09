@@ -1,18 +1,9 @@
 import { world } from './state.js';
 import { FACTIONS } from './factions.js';
 import { createCloudClusterRegistry, ensureRegistry as ensureCloudClusterRegistry } from './cloudCluster/registry.js';
-import {
-  createCluster as createCloudCluster,
-  upsertFactoryObject as upsertCloudFactoryObject,
-  removeFactoryObject as removeCloudFactoryObject,
-  upsertLink as upsertCloudClusterLink,
-  removeLink as removeCloudClusterLink,
-  serialiseCluster,
-} from './cloudCluster/domain/cluster.js';
-import { updateClusterAccumulatorMembership } from './cloudCluster/sim/index.js';
-import { getCloudClusterRegistry, setCloudClusterRegistry } from './cloudCluster/state/index.js';
-import { computeOwnershipEntries, computeClusterIntents } from './factoryOwnership/transform/index.js';
-import { CLOUD_CLUSTER_AUTO_LINK_PREFIX } from './factoryOwnership/constants.js';
+import { createCluster as createCloudCluster } from './cloudCluster/domain/cluster.js';
+import { computeOwnershipEntries } from './factoryOwnership/transform/index.js';
+import { createClusterRuntime } from './factoryOwnership/runtime/clusterRuntime.js';
 
 export function createFactoryOwnershipManager({
   ensureFactoryState,
@@ -25,6 +16,21 @@ export function createFactoryOwnershipManager({
   defaultConstructorBlueprint,
   FactoryKind,
 }){
+  const {
+    ensureFactoryCloudRegistry,
+    snapshotRegistry,
+    synchronizeFactionCluster,
+  } = createClusterRuntime({
+    factoryKindMeta,
+    factoryItemLabel,
+    getRecipeInputMap,
+    getBioforgeRecipe,
+    defaultBioforgeRecipe,
+    getConstructorBlueprint,
+    defaultConstructorBlueprint,
+    FactoryKind,
+  });
+
   function captureOwnershipInputs(factory){
     const worldSnapshot = {
       width: Number.isFinite(world?.W) ? world.W : 0,
@@ -75,44 +81,15 @@ export function createFactoryOwnershipManager({
       nodesByTile,
       structuresByTile,
       registrySnapshot: snapshotRegistry(factory),
+      manualReservations: captureManualReservations(factory),
     };
   }
 
-  function ensureFactoryCloudRegistry(factory){
-    const factoryRegistry = ensureCloudClusterRegistry(factory?.cloudClusters);
-    const stateRegistry = getCloudClusterRegistry();
-    const targetRegistry = stateRegistry;
-
-    if(factoryRegistry !== stateRegistry){
-      for(const [id, cluster] of factoryRegistry.byId.entries()){
-        targetRegistry.byId.set(id, cluster);
-        if(!targetRegistry.order.includes(id)){
-          targetRegistry.order.push(id);
-        }
-      }
-      const seen = new Set();
-      targetRegistry.order = targetRegistry.order.filter((id) => {
-        if(seen.has(id)) return false;
-        seen.add(id);
-        return true;
-      });
+  function captureManualReservations(factory){
+    if(factory?.manualReservations && Array.isArray(factory.manualReservations)){
+      return factory.manualReservations.map((reservation) => ({ ...reservation }));
     }
-
-    if(factory){
-      factory.cloudClusters = targetRegistry;
-    }
-
-    setCloudClusterRegistry(targetRegistry);
-    return targetRegistry;
-  }
-
-  function snapshotRegistry(factory){
-    const registry = ensureFactoryCloudRegistry(factory);
-    const clustersById = new Map();
-    for(const [id, cluster] of registry.byId.entries()){
-      clustersById.set(id, serialiseCluster(cluster));
-    }
-    return { clustersById };
+    return [];
   }
 
   function clusterIdForFaction(factionId){
@@ -161,150 +138,86 @@ export function createFactoryOwnershipManager({
     return true;
   }
 
-  function makeAutoLinkKey(link){
-    if(!link) return '';
-    const sourceId = link?.source?.objectId ?? '';
-    const sourcePort = link?.source?.portId ?? '';
-    const targetId = link?.target?.objectId ?? '';
-    const targetPort = link?.target?.portId ?? '';
-    const item = link?.metadata?.item ?? '';
-    return `${sourceId}:${sourcePort}->${targetId}:${targetPort}:${item}`;
-  }
-
-  function applySmelterSelections(factory, selections){
-    if(!factory || !Array.isArray(selections) || !selections.length){
-      return;
-    }
-    if(!(factory.structures instanceof Map)){
-      return;
-    }
-    for(const selection of selections){
-      if(!selection || selection.tileIdx == null || !selection.nextRecipeKey){
-        continue;
-      }
-      const structure = factory.structures.get(selection.tileIdx);
-      if(!structure){
-        continue;
-      }
-      const recipe = getBioforgeRecipe(selection.nextRecipeKey);
-      if(!recipe){
-        continue;
-      }
-      structure.recipe = recipe;
-      structure.recipeKey = recipe.key;
-      if(Array.isArray(structure.availableRecipeKeys)){
-        const idx = structure.availableRecipeKeys.indexOf(recipe.key);
-        if(idx >= 0){
-          structure.activeRecipeIndex = idx;
-        }
-      }
-    }
-  }
-
-  function updateFactionCluster(cluster, entries, factory, registry, ownershipInputs){
-    const clustersById = ownershipInputs?.registrySnapshot?.clustersById;
-    const clusterSnapshot = clustersById instanceof Map ? clustersById.get(cluster.id) : cluster;
-    const intents = computeClusterIntents({
-      clusterId: cluster.id,
-      entries,
-      ownershipInputs,
-      clusterSnapshot,
-      dependencies: {
-        factoryKindMeta,
-        factoryItemLabel,
-        getRecipeInputMap,
-        getBioforgeRecipe,
-        defaultBioforgeRecipe,
-        getConstructorBlueprint,
-        defaultConstructorBlueprint,
-        FactoryKind,
-      },
-    });
-
-    applySmelterSelections(factory, intents.smelterSelections);
-
-    const desiredObjects = intents.desiredObjects instanceof Map ? intents.desiredObjects : new Map();
-    const desiredAutoLinks = intents.desiredAutoLinks instanceof Map ? intents.desiredAutoLinks : new Map();
-
-    const removed = [];
-    for(const objectId of Array.from(cluster.objects.keys())){
-      if(desiredObjects.has(objectId)) continue;
-      const existing = cluster.objects.get(objectId);
-      const autoManaged = existing?.metadata?.auto === true;
-      if(!autoManaged){
-        continue;
-      }
-      removeCloudFactoryObject(cluster, objectId);
-      removed.push(objectId);
-    }
-
-    const added = [];
-    for(const [objectId, def] of desiredObjects.entries()){
-      const existed = cluster.objects.has(objectId);
-      upsertCloudFactoryObject(cluster, def);
-      if(!existed){
-        added.push(objectId);
-      }
-    }
-
-    if(added.length || removed.length){
-      updateClusterAccumulatorMembership(cluster.id, { added, removed });
-    }
-
-    const existingAutoLinks = new Map();
-    for(const [linkId, link] of cluster.links.entries()){
-      const isAuto = link?.metadata?.auto === true || (typeof linkId === 'string' && linkId.startsWith(CLOUD_CLUSTER_AUTO_LINK_PREFIX));
-      if(!isAuto) continue;
-      const key = makeAutoLinkKey(link);
-      existingAutoLinks.set(key, linkId);
-    }
-
-    let linksChanged = false;
-
-    for(const [key, linkId] of existingAutoLinks.entries()){
-      if(desiredAutoLinks.has(key)){
-        continue;
-      }
-      removeCloudClusterLink(cluster, linkId);
-      linksChanged = true;
-    }
-
-    for(const [key, def] of desiredAutoLinks.entries()){
-      if(existingAutoLinks.has(key)){
-        continue;
-      }
-      upsertCloudClusterLink(cluster, def);
-      linksChanged = true;
-    }
-
-    if(registry && (added.length || removed.length || linksChanged)){
-      setCloudClusterRegistry(registry);
-    }
-  }
-
   function syncFactionCloudClusters(factory, ownershipByFaction, ownershipInputs){
-    if(!factory) return;
+    if(!factory) return [];
     const registry = ensureFactoryCloudRegistry(factory);
     if(!(ownershipByFaction instanceof Map)){
       ownershipByFaction = factory.ownershipByFaction instanceof Map ? factory.ownershipByFaction : new Map();
     }
+    const bundles = [];
+    const manualLinkReconciliation = new Map();
+    const manualLinkWarnings = [];
     for(const faction of FACTIONS){
       const clusterId = clusterIdForFaction(faction.id);
       const entries = ownershipByFaction.get(faction.id) ?? [];
       let cluster = registry.byId.get(clusterId);
       if(entries.length > 0){
         cluster = ensureFactionCloudCluster(factory, faction, registry);
-        updateFactionCluster(cluster, entries, factory, registry, ownershipInputs);
+        const result = synchronizeFactionCluster({
+          cluster,
+          entries,
+          factory,
+          registry,
+          ownershipInputs,
+        });
+        if(result?.diffBundle){
+          bundles.push({
+            factionId: faction.id,
+            clusterId,
+            bundle: result.diffBundle,
+          });
+        }
+        if(result?.manualLinkReconciliation){
+          manualLinkReconciliation.set(clusterId, result.manualLinkReconciliation);
+          if(Array.isArray(result.manualLinkReconciliation.droppedLinks) && result.manualLinkReconciliation.droppedLinks.length){
+            manualLinkWarnings.push({
+              factionId: faction.id,
+              clusterId,
+              droppedLinks: result.manualLinkReconciliation.droppedLinks,
+            });
+          }
+        }
         continue;
       }
       if(!cluster) continue;
-      updateFactionCluster(cluster, [], factory, registry, ownershipInputs);
+      const result = synchronizeFactionCluster({
+        cluster,
+        entries,
+        factory,
+        registry,
+        ownershipInputs,
+      });
+      if(result?.diffBundle){
+        bundles.push({
+          factionId: faction.id,
+          clusterId,
+          bundle: result.diffBundle,
+        });
+      }
+      if(result?.manualLinkReconciliation){
+        manualLinkReconciliation.set(clusterId, result.manualLinkReconciliation);
+        if(Array.isArray(result.manualLinkReconciliation.droppedLinks) && result.manualLinkReconciliation.droppedLinks.length){
+          manualLinkWarnings.push({
+            factionId: faction.id,
+            clusterId,
+            droppedLinks: result.manualLinkReconciliation.droppedLinks,
+          });
+        }
+      }
       const hasObjects = (cluster.objects?.size ?? 0) > 0;
       const hasLinks = (cluster.links?.size ?? 0) > 0;
       if(!hasObjects && !hasLinks){
         removeFactionCloudCluster(factory, faction.id, registry);
       }
     }
+    factory.manualLinkReconciliation = manualLinkReconciliation;
+    factory.manualLinkWarnings = manualLinkWarnings;
+    if(Array.isArray(manualLinkWarnings) && manualLinkWarnings.length){
+      factory.manualLinkWarningsLog = manualLinkWarnings;
+    } else if(!Array.isArray(factory.manualLinkWarningsLog)){
+      factory.manualLinkWarningsLog = [];
+    }
+    return bundles;
   }
 
   function refreshFactoryOwnership(){
@@ -315,7 +228,8 @@ export function createFactoryOwnershipManager({
     factory.ownershipRecords = entries;
     factory.ownershipByFaction = byFaction;
     factory.unassignedOwnership = unassigned;
-    syncFactionCloudClusters(factory, byFaction, snapshot);
+    factory.ownershipDiffBundles = syncFactionCloudClusters(factory, byFaction, snapshot);
+    return factory.ownershipDiffBundles;
   }
 
   function cloneOwnershipEntry(entry){
@@ -343,6 +257,17 @@ export function createFactoryOwnershipManager({
     const byFactionMap = factory.ownershipByFaction instanceof Map ? factory.ownershipByFaction : new Map();
     const allEntries = Array.isArray(factory.ownershipRecords) ? factory.ownershipRecords : [];
     const unassigned = Array.isArray(factory.unassignedOwnership) ? factory.unassignedOwnership : [];
+    const manualLinkWarnings = Array.isArray(factory.manualLinkWarningsLog)
+      ? factory.manualLinkWarningsLog
+      : Array.isArray(factory.manualLinkWarnings)
+        ? factory.manualLinkWarnings
+        : [];
+    const manualLinkReconciliation = factory.manualLinkReconciliation instanceof Map
+      ? Array.from(factory.manualLinkReconciliation.entries(), ([clusterId, reconciliation]) => ({
+        clusterId,
+        reconciliation,
+      }))
+      : [];
     const byFaction = FACTIONS.map((faction) => ({
       factionId: faction.id,
       factionKey: faction.key,
@@ -353,6 +278,9 @@ export function createFactoryOwnershipManager({
       byFaction,
       unassigned: unassigned.map(cloneOwnershipEntry).filter(Boolean),
       all: allEntries.map(cloneOwnershipEntry).filter(Boolean),
+      diffBundles: Array.isArray(factory.ownershipDiffBundles) ? factory.ownershipDiffBundles : [],
+      manualLinkWarnings,
+      manualLinkReconciliation,
     };
   }
 

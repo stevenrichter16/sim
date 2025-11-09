@@ -29,7 +29,7 @@
 
 ## Refactoring steps for testability & observability
 1. **Split orchestration from pure transforms.**
-   - Extract stateless helpers (e.g., `resolveFactoryOwnershipAtTile`, `build*ClusterObject`, `rebuildFactionClusterLinks`) so they accept plain data snapshots and return new data structures without mutating global registries.
+   - Extract stateless helpers (e.g., `resolveFactoryOwnershipAtTile`, `build*ClusterObject`, `computeAllocationIntents`) so they accept plain data snapshots and return new data structures without mutating global registries.
    - Hoist world access into an explicit `captureOwnershipInputs(world)` helper that freezes the minimal slices of `world.dominantFaction`, `world.controlLevel`, `factory.nodes`, and `factory.structures`. Pass that snapshot through every pure transform instead of reading globals deep in the call stack. While carving this helper out, leave the existing `createFactoryOwnershipManager` in place and pipe its runtime data through the snapshot API so current callers (e.g., `src/factory.js` around line 602) continue working.
    - Extract builders and auto-link logic into pure transforms (`computeOwnershipEntries`, `computeClusterIntents`) so the runtime layer only applies their outputs to the live registry.
    - Publish explicit function signatures (`(worldSnapshot, factorySnapshot) => OwnershipEntries[]`) so tests can construct fixtures without spelunking through runtime objects, and capture them in a `factoryOwnership.d.ts` declaration file for editors.

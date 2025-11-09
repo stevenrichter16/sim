@@ -86,6 +86,7 @@ canvas{
 .telemetry-cloud-card-status[data-status="error"]{color:#ff6a7a;}
 .telemetry-cloud-card-status[data-status="warning"]{color:#ffd166;}
 .telemetry-cloud-card-status[data-status="ok"]{color:#9ee8ff;}
+.cloud-cluster-warning-badge{padding:4px 10px;border-radius:999px;background:rgba(255,196,108,0.12);border:1px solid rgba(255,196,108,0.35);color:#ffe1b3;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;}
 .telemetry-cloud-totals{display:flex;flex-direction:column;gap:2px;font-size:11px;color:#9eaad1;}
 .telemetry-cloud-issues{font-size:11px;color:#ffb3c1;}
 .btn{appearance:none;border:1px solid var(--line);background:var(--chip);color:var(--ink);padding:4px 6px;border-radius:10px;font-size:11px;flex:1;min-width:32px;}
@@ -112,6 +113,14 @@ h3{margin:4px 0 6px;}
 .cloud-cluster-header{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .cloud-cluster-controls{display:flex;align-items:center;gap:8px;}
 .cloud-cluster-select{min-width:140px;}
+.cloud-cluster-alerts{display:none;flex-direction:column;gap:6px;margin-top:4px;}
+.cloud-cluster-alert{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;background:rgba(255,108,132,0.08);border:1px solid rgba(255,108,132,0.35);color:#ffd7df;box-shadow:0 8px 22px rgba(6,4,12,0.55);}
+.cloud-cluster-alert-body{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.cloud-cluster-alert-title{font-size:12px;font-weight:600;color:#ffe9ef;}
+.cloud-cluster-alert-links{font-size:11px;color:#ffb7c8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cloud-cluster-alert-action{background:#ff6b8d;color:#0c111f;border:none;border-radius:999px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;transition:background .2s ease,transform .2s ease;}
+.cloud-cluster-alert-action:hover{background:#ff7c9c;transform:translateY(-1px);}
+.cloud-cluster-alert-action:focus-visible{outline:2px solid #ffd7df;outline-offset:2px;}
 .cloud-cluster-layout{display:flex;flex-direction:row;gap:12px;align-items:flex-start;flex-wrap:wrap;}
 .cloud-cluster-body{display:flex;flex-direction:column;gap:10px;flex:1 1 320px;}
 .cloud-cluster-visual{flex:1 1 320px;min-width:320px;height:360px;background:radial-gradient(circle at top,#17213d 0%,#0c1427 60%,#070d1d 100%);border:1px solid rgba(116,136,209,0.35);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;box-shadow:0 18px 40px rgba(4,10,26,0.55);transition:transform .2s ease,box-shadow .2s ease;}

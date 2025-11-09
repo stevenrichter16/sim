@@ -603,6 +603,10 @@ function createFactoryState(){
     ownershipRecords: [],
     ownershipByFaction: new Map(),
     unassignedOwnership: [],
+    ownershipDiffBundles: [],
+    manualLinkReconciliation: new Map(),
+    manualLinkWarnings: [],
+    manualLinkWarningsLog: [],
   };
   return state;
 }

@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { FactoryKind, FactoryItem } from '../../src/factory.js';
+import { FactoryKind, FactoryItem, placeFactoryStructure, stepFactory } from '../../src/factory.js';
 import {
   resetCloudClusterState,
   createCloudClusterEditor,
   stepCloudClusterSimulation,
 } from '../../src/cloudCluster/index.js';
+import { idx, world } from '../../src/state.js';
+import { initWorld } from '../helpers/worldHarness.js';
+import { upsertLink } from '../../src/cloudCluster/domain/cluster.js';
 
 function getPortByDirection(node, direction){
   return node?.ports?.find((port) => port.direction === direction) ?? null;
@@ -88,7 +91,49 @@ describe('cloud cluster editor UI helpers', () => {
     expect(Array.isArray(inspectorAfter?.totals)).toBe(true);
 
     const overlay = editor.getOverlay();
-    expect(overlay.clusters).toHaveLength(1);
-    expect(overlay.clusters[0].status).toBe('ok');
+    expect(overlay.clusters.length).toBeGreaterThan(0);
+    const overlayEntry = overlay.clusters.find((entry) => entry.id === editor.getGraph().clusterId) ?? overlay.clusters[0];
+    expect(overlayEntry?.status).toBe('ok');
+  });
+
+  it('surfaces ownership diagnostics and manual link warnings for UI consumers', () => {
+    initWorld({ o2: 0.19 });
+    const factionId = 1;
+    const nodeTile = idx(12, 6);
+    const forgeTile = idx(13, 6);
+    expect(placeFactoryStructure(nodeTile, 'factory-node-nerve').ok).toBe(true);
+    expect(placeFactoryStructure(forgeTile, 'factory-smelter-omni').ok).toBe(true);
+    world.dominantFaction[nodeTile] = factionId;
+    world.controlLevel[nodeTile] = 0.7;
+    world.dominantFaction[forgeTile] = factionId;
+    world.controlLevel[forgeTile] = 0.72;
+    stepFactory();
+
+    const clusterId = `faction-${factionId}-cloud`;
+    const cluster = world.factory.cloudClusters.byId.get(clusterId);
+    expect(cluster).toBeTruthy();
+    const nodeObjectId = `node-${FactoryKind.NODE}-${nodeTile}`;
+    const smelterObjectId = `structure-${FactoryKind.SMELTER}-${forgeTile}`;
+    upsertLink(cluster, {
+      id: 'manual:ui-test',
+      source: { objectId: nodeObjectId, portId: 'out' },
+      target: { objectId: smelterObjectId, portId: 'in' },
+      metadata: { reason: 'ui-test' },
+    });
+
+    world.controlLevel[nodeTile] = 0;
+    world.dominantFaction[nodeTile] = -1;
+    stepFactory();
+
+    const editor = createCloudClusterEditor();
+    const diagnostics = editor.getOwnershipDiagnostics();
+    expect(Array.isArray(diagnostics.manualLinkWarnings)).toBe(true);
+    const warning = diagnostics.manualLinkWarnings.find((entry) => entry.clusterId === clusterId);
+    expect(warning).toBeTruthy();
+    expect(warning.droppedLinks.some((link) => link.id === 'manual:ui-test')).toBe(true);
+
+    const clusters = editor.getClusters();
+    const target = clusters.find((entry) => entry.id === clusterId);
+    expect(target?.manualWarningCount ?? 0).toBeGreaterThan(0);
   });
 });

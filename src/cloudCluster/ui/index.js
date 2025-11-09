@@ -3,6 +3,7 @@ import {
   FactoryItem,
   getBioforgeRecipeDefinition,
   getConstructorBlueprintDefinition,
+  getFactoryOwnership,
 } from '../../factory.js';
 import {
   CloudFactoryPortDirection,
@@ -593,11 +594,28 @@ export function createCloudClusterEditor(options = {}){
     pendingLink: null,
     kindCounters: new Map(),
     clusterCounter: 1,
+    diffBundles: [],
+    manualLinkWarnings: [],
   };
+
+  function refreshOwnershipDiagnostics(){
+    try {
+      const ownership = getFactoryOwnership();
+      state.diffBundles = Array.isArray(ownership.diffBundles) ? ownership.diffBundles : [];
+      state.manualLinkWarnings = Array.isArray(ownership.manualLinkWarnings) ? ownership.manualLinkWarnings : [];
+    } catch (error){
+      state.diffBundles = [];
+      state.manualLinkWarnings = [];
+      if(typeof console !== 'undefined' && console.warn){
+        console.warn('[cloudCluster] Failed to refresh ownership diagnostics', error);
+      }
+    }
+  }
 
   function commit(nextRegistry){
     state.registry = setCloudClusterRegistry(ensureRegistry(nextRegistry));
     refreshSelection();
+    refreshOwnershipDiagnostics();
     return state.registry;
   }
 
@@ -623,17 +641,27 @@ export function createCloudClusterEditor(options = {}){
   }
 
   function getClusters(){
+    refreshOwnershipDiagnostics();
     const registry = state.registry;
+    const warningByCluster = new Map();
+    for(const warning of state.manualLinkWarnings ?? []){
+      if(warning?.clusterId){
+        warningByCluster.set(warning.clusterId, warning);
+      }
+    }
     const result = [];
     for(const id of orderedClusterIds(registry)){
       const cluster = registry.byId.get(id);
       if(!cluster) continue;
+      const warning = warningByCluster.get(cluster.id);
       result.push({
         id: cluster.id,
         name: cluster.name,
         description: cluster.description,
         objectCount: cluster.objects.size,
         linkCount: cluster.links.size,
+        manualWarningCount: warning?.droppedLinks?.length ?? 0,
+        manualWarnings: warning ?? null,
       });
     }
     return result;
@@ -1106,8 +1134,15 @@ export function createCloudClusterEditor(options = {}){
 
   function getOverlay(){
     advanceSimulation();
+    refreshOwnershipDiagnostics();
     const telemetryState = getCloudClusterTelemetry();
     const clusters = [];
+    const warningByCluster = new Map();
+    for(const warning of state.manualLinkWarnings ?? []){
+      if(warning?.clusterId){
+        warningByCluster.set(warning.clusterId, warning);
+      }
+    }
     for(const id of orderedClusterIds(state.registry)){
       const cluster = state.registry.byId.get(id);
       if(!cluster) continue;
@@ -1115,6 +1150,7 @@ export function createCloudClusterEditor(options = {}){
       const throughput = getClusterThroughput(id) ?? calculateClusterThroughput(cluster);
       const telemetryEntry = telemetryState?.clusters?.find((entry) => entry.id === id) ?? null;
       const status = telemetryEntry?.status ?? deriveStatusFromIssues(validation?.issues ?? []);
+      const warning = warningByCluster.get(id);
       clusters.push({
         id: cluster.id,
         name: cluster.name,
@@ -1123,11 +1159,21 @@ export function createCloudClusterEditor(options = {}){
         issueCount: validation?.issues?.length ?? 0,
         issues: validation?.issues ?? [],
         totals: (telemetryEntry?.totals ?? throughput?.totals ?? []).slice(),
+        manualWarningCount: warning?.droppedLinks?.length ?? 0,
+        manualWarnings: warning ?? null,
       });
     }
     return {
       tick: telemetryState?.tick ?? null,
       clusters,
+    };
+  }
+
+  function getOwnershipDiagnostics(){
+    refreshOwnershipDiagnostics();
+    return {
+      diffBundles: state.diffBundles.slice(),
+      manualLinkWarnings: state.manualLinkWarnings.slice(),
     };
   }
 
@@ -1141,6 +1187,7 @@ export function createCloudClusterEditor(options = {}){
   }
 
   refreshSelection();
+  refreshOwnershipDiagnostics();
 
   return {
     getState,
@@ -1160,6 +1207,7 @@ export function createCloudClusterEditor(options = {}){
     getGraph,
     getInspector,
     getOverlay,
+    getOwnershipDiagnostics,
     stepSimulation: advanceSimulation,
     getSmelterRecipes,
     getConstructorBlueprints,

@@ -117,6 +117,11 @@ describe('factory ownership influence tracking', () => {
     const linkId = `auto:faction:${clusterId}:${nodeObjectId}->${smelterObjectId}:${FactoryItem.SKIN_PATCH}`;
     expect(cluster.links.has(linkId)).toBe(true);
     expect(cluster.links.get(linkId)?.metadata?.auto).toBe(true);
+
+    const diffBundles = world.factory.ownershipDiffBundles ?? [];
+    const envelope = diffBundles.find((entry) => entry.clusterId === clusterId);
+    expect(envelope).toBeTruthy();
+    expect(envelope.bundle?.diff?.addedObjects?.length ?? 0).toBeGreaterThan(0);
   });
 
   it('links multiple resource providers required by a bioforge recipe', () => {
@@ -139,20 +144,29 @@ describe('factory ownership influence tracking', () => {
 
     const clusterId = `faction-${factionId}-cloud`;
     const registry = world.factory.cloudClusters;
-    const cluster = registry.byId.get(clusterId);
-    expect(cluster).toBeTruthy();
-
     const smelterObjectId = `structure-${FactoryKind.SMELTER}-${forgeTile}`;
-    const autoLinks = Array.from(cluster.links.values()).filter((link) => link?.metadata?.auto && link?.target?.objectId === smelterObjectId);
+    const readCluster = () => {
+      const nextCluster = registry.byId.get(clusterId);
+      expect(nextCluster).toBeTruthy();
+      return nextCluster;
+    };
 
-    const nerveLinks = autoLinks.filter((link) => link.metadata?.item === FactoryItem.NERVE_THREAD);
-    const bloodLinks = autoLinks.filter((link) => link.metadata?.item === FactoryItem.BLOOD_VIAL);
+    const assertAutoLinks = () => {
+      const cluster = readCluster();
+      const autoLinks = Array.from(cluster.links.values()).filter((link) => link?.metadata?.auto && link?.target?.objectId === smelterObjectId);
+      const nerveLinks = autoLinks.filter((link) => link.metadata?.item === FactoryItem.NERVE_THREAD);
+      const bloodLinks = autoLinks.filter((link) => link.metadata?.item === FactoryItem.BLOOD_VIAL);
+      const expectedNerveSources = new Set(nerveTiles.map((tile) => `node-${FactoryKind.NODE}-${tile}`));
+      expect(new Set(nerveLinks.map((link) => link.source.objectId))).toEqual(expectedNerveSources);
+      const expectedBloodSource = `node-${FactoryKind.NODE}-${bloodTile}`;
+      expect(bloodLinks.some((link) => link.source.objectId === expectedBloodSource)).toBe(true);
+    };
 
-    const expectedNerveSources = new Set(nerveTiles.map((tile) => `node-${FactoryKind.NODE}-${tile}`));
-    expect(new Set(nerveLinks.map((link) => link.source.objectId))).toEqual(expectedNerveSources);
+    assertAutoLinks();
 
-    const expectedBloodSource = `node-${FactoryKind.NODE}-${bloodTile}`;
-    expect(bloodLinks.some((link) => link.source.objectId === expectedBloodSource)).toBe(true);
+    // Second refresh should preserve the full set of auto links.
+    stepFactory();
+    assertAutoLinks();
   });
 
   it('removes objects from faction cloud clusters when influence is lost', () => {

@@ -250,6 +250,7 @@ export function initInput({ canvas, draw }){
   const cloudClusterGraph = document.getElementById('cloudClusterGraph');
   const cloudClusterInspector = document.getElementById('cloudClusterInspector');
   const cloudClusterVisual = document.getElementById('cloudClusterVisual');
+  const cloudClusterAlerts = document.getElementById('cloudClusterAlerts');
   const cloudClusterGlossary = document.getElementById('cloudClusterGlossary');
   const overlayToggleKeys = {
     Digit1: 'help',
@@ -2985,6 +2986,12 @@ function toggleScenarioDiagPanel(force){
         issues.textContent = `${issueCount} issue${issueCount === 1 ? '' : 's'} detected`;
         card.append(issues);
       }
+      if(cluster.manualWarningCount > 0){
+        const warningBadge = document.createElement('div');
+        warningBadge.className = 'cloud-cluster-warning-badge';
+        warningBadge.textContent = `⚠ ${cluster.manualWarningCount} manual link${cluster.manualWarningCount === 1 ? '' : 's'} dropped`;
+        card.append(warningBadge);
+      }
       if(Array.isArray(cluster.totals) && cluster.totals.length){
         const totals = document.createElement('div');
         totals.className = 'telemetry-cloud-totals';
@@ -3012,6 +3019,68 @@ function toggleScenarioDiagPanel(force){
     }
   }
 
+  function renderCloudClusterAlerts(){
+    if(!cloudClusterAlerts){
+      return;
+    }
+    if(typeof cloudEditor.getOwnershipDiagnostics !== 'function'){
+      cloudClusterAlerts.style.display = 'none';
+      cloudClusterAlerts.innerHTML = '';
+      cloudClusterAlerts.removeAttribute('data-count');
+      return;
+    }
+    const diagnostics = cloudEditor.getOwnershipDiagnostics();
+    const warnings = diagnostics?.manualLinkWarnings ?? [];
+    cloudClusterAlerts.innerHTML = '';
+    if(!warnings.length){
+      cloudClusterAlerts.style.display = 'none';
+      cloudClusterAlerts.removeAttribute('data-count');
+      return;
+    }
+    cloudClusterAlerts.style.display = 'flex';
+    cloudClusterAlerts.setAttribute('data-count', warnings.length);
+    for(const warning of warnings){
+      const clusterLabel = warning?.clusterId ?? 'Cluster';
+      const dropped = Array.isArray(warning?.droppedLinks) ? warning.droppedLinks : [];
+      const alert = document.createElement('div');
+      alert.className = 'cloud-cluster-alert';
+
+      const body = document.createElement('div');
+      body.className = 'cloud-cluster-alert-body';
+      const title = document.createElement('div');
+      title.className = 'cloud-cluster-alert-title';
+      title.textContent = `${clusterLabel}: ${dropped.length} manual link${dropped.length === 1 ? '' : 's'} removed`;
+      body.append(title);
+
+      if(dropped.length){
+        const list = document.createElement('div');
+        list.className = 'cloud-cluster-alert-links';
+        const names = dropped.slice(0, 3).map((link) => link?.id ?? 'link');
+        list.textContent = names.join(', ') + (dropped.length > 3 ? ' …' : '');
+        body.append(list);
+      }
+
+      const focusBtn = document.createElement('button');
+      focusBtn.type = 'button';
+      focusBtn.className = 'btn cloud-cluster-alert-action';
+      focusBtn.textContent = 'Focus';
+      focusBtn.addEventListener('click', () => {
+        try {
+          cloudEditor.selectCluster(warning.clusterId);
+          refreshCloudClusterUI();
+          if(cloudClusterSelect){
+            cloudClusterSelect.value = warning.clusterId;
+          }
+        } catch (error){
+          console.error('Failed to focus cloud cluster warning', error);
+        }
+      });
+
+      alert.append(body, focusBtn);
+      cloudClusterAlerts.append(alert);
+    }
+  }
+
   function refreshCloudClusterUI(){
     if(!cloudClusterPanel) return;
     if(typeof cloudEditor.stepSimulation === 'function'){
@@ -3030,6 +3099,7 @@ function toggleScenarioDiagPanel(force){
     const inspectorUsed = renderCloudClusterGraph(inspectorData);
     renderCloudClusterInspector(inspectorUsed ?? inspectorData);
     renderCloudClusterVisualGraph();
+    renderCloudClusterAlerts();
     renderCloudClusterGlossary();
     renderCloudClusterTelemetry();
   }
