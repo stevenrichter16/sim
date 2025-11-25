@@ -47,6 +47,9 @@ export function initInput({ canvas, draw }){
   const spawnPanicABtn = document.getElementById('spawnPanicA');
   const spawnPanicBBtn = document.getElementById('spawnPanicB');
   const spawnMedicBtn = document.getElementById('spawnMedic');
+  const spawnScoutBtn = document.getElementById('spawnScout');
+  const spawnPredatorBtn = document.getElementById('spawnPredator');
+  const spawnGuardBtn = document.getElementById('spawnGuard');
   const sparkBtn = document.getElementById('spark');
   const clearBtn = document.getElementById('clear');
   const dHeat = document.getElementById('dHeat');
@@ -928,6 +931,35 @@ function toggleScenarioDiagPanel(force){
         b.classList.toggle('active', !current);
         return;
       }
+      // Emotion/psychology field toggles
+      if(val==='toggle-aggro'){
+        toggleOverlaySlice('aggro');
+        return;
+      }
+      if(val==='toggle-curiosity'){
+        toggleOverlaySlice('curiosity');
+        return;
+      }
+      if(val==='toggle-awe'){
+        toggleOverlaySlice('awe');
+        return;
+      }
+      if(val==='toggle-noise'){
+        toggleOverlaySlice('noise');
+        return;
+      }
+      if(val==='toggle-blood'){
+        toggleOverlaySlice('blood');
+        return;
+      }
+      if(val==='toggle-discovery'){
+        toggleOverlaySlice('discovery');
+        return;
+      }
+      if(val==='toggle-computedTension'){
+        toggleOverlaySlice('computedTension');
+        return;
+      }
       selectBrush(val);
     });
   }
@@ -974,6 +1006,13 @@ function toggleScenarioDiagPanel(force){
     'pheromone-route': { field: 'routeField', value: 1 },
     'pheromone-safe': { field: 'safeField', value: 1 },
     'pheromone-escape': { field: 'escapeField', value: 1 },
+    // Emotion/psychology field brushes
+    'pheromone-aggro': { field: 'aggroField', value: 1 },
+    'pheromone-curiosity': { field: 'curiosityField', value: 1 },
+    'pheromone-awe': { field: 'aweField', value: 1 },
+    'pheromone-noise': { field: 'noiseField', value: 1 },
+    'pheromone-blood': { field: 'bloodField', value: 1 },
+    'pheromone-discovery': { field: 'discoveryField', value: 1 },
   });
 
   const PHEROMONE_FIELDS = Object.freeze([
@@ -982,6 +1021,13 @@ function toggleScenarioDiagPanel(force){
     'routeField',
     'safeField',
     'escapeField',
+    // Emotion/psychology fields
+    'aggroField',
+    'curiosityField',
+    'aweField',
+    'noiseField',
+    'bloodField',
+    'discoveryField',
   ]);
 
   updateOverlayButtonState('control');
@@ -1029,8 +1075,15 @@ function toggleScenarioDiagPanel(force){
       draw();
       return;
     }
-    if(brush==='spawn-calm' || brush==='spawn-panic'){
-      const mode = brush==='spawn-calm' ? Mode.CALM : Mode.PANIC;
+    if(brush==='spawn-calm' || brush==='spawn-panic' || brush==='spawn-scout' || brush==='spawn-predator' || brush==='spawn-guard'){
+      const modeMap = {
+        'spawn-calm': Mode.CALM,
+        'spawn-panic': Mode.PANIC,
+        'spawn-scout': Mode.SCOUT,
+        'spawn-predator': Mode.PREDATOR,
+        'spawn-guard': Mode.GUARD
+      };
+      const mode = modeMap[brush];
       const factionKey = (dragAgent && dragBrush === brush) ? dragFactionKey : (ev?.altKey ? ALT_FACTION_KEY : DEFAULT_FACTION_KEY);
       const factionEntry = factionByKey(factionKey);
       if(world.wall[i]) world.wall[i] = 0;
@@ -1510,6 +1563,21 @@ function toggleScenarioDiagPanel(force){
     if(spawnMedicBtn){
       spawnMedicBtn.onclick = ()=>{
         handleSpawnResult(simulation.spawnNPC(Mode.MEDIC), { mode: Mode.MEDIC });
+      };
+    }
+    if(spawnScoutBtn){
+      spawnScoutBtn.onclick = ()=>{
+        handleSpawnResult(simulation.spawnNPC(Mode.SCOUT), { mode: Mode.SCOUT });
+      };
+    }
+    if(spawnPredatorBtn){
+      spawnPredatorBtn.onclick = ()=>{
+        handleSpawnResult(simulation.spawnNPC(Mode.PREDATOR), { mode: Mode.PREDATOR });
+      };
+    }
+    if(spawnGuardBtn){
+      spawnGuardBtn.onclick = ()=>{
+        handleSpawnResult(simulation.spawnNPC(Mode.GUARD), { mode: Mode.GUARD });
       };
     }
     if(sparkBtn){
