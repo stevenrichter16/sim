@@ -11,6 +11,9 @@ export const Mode = Object.freeze({
   CALM: 101,
   PANIC: 102,
   MEDIC: 103,
+  SCOUT: 104,      // Explorer/curious agent
+  PREDATOR: 105,   // Aggressive/hostile agent
+  GUARD: 106,      // Defensive/patrol agent
 });
 
 export const TAU = Math.PI * 2;

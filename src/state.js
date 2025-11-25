@@ -28,6 +28,16 @@ export const world = {
   debtByFaction: null,
   reinforceByFaction: null,
   visited: null,
+
+  // Emotion/psychology fields
+  aggroField: null,        // Hostility/recent combat intensity
+  curiosityField: null,    // Exploration drive/lore attraction
+  aweField: null,          // Wonder/discovery emotion
+  noiseField: null,        // Sound propagation
+  bloodField: null,        // Combat aftermath (feeds aggro)
+  discoveryField: null,    // Points of interest markers
+  computedTensionField: null, // Computed tension from multiple emotions
+
   wall: null,
   vent: null,
   fire: null,
@@ -68,7 +78,10 @@ export const metricsState = {
     heat: new Array(20).fill(0),
   },
   diagnostics: {
-    fieldTotals: { help:0, route:0, panic:0, safe:0, escape:0, door:0 },
+    fieldTotals: {
+      help:0, route:0, panic:0, safe:0, escape:0, door:0,
+      aggro:0, curiosity:0, awe:0, noise:0, blood:0, discovery:0, computedTension:0
+    },
     hotAgents: 0,
     overwhelmedAgents: 0,
   },
@@ -126,6 +139,16 @@ export function resetWorld(o2BaseValue, options = {}){
   world.debtByFaction = FACTIONS.map(() => new Float32Array(size));
   world.reinforceByFaction = FACTIONS.map(() => new Float32Array(size));
   world.visited = new Float32Array(size);
+
+  // Initialize emotion/psychology fields
+  world.aggroField = new Float32Array(size);
+  world.curiosityField = new Float32Array(size);
+  world.aweField = new Float32Array(size);
+  world.noiseField = new Float32Array(size);
+  world.bloodField = new Float32Array(size);
+  world.discoveryField = new Float32Array(size);
+  world.computedTensionField = new Float32Array(size);
+
   world.wall = new Uint8Array(size);
   world.vent = new Uint8Array(size);
   world.fire = new Set();
@@ -175,6 +198,15 @@ export function resetWorld(o2BaseValue, options = {}){
     }
   }
   world.visited.fill(0);
+
+  // Fill emotion/psychology fields
+  world.aggroField.fill(0);
+  world.curiosityField.fill(0);
+  world.aweField.fill(0);
+  world.noiseField.fill(0);
+  world.bloodField.fill(0);
+  world.discoveryField.fill(0);
+  world.computedTensionField.fill(0);
 
   for(let x=0;x<world.W;x++){
     world.wall[idx(x,0)] = 1;
