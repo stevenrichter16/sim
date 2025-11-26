@@ -295,6 +295,49 @@ function clampField01(field){
   }
 }
 
+/**
+ * Update computed tension field from fear, comfort, and aggro
+ * Formula: tension = fear * (1 - comfort) + β*aggro
+ */
+function updateComputedTension(){
+  if(!world.computedTensionField) return;
+  if(!world.panicField || !world.safeField || !world.aggroField) return;
+
+  const AGGRO_WEIGHT = 0.5;  // β parameter
+
+  for(let i = 0; i < world.computedTensionField.length; i++){
+    if(world.wall[i]) continue;
+
+    const fear = world.panicField[i] ?? 0;
+    const comfort = world.safeField[i] ?? 0;
+    const aggro = world.aggroField[i] ?? 0;
+
+    // tension = fear * (1 - comfort) + β*aggro
+    const tension = fear * (1 - comfort) + AGGRO_WEIGHT * aggro;
+    world.computedTensionField[i] = Math.max(0, Math.min(1, tension));
+  }
+}
+
+/**
+ * Apply field coupling - fear suppresses curiosity
+ */
+function applyFieldCoupling(){
+  if(!world.panicField || !world.curiosityField) return;
+
+  const SUPPRESSION_STRENGTH = 0.7;  // How much fear suppresses curiosity
+
+  for(let i = 0; i < world.curiosityField.length; i++){
+    if(world.wall[i]) continue;
+
+    const fear = world.panicField[i] ?? 0;
+    if(fear > 0.6){  // High fear threshold
+      // Suppress curiosity based on fear level
+      const suppression = 1 - (fear * SUPPRESSION_STRENGTH);
+      world.curiosityField[i] *= Math.max(0, suppression);
+    }
+  }
+}
+
 function sumField(field){
   if(!field) return 0;
   let total = 0;
@@ -313,6 +356,36 @@ function assertField01(name, field){
 }
 
 function movementWeightsFor(agent){
+  // Base weights for default/calm agents
+  const baseWeights = {
+    safety:0.45,
+    help:-0.32,
+    route:0.22,
+    panic:-0.6,
+    safe:0.0,
+    escape:0.2,
+    visited:-0.35,
+    myFrontier:0.28,
+    mySafeMem:0.3,
+    rivalSafeMem:-0.28,
+    mySafeField:0.5,
+    rivalSafeField:-0.24,
+    allyPresence:0.38,
+    rivalPresence:-0.42,
+    ourTurf:0.35,
+    rivalTurf:-0.5,
+    debt:0.12,
+    controlGradReward:0.12,
+    reinforce:0.1,
+    // Emotion field weights
+    aggro:-0.7,         // Flee hostility
+    curiosity:0.3,      // Exploration drive
+    awe:0.25,           // Drawn to wonders
+    noise:-0.5,         // Avoid loud areas
+    blood:-0.6,         // Strong aversion to violence
+  };
+
+  // Medic role - prioritizes helping others
   if(agent?.isMedic){
     return {
       safety:0.22,
@@ -334,29 +407,68 @@ function movementWeightsFor(agent){
       rivalPresence:-0.05,
       ourTurf:0.12,
       rivalTurf:-0.18,
+      // Emotion field weights
+      aggro:-0.6,       // Avoid combat zones (but less than civilians)
+      curiosity:0.15,   // Mild interest
+      awe:0.1,          // Slight pull
+      noise:-0.3,       // Avoid loud areas
+      blood:-0.4,       // Avoid carnage
     };
   }
-  return {
-    safety:0.45,
-    help:-0.32,
-    route:0.22,
-    panic:-0.6,
-    safe:0.0,
-    escape:0.2,
-    visited:-0.35,
-    myFrontier:0.28,
-    mySafeMem:0.3,
-    rivalSafeMem:-0.28,
-    mySafeField:0.5,
-    rivalSafeField:-0.24,
-    allyPresence:0.38,
-    rivalPresence:-0.42,
-    ourTurf:0.35,
-    rivalTurf:-0.5,
-    debt:0.12,
-    controlGradReward:0.12,
-    reinforce:0.1,
-  };
+
+  // Scout role - high exploration drive
+  if(agent?.role === Mode.SCOUT){
+    return {
+      ...baseWeights,
+      safety:0.25,
+      help:-0.1,
+      visited:-0.7,      // Strong preference for unexplored
+      myFrontier:0.85,   // Seeks frontiers
+      curiosity:0.9,     // High exploration drive
+      awe:0.7,           // Seek wonders
+      aggro:-0.3,        // Tolerate some danger
+      noise:0.2,         // Investigate sounds
+      blood:-0.3,        // Less aversion than civilians
+    };
+  }
+
+  // Predator role - aggressive, seeks combat
+  if(agent?.role === Mode.PREDATOR){
+    return {
+      ...baseWeights,
+      safety:0.1,        // Low safety concern
+      help:-0.8,         // Ignore/avoid helpers
+      panic:0.4,         // Hunt fleeing prey
+      aggro:0.8,         // Seek combat
+      blood:0.6,         // Follow carnage
+      noise:0.5,         // Investigate sounds
+      curiosity:-0.2,    // Not interested in exploration
+      awe:-0.1,          // Not interested in wonders
+      mySafeField:-0.2,  // Avoid safe zones
+      rivalSafeField:0.5,// Target enemy safe zones
+    };
+  }
+
+  // Guard role - defensive, patrol, protect territory
+  if(agent?.role === Mode.GUARD){
+    return {
+      ...baseWeights,
+      safety:0.35,
+      help:0.3,          // Assist allies
+      myFrontier:0.6,    // Patrol borders
+      ourTurf:0.7,       // Stay in controlled territory
+      rivalTurf:-0.8,    // Avoid enemy territory (unless chasing)
+      aggro:-0.2,        // Cautious but will engage if needed
+      noise:0.4,         // Investigate sounds
+      blood:-0.2,        // Tolerate violence
+      curiosity:0.1,     // Low exploration drive
+      awe:0.05,          // Not interested in wonders
+      mySafeField:0.6,   // Stay near safe zones
+      allyPresence:0.5,  // Stay with allies
+    };
+  }
+
+  return baseWeights;
 }
 
 function scoredNeighbor(agent, nx, ny, weights){
@@ -482,6 +594,14 @@ function scoredNeighbor(agent, nx, ny, weights){
     const proj = projectOnto(world.memX, world.memY, k, safePhaseForId(otherId));
     if(proj > 0) rivalSafeMem = Math.max(rivalSafeMem, proj * -affinity);
   }
+
+  // Sample emotion/psychology fields
+  const aggro = world.aggroField ? world.aggroField[k] ?? 0 : 0;
+  const curiosity = world.curiosityField ? world.curiosityField[k] ?? 0 : 0;
+  const awe = world.aweField ? world.aweField[k] ?? 0 : 0;
+  const noise = world.noiseField ? world.noiseField[k] ?? 0 : 0;
+  const blood = world.bloodField ? world.bloodField[k] ?? 0 : 0;
+
   return (
     (weights.safety ?? 0) * safety +
     (weights.help ?? 0)   * help +
@@ -501,7 +621,12 @@ function scoredNeighbor(agent, nx, ny, weights){
     (weights.myFrontier ?? 0) * myFrontier +
     (weights.debt ?? 0) * myDebt +
     (weights.controlGradReward ?? 0) * controlGrad +
-    (weights.reinforce ?? 0) * myReinforce
+    (weights.reinforce ?? 0) * myReinforce +
+    (weights.aggro ?? 0) * aggro +
+    (weights.curiosity ?? 0) * curiosity +
+    (weights.awe ?? 0) * awe +
+    (weights.noise ?? 0) * noise +
+    (weights.blood ?? 0) * blood
   );
 }
 
@@ -547,6 +672,17 @@ function tryCuriosityStep(agent){
   if(best.score > -Infinity && (best.x !== agent.x || best.y !== agent.y)){
     agent.x = best.x;
     agent.y = best.y;
+
+    // Emit curiosity and discovery emotions when exploring novel areas
+    const destIdx = idx(best.x, best.y);
+    const visitedAmount = world.visited ? world.visited[destIdx] ?? 0 : 0;
+    if(visitedAmount < 0.3){  // Relatively unexplored
+      emitCuriosity(destIdx, 0.05);
+      if(visitedAmount < 0.1){  // Very novel
+        emitDiscoveryEmotions(destIdx, 0.4);
+      }
+    }
+
     return true;
   }
   return false;
@@ -664,6 +800,93 @@ function twoStepEscapeOK(x,y){
     }
   }
   return null;
+}
+
+// ========================================
+// Emotion Field Emission Functions
+// ========================================
+
+/**
+ * Emit aggro, blood, and noise fields from combat/damage
+ * @param {number} tileIdx - Tile index where damage occurred
+ * @param {number} damageAmount - Damage amount (0-1 normalized)
+ */
+export function emitCombatEmotions(tileIdx, damageAmount = 0.5){
+  if(typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= world.heat.length) return;
+
+  const intensity = Math.max(0, Math.min(1, damageAmount));
+
+  // Aggro field - hostility marker
+  if(world.aggroField){
+    world.aggroField[tileIdx] = Math.min(1, (world.aggroField[tileIdx] ?? 0) + 0.3 * intensity);
+  }
+
+  // Blood field - combat aftermath (only for significant damage)
+  if(world.bloodField && intensity > 0.3){
+    world.bloodField[tileIdx] = Math.min(1, (world.bloodField[tileIdx] ?? 0) + 0.4 * intensity);
+  }
+
+  // Noise field - combat sounds
+  if(world.noiseField){
+    world.noiseField[tileIdx] = Math.min(1, (world.noiseField[tileIdx] ?? 0) + 0.25 * intensity);
+  }
+
+  // Panic field - fear from violence
+  if(world.panicField){
+    world.panicField[tileIdx] = Math.min(1, (world.panicField[tileIdx] ?? 0) + 0.15 * intensity);
+  }
+}
+
+/**
+ * Emit awe, curiosity, and discovery markers when finding new areas or POIs
+ * @param {number} tileIdx - Tile index of discovery
+ * @param {number} intensity - Discovery intensity (0-1)
+ */
+export function emitDiscoveryEmotions(tileIdx, intensity = 0.8){
+  if(typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= world.heat.length) return;
+
+  const amount = Math.max(0, Math.min(1, intensity));
+
+  // Awe field - wonder and amazement
+  if(world.aweField){
+    world.aweField[tileIdx] = Math.min(1, (world.aweField[tileIdx] ?? 0) + 0.15 * amount);
+  }
+
+  // Curiosity field - exploration pull
+  if(world.curiosityField){
+    world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + 0.12 * amount);
+  }
+
+  // Discovery marker - mark as discovered
+  if(world.discoveryField){
+    world.discoveryField[tileIdx] = Math.max(world.discoveryField[tileIdx] ?? 0, amount);
+  }
+}
+
+/**
+ * Emit curiosity field in unexplored or frontier areas
+ * @param {number} tileIdx - Tile index
+ * @param {number} amount - Curiosity amount to add (0-1)
+ */
+export function emitCuriosity(tileIdx, amount = 0.08){
+  if(typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= world.heat.length) return;
+  if(!world.curiosityField) return;
+
+  const deposit = Math.max(0, Math.min(1, amount));
+  world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + deposit);
+}
+
+/**
+ * Emit noise field (for movement, actions, events)
+ * @param {number} tileIdx - Tile index
+ * @param {number} amount - Noise amount (0-1)
+ */
+export function emitNoise(tileIdx, amount = 0.2){
+  if(typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= world.heat.length) return;
+  if(!world.noiseField) return;
+
+  const deposit = Math.max(0, Math.min(1, amount));
+  world.noiseField[tileIdx] = Math.min(1, (world.noiseField[tileIdx] ?? 0) + deposit);
 }
 
 export class Agent{
@@ -1505,6 +1728,14 @@ export function igniteTile(tileIdx, intensity = 1){
   const currentO2 = world.o2[tileIdx] ?? 0;
   world.o2[tileIdx] = Math.max(0, currentO2 - o2Drop);
 
+  // Emit emotion fields: fire creates noise and panic
+  if(world.noiseField){
+    world.noiseField[tileIdx] = Math.min(1, (world.noiseField[tileIdx] ?? 0) + 0.3 * normalized);
+  }
+  if(world.panicField){
+    world.panicField[tileIdx] = Math.min(1, (world.panicField[tileIdx] ?? 0) + 0.2 * normalized);
+  }
+
   return { ok:true, tileIdx, intensity: clampedIntensity };
 }
 
@@ -2034,6 +2265,15 @@ let acidBasePairs = new Set();
         }
       }
       updateField(world.visited, fieldConfig.visited, { skipWalls: false });
+
+      // Update emotion/psychology fields
+      updateField(world.aggroField, fieldConfig.aggro);
+      updateField(world.curiosityField, fieldConfig.curiosity);
+      updateField(world.aweField, fieldConfig.awe);
+      updateField(world.noiseField, fieldConfig.noise);
+      updateField(world.bloodField, fieldConfig.blood);
+      updateField(world.discoveryField, fieldConfig.discovery);
+
       clampField01(world.helpField);
       clampField01(world.routeField);
       clampField01(world.panicField);
@@ -2046,6 +2286,16 @@ let acidBasePairs = new Set();
       }
       if(world.doorField) clampField01(world.doorField);
       clampField01(world.visited);
+
+      // Clamp emotion/psychology fields
+      clampField01(world.aggroField);
+      clampField01(world.curiosityField);
+      clampField01(world.aweField);
+      clampField01(world.noiseField);
+      clampField01(world.bloodField);
+      clampField01(world.discoveryField);
+      clampField01(world.computedTensionField);
+
       if(world.memX && world.memY){
         diffuse(world.memX, MEMORY_DIFFUSION);
         diffuse(world.memY, MEMORY_DIFFUSION);
@@ -2102,7 +2352,19 @@ let acidBasePairs = new Set();
         }
         assertField01('door', world.doorField);
         assertField01('visited', world.visited);
+        assertField01('aggro', world.aggroField);
+        assertField01('curiosity', world.curiosityField);
+        assertField01('awe', world.aweField);
+        assertField01('noise', world.noiseField);
+        assertField01('blood', world.bloodField);
+        assertField01('discovery', world.discoveryField);
+        assertField01('computedTension', world.computedTensionField);
       }
+
+      // Update computed tension field and apply field coupling
+      updateComputedTension();
+      applyFieldCoupling();
+
     const base = settings.o2Base;
     for(let i=0;i<world.o2.length;i++) if(!world.wall[i]&&!world.vent[i]) world.o2[i]+= (base - world.o2[i]) * 0.002;
     for(let i=0;i<world.vent.length;i++) if(world.vent[i]) world.o2[i] = Math.min(base, world.o2[i] + 0.02);
