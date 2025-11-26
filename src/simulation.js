@@ -877,6 +877,48 @@ export function emitCuriosity(tileIdx, amount = 0.08){
 }
 
 /**
+ * Emit curiosity fields from all factory objects to attract agents
+ */
+export function emitFactoryCuriosity(){
+  if(!world.curiosityField) return;
+
+  const factory = world.factory;
+  if(!factory?.structures?.size) return;
+
+  // Iterate through all factory structures and emit curiosity
+  for(const [tileIdx, structure] of factory.structures.entries()){
+    if(!structure) continue;
+
+    // Different factory types emit different amounts of curiosity
+    let emissionAmount = 0.05; // Base emission
+
+    switch(structure.kind){
+      case 'smelter':
+        emissionAmount = 0.08; // Smelters are interesting (heat, transformation)
+        break;
+      case 'constructor':
+        emissionAmount = 0.10; // Constructors are very interesting (creation)
+        break;
+      case 'node':
+        emissionAmount = 0.06; // Nodes are moderately interesting (central hub)
+        break;
+      case 'miner':
+        emissionAmount = 0.04; // Miners are less interesting (repetitive)
+        break;
+      case 'storage':
+        emissionAmount = 0.05; // Storage is baseline interesting
+        break;
+      case 'belt':
+        emissionAmount = 0.03; // Belts are least interesting (movement only)
+        break;
+    }
+
+    // Emit curiosity at factory location
+    world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + emissionAmount);
+  }
+}
+
+/**
  * Emit noise field (for movement, actions, events)
  * @param {number} tileIdx - Tile index
  * @param {number} amount - Noise amount (0-1)
@@ -2373,6 +2415,7 @@ let acidBasePairs = new Set();
     handlePhaseTransitions();
     stepCryofoam();
     stepFactory();
+    emitFactoryCuriosity(); // Factory objects emit curiosity to attract agents
 
     const toIgnite=[];
     const baseO2 = settings.o2Base || 0.21;
