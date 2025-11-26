@@ -325,6 +325,25 @@ function drawPheromoneSlices(ctx){
       threshold: 0.01,
     });
   }
+
+  // Emotion/psychology field overlays
+  if(overlay.aggro !== false)     fields.push({ key:'aggro',     data: world.aggroField,     color: '#ff0000', threshold: 0.01 }); // Red
+  if(overlay.curiosity !== false) fields.push({ key:'curiosity', data: world.curiosityField, color: '#00ffff', threshold: 0.01 }); // Cyan
+  if(overlay.awe !== false)       fields.push({ key:'awe',       data: world.aweField,       color: '#ff00ff', threshold: 0.01 }); // Magenta
+  if(overlay.noise !== false)     fields.push({ key:'noise',     data: world.noiseField,     color: '#ffff00', threshold: 0.01 }); // Yellow
+  if(overlay.blood !== false)     fields.push({ key:'blood',     data: world.bloodField,     color: '#800000', threshold: 0.01 }); // Dark red
+  if(overlay.discovery !== false) fields.push({ key:'discovery', data: world.discoveryField, color: '#ffa500', threshold: 0.01 }); // Orange
+  if(overlay.computedTension){
+    fields.push({
+      key: 'computedTension',
+      data: world.computedTensionField,
+      color: '#ff1493',  // Deep pink
+      threshold: 0.01,
+      minAlpha: 0.5,
+      scale: 1.5,
+    });
+  }
+
   if(!fields.some(f => f.data || f.get)) return;
   ctx.save();
   const baseAlpha = 0.9;

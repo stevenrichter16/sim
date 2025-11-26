@@ -65,6 +65,14 @@ export const fieldConfig = {
   door:   { D: 0.10, tHalf: 15 },
   visited:{              tHalf: 20 },
   sound:  { D: 0.28, tHalf: 15,  depositBase: 0.10 },
+
+  // Emotion/psychology fields
+  aggro:     { D: 0.08, tHalf: 20,  depositBase: 0.15 },  // Hostility - slower decay
+  curiosity: { D: 0.11, tHalf: 40,  depositBase: 0.08 },  // Exploration - long persistence
+  awe:       { D: 0.12, tHalf: 35,  depositBase: 0.12 },  // Wonder - spreads fast
+  noise:     { D: 0.28, tHalf: 5,   depositBase: 0.20 },  // Sound - fast diffusion, short life
+  blood:     { D: 0.06, tHalf: 50,  depositBase: 0.25 },  // Combat aftermath - sticky, long-lasting
+  discovery: { D: 0.10, tHalf: 100, depositBase: 0.10 },  // Points of interest - very persistent
 };
 
 export function decayMultiplierFromHalfLife(tHalf, dt = 1){
