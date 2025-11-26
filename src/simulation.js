@@ -877,44 +877,56 @@ export function emitCuriosity(tileIdx, amount = 0.08){
 }
 
 /**
- * Emit curiosity fields from all factory objects to attract agents
+ * Emit curiosity and noise fields from all factory objects to attract agents
  */
-export function emitFactoryCuriosity(){
-  if(!world.curiosityField) return;
-
+export function emitFactoryFields(){
   const factory = world.factory;
   if(!factory?.structures?.size) return;
 
-  // Iterate through all factory structures and emit curiosity
+  // Iterate through all factory structures and emit curiosity and noise
   for(const [tileIdx, structure] of factory.structures.entries()){
     if(!structure) continue;
 
-    // Different factory types emit different amounts of curiosity
-    let emissionAmount = 0.05; // Base emission
+    // Different factory types emit different amounts of curiosity and noise
+    let curiosityAmount = 0.05; // Base curiosity emission
+    let noiseAmount = 0.04; // Base noise emission
 
     switch(structure.kind){
       case 'smelter':
-        emissionAmount = 0.08; // Smelters are interesting (heat, transformation)
+        curiosityAmount = 0.08; // Smelters are interesting (heat, transformation)
+        noiseAmount = 0.12; // Very loud (heat, machinery, transformation)
         break;
       case 'constructor':
-        emissionAmount = 0.10; // Constructors are very interesting (creation)
+        curiosityAmount = 0.10; // Constructors are very interesting (creation)
+        noiseAmount = 0.10; // Loud (assembly, construction)
         break;
       case 'node':
-        emissionAmount = 0.06; // Nodes are moderately interesting (central hub)
+        curiosityAmount = 0.06; // Nodes are moderately interesting (central hub)
+        noiseAmount = 0.05; // Moderate (power distribution, humming)
         break;
       case 'miner':
-        emissionAmount = 0.04; // Miners are less interesting (repetitive)
+        curiosityAmount = 0.04; // Miners are less interesting (repetitive)
+        noiseAmount = 0.14; // Very loud (drilling, extraction)
         break;
       case 'storage':
-        emissionAmount = 0.05; // Storage is baseline interesting
+        curiosityAmount = 0.05; // Storage is baseline interesting
+        noiseAmount = 0.03; // Quiet (just storage)
         break;
       case 'belt':
-        emissionAmount = 0.03; // Belts are least interesting (movement only)
+        curiosityAmount = 0.03; // Belts are least interesting (movement only)
+        noiseAmount = 0.08; // Moderate noise (mechanical movement)
         break;
     }
 
     // Emit curiosity at factory location
-    world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + emissionAmount);
+    if(world.curiosityField){
+      world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + curiosityAmount);
+    }
+
+    // Emit noise at factory location
+    if(world.noiseField){
+      world.noiseField[tileIdx] = Math.min(1, (world.noiseField[tileIdx] ?? 0) + noiseAmount);
+    }
   }
 }
 
@@ -2415,7 +2427,7 @@ let acidBasePairs = new Set();
     handlePhaseTransitions();
     stepCryofoam();
     stepFactory();
-    emitFactoryCuriosity(); // Factory objects emit curiosity to attract agents
+    emitFactoryFields(); // Factory objects emit curiosity and noise fields
 
     const toIgnite=[];
     const baseO2 = settings.o2Base || 0.21;
