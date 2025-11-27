@@ -325,15 +325,25 @@ function applyFieldCoupling(){
   if(!world.panicField || !world.curiosityField) return;
 
   const SUPPRESSION_STRENGTH = 0.7;  // How much fear suppresses curiosity
+  const AWE_RELIEF = 0.5;             // Awe softens fear-driven suppression
+  const AWE_EXPLORATION_BOOST = 0.25; // Awe nudges exploration when fear is low
 
   for(let i = 0; i < world.curiosityField.length; i++){
     if(world.wall[i]) continue;
 
     const fear = world.panicField[i] ?? 0;
+    const awe = world.aweField ? world.aweField[i] ?? 0 : 0;
+    const curiosity = world.curiosityField[i] ?? 0;
+
     if(fear > 0.6){  // High fear threshold
-      // Suppress curiosity based on fear level
-      const suppression = 1 - (fear * SUPPRESSION_STRENGTH);
-      world.curiosityField[i] *= Math.max(0, suppression);
+      // Awe can soften the suppression a bit, keeping curiosity from collapsing fully
+      const aweBuffer = 1 - Math.min(AWE_RELIEF, awe * AWE_RELIEF);
+      const suppression = 1 - (fear * SUPPRESSION_STRENGTH * aweBuffer);
+      world.curiosityField[i] = curiosity * Math.max(0, suppression);
+    } else if(fear < 0.35 && awe > 0.3){
+      // In calmer areas, awe gently amplifies curiosity to reward wonder
+      const curiosityLift = 1 + (awe * AWE_EXPLORATION_BOOST);
+      world.curiosityField[i] = Math.min(1, curiosity * curiosityLift);
     }
   }
 }
@@ -806,6 +816,11 @@ function twoStepEscapeOK(x,y){
 // Emotion Field Emission Functions
 // ========================================
 
+function depositFromConfig(fieldKey, scale = 1, intensity = 1){
+  const base = fieldConfig[fieldKey]?.depositBase ?? 0;
+  return base * scale * intensity;
+}
+
 /**
  * Emit aggro, blood, and noise fields from combat/damage
  * @param {number} tileIdx - Tile index where damage occurred
@@ -818,22 +833,26 @@ export function emitCombatEmotions(tileIdx, damageAmount = 0.5){
 
   // Aggro field - hostility marker
   if(world.aggroField){
-    world.aggroField[tileIdx] = Math.min(1, (world.aggroField[tileIdx] ?? 0) + 0.3 * intensity);
+    const deposit = depositFromConfig('aggro', 2, intensity); // ~0.3 with default config
+    world.aggroField[tileIdx] = Math.min(1, (world.aggroField[tileIdx] ?? 0) + deposit);
   }
 
   // Blood field - combat aftermath (only for significant damage)
   if(world.bloodField && intensity > 0.3){
-    world.bloodField[tileIdx] = Math.min(1, (world.bloodField[tileIdx] ?? 0) + 0.4 * intensity);
+    const deposit = depositFromConfig('blood', 1.6, intensity); // ~0.4 with default config
+    world.bloodField[tileIdx] = Math.min(1, (world.bloodField[tileIdx] ?? 0) + deposit);
   }
 
   // Noise field - combat sounds
   if(world.noiseField){
-    world.noiseField[tileIdx] = Math.min(1, (world.noiseField[tileIdx] ?? 0) + 0.25 * intensity);
+    const deposit = depositFromConfig('noise', 1.25, intensity); // ~0.25 with default config
+    world.noiseField[tileIdx] = Math.min(1, (world.noiseField[tileIdx] ?? 0) + deposit);
   }
 
   // Panic field - fear from violence
   if(world.panicField){
-    world.panicField[tileIdx] = Math.min(1, (world.panicField[tileIdx] ?? 0) + 0.15 * intensity);
+    const deposit = (fieldConfig.panic?.depositBase ?? 0.05) * intensity * 3; // align with config yet keep impacty
+    world.panicField[tileIdx] = Math.min(1, (world.panicField[tileIdx] ?? 0) + deposit);
   }
 }
 
@@ -849,17 +868,20 @@ export function emitDiscoveryEmotions(tileIdx, intensity = 0.8){
 
   // Awe field - wonder and amazement
   if(world.aweField){
-    world.aweField[tileIdx] = Math.min(1, (world.aweField[tileIdx] ?? 0) + 0.15 * amount);
+    const deposit = depositFromConfig('awe', 1.25, amount);
+    world.aweField[tileIdx] = Math.min(1, (world.aweField[tileIdx] ?? 0) + deposit);
   }
 
   // Curiosity field - exploration pull
   if(world.curiosityField){
-    world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + 0.12 * amount);
+    const deposit = depositFromConfig('curiosity', 1.5, amount);
+    world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + deposit);
   }
 
   // Discovery marker - mark as discovered
   if(world.discoveryField){
-    world.discoveryField[tileIdx] = Math.max(world.discoveryField[tileIdx] ?? 0, amount);
+    const deposit = depositFromConfig('discovery', 1, amount);
+    world.discoveryField[tileIdx] = Math.max(world.discoveryField[tileIdx] ?? 0, deposit);
   }
 }
 
@@ -872,7 +894,7 @@ export function emitCuriosity(tileIdx, amount = 0.08){
   if(typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= world.heat.length) return;
   if(!world.curiosityField) return;
 
-  const deposit = Math.max(0, Math.min(1, amount));
+  const deposit = Math.max(0, Math.min(1, amount ?? (fieldConfig.curiosity?.depositBase ?? 0.08)));
   world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + deposit);
 }
 
@@ -927,7 +949,7 @@ export function emitNoise(tileIdx, amount = 0.2){
   if(typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= world.heat.length) return;
   if(!world.noiseField) return;
 
-  const deposit = Math.max(0, Math.min(1, amount));
+  const deposit = Math.max(0, Math.min(1, amount ?? depositFromConfig('noise', 1)));
   world.noiseField[tileIdx] = Math.min(1, (world.noiseField[tileIdx] ?? 0) + deposit);
 }
 
