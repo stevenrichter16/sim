@@ -48,3 +48,15 @@ When a tile is ignited via `igniteTile`, the simulation also emits:
 ## Takeaways
 - Agents can emit a mix of fear, hostility, sound, and curiosity-related signals, with combat and fire primarily pushing fear/aggro/noise and exploration events boosting awe/curiosity.
 - Derived tension and curiosity suppression couple these emissions, ensuring high-threat areas dampen exploration while discoveries or factory objects proactively attract agents.
+
+## Design improvement brainstorm
+The current layout keeps each field in its own array; that is simple but makes it harder to extend, share metadata, or optimize memory. Future refactors could improve both how fields live on tiles and how agents read them:
+
+- **Encapsulate fields in a typed map object**: wrap the parallel arrays in a `FieldMap` with metadata (decay rate, deposit base, clamps) and helper methods (`add(tileIdx, field, amount)`, `decayChunk(chunkId)`) so new fields are registered centrally.
+- **Tile-centric storage option**: add an optional `tile.fields` struct that holds a compact tuple for frequently coupled values (e.g., `{panic, aggro, tension}`) while leaving rarely used fields in shared arrays. That keeps hot-path reads cache-friendly for agents evaluating danger.
+- **Sparse overlays for temporary signals**: represent short-lived markers (e.g., discovery flashes, one-off noise bursts) as sparse overlays keyed by tile index with expiry ticks. Decay sweeps can then skip zero-heavy arrays.
+- **Chunked decay and caching**: group tiles into chunks and track “dirty” flags per field per chunk to avoid decaying untouched regions every frame. Agents could also cache the last-read chunk state for gradient sampling.
+- **Gradient-aware sampling helpers**: provide an API that returns both the scalar and a smoothed gradient vector for each field around a tile, so agent steering can blend multiple fields without recomputing neighborhood sums.
+- **Agent-readable field bundles**: expose a `senseFields(tileIdx)` helper that returns a pre-normalized bundle (panic, curiosity, awe, tension, noise) in the units agents already use, so agent code no longer reads raw arrays directly.
+- **Config-first registration**: define all fields in a config block with names, defaults, and coupling rules. Initialization would allocate arrays and return handles keyed by name, cutting down on manual array wiring and making experimentation safer.
+- **Replay/debug snapshots**: store optional frame-sampled snapshots of field layers to visualize how emissions spread; this helps tune decay and coupling and ensures agents are reacting to believable gradients.
