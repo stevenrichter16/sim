@@ -21,7 +21,8 @@ import {
 import { emitParticleBurst, emitFlash } from './effects.js';
 import { debugConfig } from './debug.js';
 import { createRecorder } from './recorder.js';
-import { thresholds, roles, fieldConfig, decayMultiplierFromHalfLife } from './config.js';
+import { thresholds, roles, decayMultiplierFromHalfLife } from './config.js';
+import { getFieldDepositBase, getFieldSpec } from './fieldRegistry.js';
 import { FACTIONS, DEFAULT_FACTION_ID, factionById, factionByKey, factionAffinity } from './factions.js';
 import { MTAG, depositTagged, projectOnto, factionSafePhases, getPresenceCos, getPresenceSin, rebuildPresencePhaseCache } from './memory.js';
 import { random, randomCentered, randomInt, randomRange } from './rng.js';
@@ -43,6 +44,34 @@ import {
 import { createScenarioRuntime } from './script/runtime.js';
 import { deserialiseCompiledProgram } from './script/bytecode.js';
 import { stepFactory, setFactoryWorkerSpawner, spawnFactoryWorker } from './factory.js';
+import { EmotionFields, FieldCoupling } from './emotionConstants.js';
+
+const {
+  Help,
+  Route,
+  Panic,
+  Safe,
+  Escape,
+  Door,
+  Visited,
+  Aggro,
+  Curiosity,
+  Awe,
+  Noise,
+  Blood,
+  Discovery,
+  ComputedTension,
+} = EmotionFields;
+
+const {
+  AggroWeight,
+  SuppressionStrength,
+  AweRelief,
+  AweExplorationBoost,
+  HighFearThreshold,
+  CalmFearThreshold,
+  AweCalmThreshold,
+} = FieldCoupling;
 
 const medicAssignments = new Map();
 
@@ -57,7 +86,7 @@ const MEMORY_DECAY = 0.985;
 const MEMORY_EPSILON = 1e-4;
 
 const diagnosticsFrame = {
-  fieldTotals: { help:0, route:0, panic:0, safe:0, escape:0, door:0 },
+  fieldTotals: { [Help]:0, [Route]:0, [Panic]:0, [Safe]:0, [Escape]:0, [Door]:0 },
   hotAgents: 0,
   overwhelmedAgents: 0,
 };
@@ -71,7 +100,7 @@ function safePhaseForId(fid){
 }
 
 function safeDepositForFaction(faction){
-  return faction.safeDeposit ?? (fieldConfig.safe?.depositBase ?? 0.02);
+  return faction.safeDeposit ?? getFieldDepositBase(Safe);
 }
 
 const PRESENCE_DIFFUSION = 0.08;
@@ -96,162 +125,173 @@ let prevControl = null;
 
 function updatePresenceControl(){
   if(!world.presenceX || !world.presenceY || !world.dominantFaction || !world.controlLevel) return;
-  const px = world.presenceX;
-  const py = world.presenceY;
-  const dom = world.dominantFaction;
-  const ctrl = world.controlLevel;
+
+  const presenceVectorX = world.presenceX;
+  const presenceVectorY = world.presenceY;
+  const dominantFactionGrid = world.dominantFaction;
+  const controlLevelGrid = world.controlLevel;
   const factionCount = FACTIONS.length;
-  const cos = getPresenceCos();
-  const sin = getPresenceSin();
-  for(let i=0;i<px.length;i++){
-    if(world.wall && world.wall[i]){
-      px[i] = 0;
-      py[i] = 0;
-      dom[i] = -1;
-      ctrl[i] = 0;
+  const presenceCosLookup = getPresenceCos();
+  const presenceSinLookup = getPresenceSin();
+
+  for(let tileIndex = 0; tileIndex < presenceVectorX.length; tileIndex++){
+    if(world.wall && world.wall[tileIndex]){
+      presenceVectorX[tileIndex] = 0;
+      presenceVectorY[tileIndex] = 0;
+      dominantFactionGrid[tileIndex] = -1;
+      controlLevelGrid[tileIndex] = 0;
       continue;
     }
-    let bestId = -1;
-    let bestPos = 0;
-    let sumPos = 0;
-    const x = px[i];
-    const y = py[i];
-    if(x === 0 && y === 0){
-      dom[i] = -1;
-      ctrl[i] = 0;
+
+    let strongestFactionId = -1;
+    let strongestPresenceProjection = 0;
+    let summedPositivePresence = 0;
+    const presenceX = presenceVectorX[tileIndex];
+    const presenceY = presenceVectorY[tileIndex];
+
+    if(presenceX === 0 && presenceY === 0){
+      dominantFactionGrid[tileIndex] = -1;
+      controlLevelGrid[tileIndex] = 0;
       continue;
     }
-    for(let f=0; f<factionCount; f++){
-      const proj = x * cos[f] + y * sin[f];
-      if(proj > 0){
-        sumPos += proj;
-        if(proj > bestPos){
-          bestPos = proj;
-          bestId = f;
+
+    for(let factionIndex = 0; factionIndex < factionCount; factionIndex++){
+      const projectedPresence = presenceX * presenceCosLookup[factionIndex] + presenceY * presenceSinLookup[factionIndex];
+      if(projectedPresence > 0){
+        summedPositivePresence += projectedPresence;
+        if(projectedPresence > strongestPresenceProjection){
+          strongestPresenceProjection = projectedPresence;
+          strongestFactionId = factionIndex;
         }
       }
     }
-    if(bestId >= 0 && sumPos > 0){
-      dom[i] = bestId;
-      ctrl[i] = clamp01(bestPos / sumPos);
+
+    if(strongestFactionId >= 0 && summedPositivePresence > 0){
+      dominantFactionGrid[tileIndex] = strongestFactionId;
+      controlLevelGrid[tileIndex] = clamp01(strongestPresenceProjection / summedPositivePresence);
     } else {
-      dom[i] = -1;
-      ctrl[i] = 0;
+      dominantFactionGrid[tileIndex] = -1;
+      controlLevelGrid[tileIndex] = 0;
     }
   }
 }
 
 function updateFrontierFields(){
   if(!world.frontierByFaction || !world.dominantFaction || !world.controlLevel) return;
-  const dom = world.dominantFaction;
-  const ctrl = world.controlLevel;
-  const frontier = world.frontierByFaction;
-  const contestVals = new Float32Array(dom.length);
-  for(let i=0;i<dom.length;i++){
-    if(dom[i] < 0 || (world.wall && world.wall[i])){
-      contestVals[i] = 0;
+
+  const dominantFactionGrid = world.dominantFaction;
+  const controlLevelGrid = world.controlLevel;
+  const frontierFieldsByFaction = world.frontierByFaction;
+  const frontierContestRatio = new Float32Array(dominantFactionGrid.length);
+
+  for(let tileIndex = 0; tileIndex < dominantFactionGrid.length; tileIndex++){
+    if(dominantFactionGrid[tileIndex] < 0 || (world.wall && world.wall[tileIndex])){
+      frontierContestRatio[tileIndex] = 0;
       continue;
     }
-    const control = ctrl[i] ?? 0;
-    contestVals[i] = 1 - Math.abs(2 * control - 1);
+    const control = controlLevelGrid[tileIndex] ?? 0;
+    frontierContestRatio[tileIndex] = 1 - Math.abs(2 * control - 1);
   }
-  for(const field of frontier) field.fill(0);
-  for(let i=0;i<dom.length;i++){
-    const contest = contestVals[i];
+
+  for(const frontierField of frontierFieldsByFaction) frontierField.fill(0);
+
+  for(let tileIndex = 0; tileIndex < dominantFactionGrid.length; tileIndex++){
+    const contest = frontierContestRatio[tileIndex];
     if(contest <= FRONTIER_MIN_CONTEST) continue;
-    const x = i % world.W;
-    const y = (i / world.W) | 0;
+    const tileX = tileIndex % world.W;
+    const tileY = (tileIndex / world.W) | 0;
     for(const faction of FACTIONS){
-      const fid = faction.id;
+      const factionId = faction.id;
       let hasFriendly = false;
       let hasHostile = false;
       for(const [dx,dy] of DIRS4){
-        const nx = x + dx;
-        const ny = y + dy;
-        if(!inBounds(nx, ny)) continue;
-        const ni = idx(nx, ny);
-        if(world.wall && world.wall[ni]) continue;
-        const neighborFaction = dom[ni];
+        const neighborX = tileX + dx;
+        const neighborY = tileY + dy;
+        if(!inBounds(neighborX, neighborY)) continue;
+        const neighborIndex = idx(neighborX, neighborY);
+        if(world.wall && world.wall[neighborIndex]) continue;
+        const neighborFaction = dominantFactionGrid[neighborIndex];
         if(neighborFaction < 0) continue;
-        const affinity = factionAffinity(fid, neighborFaction);
-        if(neighborFaction === fid || affinity > 0){
+        const affinity = factionAffinity(factionId, neighborFaction);
+        if(neighborFaction === factionId || affinity > 0){
           hasFriendly = true;
         } else if(affinity < 0){
           hasHostile = true;
         }
       }
       if(hasFriendly && hasHostile){
-        frontier[fid][i] = Math.min(1, frontier[fid][i] + contest * FRONTIER_DEPOSIT);
+        frontierFieldsByFaction[factionId][tileIndex] = Math.min(1, frontierFieldsByFaction[factionId][tileIndex] + contest * FRONTIER_DEPOSIT);
       }
     }
   }
-  const frontierCfg = fieldConfig.safe;
-  for(const field of frontier){
-    updateField(field, frontierCfg);
-    clampField01(field);
+
+  const frontierFieldConfig = getFieldSpec(Safe);
+  for(const frontierField of frontierFieldsByFaction){
+    updateField(frontierField, frontierFieldConfig);
+    clampField01(frontierField);
   }
 }
 
 function seedControlDebt(){
   if(!world.debtByFaction || !world.dominantFaction || !world.controlLevel) return;
-  const dom = world.dominantFaction;
-  const ctrl = world.controlLevel;
-  if(!prevDominant || prevDominant.length !== dom.length){
-    prevDominant = new Int16Array(dom.length);
+  const dominantFactionGrid = world.dominantFaction;
+  const controlLevelGrid = world.controlLevel;
+  if(!prevDominant || prevDominant.length !== dominantFactionGrid.length){
+    prevDominant = new Int16Array(dominantFactionGrid.length);
     prevDominant.fill(-1);
   }
-  if(!prevControl || prevControl.length !== ctrl.length){
-    prevControl = new Float32Array(ctrl.length);
+  if(!prevControl || prevControl.length !== controlLevelGrid.length){
+    prevControl = new Float32Array(controlLevelGrid.length);
   }
-  for(let i=0;i<dom.length;i++){
-    if(world.wall && world.wall[i]) continue;
-    const was = prevDominant[i];
-    const wasConf = prevControl[i] ?? 0;
-    const now = dom[i];
-    const nowConf = ctrl[i] ?? 0;
-    const lost = (was >= 0 && wasConf > DEBT_LOSS_HIGH) && (now !== was || nowConf < DEBT_LOSS_LOW);
-    if(!lost) continue;
-    const hostile = (now >= 0) ? (factionAffinity(was, now) < 0) : true;
-    if(!hostile) continue;
-    const deposit = DEBT_DEPOSIT * Math.max(0, wasConf - nowConf);
-    if(deposit <= 0) continue;
-    const field = world.debtByFaction[was];
-    if(field) field[i] = Math.min(1, (field[i] ?? 0) + deposit);
+  for(let tileIndex = 0; tileIndex < dominantFactionGrid.length; tileIndex++){
+    if(world.wall && world.wall[tileIndex]) continue;
+    const previousDominantFaction = prevDominant[tileIndex];
+    const previousControlLevel = prevControl[tileIndex] ?? 0;
+    const currentDominantFaction = dominantFactionGrid[tileIndex];
+    const currentControlLevel = controlLevelGrid[tileIndex] ?? 0;
+    const controlLost = (previousDominantFaction >= 0 && previousControlLevel > DEBT_LOSS_HIGH) && (currentDominantFaction !== previousDominantFaction || currentControlLevel < DEBT_LOSS_LOW);
+    if(!controlLost) continue;
+    const hostileTakeover = (currentDominantFaction >= 0) ? (factionAffinity(previousDominantFaction, currentDominantFaction) < 0) : true;
+    if(!hostileTakeover) continue;
+    const takeoverDebtDeposit = DEBT_DEPOSIT * Math.max(0, previousControlLevel - currentControlLevel);
+    if(takeoverDebtDeposit <= 0) continue;
+    const debtField = world.debtByFaction[previousDominantFaction];
+    if(debtField) debtField[tileIndex] = Math.min(1, (debtField[tileIndex] ?? 0) + takeoverDebtDeposit);
   }
-  if(dom.length) prevDominant.set(dom);
-  if(ctrl.length) prevControl.set(ctrl);
+  if(dominantFactionGrid.length) prevDominant.set(dominantFactionGrid);
+  if(controlLevelGrid.length) prevControl.set(controlLevelGrid);
 }
 
 function seedReinforcement(){
   //console.log("in seedReinforcemnt");
   if(!world.reinforceByFaction || !world.dominantFaction || !world.controlLevel) return;
   //console.log("passed the first seedRein...");
-  const dom = world.dominantFaction;
-  const ctrl = world.controlLevel;
+  const dominantFactionGrid = world.dominantFaction;
+  const controlLevelGrid = world.controlLevel;
   //console.log("dom length:", dom.length);
-  for(let i=0;i<dom.length;i++){
-    if(world.wall && world.wall[i]) continue;
+  for(let tileIndex = 0; tileIndex < dominantFactionGrid.length; tileIndex++){
+    if(world.wall && world.wall[tileIndex]) continue;
     //console.log("after wall check in SeedRien..");
     //console.log("dom:", dom[i]);
-    const fid = dom[i];
+    const factionId = dominantFactionGrid[tileIndex];
     //console.log("after setting fid in SeedRien..");
-    if(fid < 0) continue;
+    if(factionId < 0) continue;
     //console.log("after fid check in seedRein..");
-    const strength = ctrl[i] ?? 0;
-    if(strength <= REINFORCE_THRESHOLD) continue;
+    const controlLevel = controlLevelGrid[tileIndex] ?? 0;
+    if(controlLevel <= REINFORCE_THRESHOLD) continue;
     //console.log("after strength check in seedRein..");
-    const field = world.reinforceByFaction[fid];
-    if(!field) continue;
+    const reinforcementField = world.reinforceByFaction[factionId];
+    if(!reinforcementField) continue;
     //console.log("after !field check in seedRein..");
-    const deposit = REINFORCE_DEPOSIT * (strength - REINFORCE_THRESHOLD);
-    if(deposit <= 0) continue;
+    const reinforcementDeposit = REINFORCE_DEPOSIT * (controlLevel - REINFORCE_THRESHOLD);
+    if(reinforcementDeposit <= 0) continue;
     //console.log("after deposit check in seedRein..");
-    field[i] = Math.min(1, field[i] + deposit);
+    reinforcementField[tileIndex] = Math.min(1, reinforcementField[tileIndex] + reinforcementDeposit);
     //console.log("Seeding reinforcement");
     if(debugConfig.enableLogs?.reinforceSeed){
-      const x = i % world.W;
-      const y = (i / world.W) | 0;
-      console.log(`[reinforce] deposit`, { tile: `${x},${y}`, faction: fid, ctrl: strength.toFixed(3), deposit: deposit.toFixed(5), value: field[i].toFixed(4) });
+      const x = tileIndex % world.W;
+      const y = (tileIndex / world.W) | 0;
+      console.log(`[reinforce] deposit`, { tile: `${x},${y}`, faction: factionId, ctrl: controlLevel.toFixed(3), deposit: reinforcementDeposit.toFixed(5), value: reinforcementField[tileIndex].toFixed(4) });
     }
   }
 }
@@ -263,35 +303,35 @@ function maybeBoostFrontierFromReinforce(fromIdx, toIdx, factionId){
   if(!reinforceField || !frontierField) return;
   const fromVal = reinforceField[fromIdx] ?? 0;
   if(fromVal <= REINFORCE_FRONTIER_MIN) return;
-  const dom = world.dominantFaction;
-  const ctrl = world.controlLevel;
-  if(!dom || !ctrl) return;
-  const domNext = dom[toIdx];
-  const ctrlNext = ctrl[toIdx] ?? 0;
-  const contested = (domNext < 0) || (domNext !== factionId && ctrlNext <= REINFORCE_THRESHOLD);
+  const dominantFactionGrid = world.dominantFaction;
+  const controlLevelGrid = world.controlLevel;
+  if(!dominantFactionGrid || !controlLevelGrid) return;
+  const dominantFactionNextTile = dominantFactionGrid[toIdx];
+  const controlLevelNextTile = controlLevelGrid[toIdx] ?? 0;
+  const contested = (dominantFactionNextTile < 0) || (dominantFactionNextTile !== factionId && controlLevelNextTile <= REINFORCE_THRESHOLD);
   if(!contested) return;
   const boost = REINFORCE_FRONTIER_BOOST * fromVal;
   if(boost <= 0) return;
   frontierField[toIdx] = Math.min(1, frontierField[toIdx] + boost);
 }
 
-function updateField(field, cfg, { skipWalls = true } = {}){
-  if(!field || !cfg) return;
-  diffuse(field, cfg?.D ?? 0);
-  const keep = decayMultiplierFromHalfLife(cfg?.tHalf ?? 1);
-  for(let i=0;i<field.length;i++){
-    if(skipWalls && world.wall[i]) continue;
-    const v = field[i] * keep;
-    field[i] = v < 0.0001 ? 0 : v;
+function updateField(field, fieldConfigEntry, { skipWalls = true } = {}){
+  if(!field || !fieldConfigEntry) return;
+  diffuse(field, fieldConfigEntry?.diffusionRate ?? 0);
+  const decayMultiplier = decayMultiplierFromHalfLife(fieldConfigEntry?.halfLifeTurns ?? 1);
+  for(let tileIndex = 0; tileIndex < field.length; tileIndex++){
+    if(skipWalls && world.wall[tileIndex]) continue;
+    const decayedValue = field[tileIndex] * decayMultiplier;
+    field[tileIndex] = decayedValue < 0.0001 ? 0 : decayedValue;
   }
 }
 
 function clampField01(field){
   if(!field) return;
-  for(let i=0;i<field.length;i++){
-    const v = field[i];
-    if(v <= 0) field[i] = 0;
-    else if(v >= 1) field[i] = 1;
+  for(let tileIndex = 0; tileIndex < field.length; tileIndex++){
+    const value = field[tileIndex];
+    if(value <= 0) field[tileIndex] = 0;
+    else if(value >= 1) field[tileIndex] = 1;
   }
 }
 
@@ -303,8 +343,6 @@ function updateComputedTension(){
   if(!world.computedTensionField) return;
   if(!world.panicField || !world.safeField || !world.aggroField) return;
 
-  const AGGRO_WEIGHT = 0.5;  // β parameter
-
   for(let i = 0; i < world.computedTensionField.length; i++){
     if(world.wall[i]) continue;
 
@@ -313,7 +351,7 @@ function updateComputedTension(){
     const aggro = world.aggroField[i] ?? 0;
 
     // tension = fear * (1 - comfort) + β*aggro
-    const tension = fear * (1 - comfort) + AGGRO_WEIGHT * aggro;
+    const tension = fear * (1 - comfort) + AggroWeight * aggro;
     world.computedTensionField[i] = Math.max(0, Math.min(1, tension));
   }
 }
@@ -324,16 +362,22 @@ function updateComputedTension(){
 function applyFieldCoupling(){
   if(!world.panicField || !world.curiosityField) return;
 
-  const SUPPRESSION_STRENGTH = 0.7;  // How much fear suppresses curiosity
-
   for(let i = 0; i < world.curiosityField.length; i++){
     if(world.wall[i]) continue;
 
     const fear = world.panicField[i] ?? 0;
-    if(fear > 0.6){  // High fear threshold
-      // Suppress curiosity based on fear level
-      const suppression = 1 - (fear * SUPPRESSION_STRENGTH);
-      world.curiosityField[i] *= Math.max(0, suppression);
+    const awe = world.aweField ? world.aweField[i] ?? 0 : 0;
+    const curiosity = world.curiosityField[i] ?? 0;
+
+    if(fear > HighFearThreshold){
+      // Awe can soften the suppression a bit, keeping curiosity from collapsing fully
+      const aweBuffer = 1 - Math.min(AweRelief, awe * AweRelief);
+      const suppression = 1 - (fear * SuppressionStrength * aweBuffer);
+      world.curiosityField[i] = curiosity * Math.max(0, suppression);
+    } else if(fear < CalmFearThreshold && awe > AweCalmThreshold){
+      // In calmer areas, awe gently amplifies curiosity to reward wonder
+      const curiosityLift = 1 + (awe * AweExplorationBoost);
+      world.curiosityField[i] = Math.min(1, curiosity * curiosityLift);
     }
   }
 }
@@ -473,23 +517,23 @@ function movementWeightsFor(agent){
 
 function scoredNeighbor(agent, nx, ny, weights){
   if(!inBounds(nx,ny)) return -Infinity;
-  const k = idx(nx, ny);
-  if(world.wall[k]) return -Infinity;
+  const neighborIndex = idx(nx, ny);
+  if(world.wall[neighborIndex]) return -Infinity;
   const safety = Math.max(0, Math.min(1, safetyScore(nx, ny)));
-  const help = world.helpField ? world.helpField[k] ?? 0 : 0;
-  const route = world.routeField ? world.routeField[k] ?? 0 : 0;
-  const panic = world.panicField ? world.panicField[k] ?? 0 : 0;
-  const safe = world.safeField ? world.safeField[k] ?? 0 : 0;
-  const escape = world.escapeField ? world.escapeField[k] ?? 0 : 0;
-  const visited = world.visited ? world.visited[k] ?? 0 : 0;
+  const help = world.helpField ? world.helpField[neighborIndex] ?? 0 : 0;
+  const route = world.routeField ? world.routeField[neighborIndex] ?? 0 : 0;
+  const panic = world.panicField ? world.panicField[neighborIndex] ?? 0 : 0;
+  const safe = world.safeField ? world.safeField[neighborIndex] ?? 0 : 0;
+  const escape = world.escapeField ? world.escapeField[neighborIndex] ?? 0 : 0;
+  const visited = world.visited ? world.visited[neighborIndex] ?? 0 : 0;
   const factionId = agent?.factionId ?? DEFAULT_FACTION_ID;
-  const hereIdx = agent ? idx(agent.x, agent.y) : k;
-  const mySafeMem = projectOnto(world.memX, world.memY, k, safePhaseForId(factionId));
+  const currentTileIndex = agent ? idx(agent.x, agent.y) : neighborIndex;
+  const mySafeMem = projectOnto(world.memX, world.memY, neighborIndex, safePhaseForId(factionId));
   const cosArr = getPresenceCos();
   const sinArr = getPresenceSin();
   let allyPresence = 0;
   if(world.presenceX && world.presenceY){
-    const selfProj = world.presenceX[k] * cosArr[factionId] + world.presenceY[k] * sinArr[factionId];
+    const selfProj = world.presenceX[neighborIndex] * cosArr[factionId] + world.presenceY[neighborIndex] * sinArr[factionId];
     if(selfProj > 0) allyPresence = selfProj;
   }
   let rivalPresence = 0;
@@ -503,23 +547,23 @@ function scoredNeighbor(agent, nx, ny, weights){
   let myReinforce = 0;
   if(world.safeFieldsByFaction){
     const myField = world.safeFieldsByFaction[factionId];
-    if(myField) mySafeField = myField[k] ?? 0;
+    if(myField) mySafeField = myField[neighborIndex] ?? 0;
   }
   if(world.frontierByFaction){
     const myFrontierField = world.frontierByFaction[factionId];
-    if(myFrontierField) myFrontier = myFrontierField[k] ?? 0;
+    if(myFrontierField) myFrontier = myFrontierField[neighborIndex] ?? 0;
   }
   if(world.debtByFaction){
     const debtField = world.debtByFaction[factionId];
-    if(debtField) myDebt = debtField[k] ?? 0;
+    if(debtField) myDebt = debtField[neighborIndex] ?? 0;
   }
   if(world.reinforceByFaction){
     const reinforceField = world.reinforceByFaction[factionId];
-    if(reinforceField) myReinforce = reinforceField[k] ?? 0;
+    if(reinforceField) myReinforce = reinforceField[neighborIndex] ?? 0;
   }
   if(world.presenceX && world.presenceY){
-    const px = world.presenceX[k];
-    const py = world.presenceY[k];
+    const px = world.presenceX[neighborIndex];
+    const py = world.presenceY[neighborIndex];
     for(const faction of FACTIONS){
       const otherId = faction.id;
       if(otherId === factionId) continue;
@@ -543,7 +587,7 @@ function scoredNeighbor(agent, nx, ny, weights){
       const affinity = factionAffinity(factionId, otherId);
       const field = world.safeFieldsByFaction[otherId];
       if(!field) continue;
-      const val = field[k] ?? 0;
+      const val = field[neighborIndex] ?? 0;
       if(val <= 0) continue;
       if(affinity > 0){
         mySafeField = Math.max(mySafeField, val * affinity);
@@ -553,36 +597,29 @@ function scoredNeighbor(agent, nx, ny, weights){
     }
   }
   if(world.dominantFaction && world.controlLevel){
-    const dom = world.dominantFaction[k];
-    const conf = world.controlLevel[k] ?? 0;
-    if(dom >= 0 && conf > 0.05){
-      const affinity = factionAffinity(factionId, dom);
-      if(dom === factionId || affinity > 0){
-        ourTurf = Math.max(ourTurf, conf);
+    const dominantFactionAtNeighbor = world.dominantFaction[neighborIndex];
+    const controlLevelAtNeighbor = world.controlLevel[neighborIndex] ?? 0;
+    if(dominantFactionAtNeighbor >= 0 && controlLevelAtNeighbor > 0.05){
+      const affinity = factionAffinity(factionId, dominantFactionAtNeighbor);
+      if(dominantFactionAtNeighbor === factionId || affinity > 0){
+        ourTurf = Math.max(ourTurf, controlLevelAtNeighbor);
       } else if(affinity < 0){
-        rivalTurf = Math.max(rivalTurf, conf * -affinity);
+        rivalTurf = Math.max(rivalTurf, controlLevelAtNeighbor * -affinity);
       }
     }
     if(agent){
-      const domHere = world.dominantFaction[hereIdx];
-      const ctrlHere = world.controlLevel[hereIdx] ?? 0;
-      const ctrlNext = conf;
-      let myHere = 0;
-      if(domHere >= 0){
-        const affinityHere = factionAffinity(factionId, domHere);
-        if(domHere === factionId || affinityHere > 0){
-          myHere = ctrlHere;
+      const dominantFactionAtCurrent = world.dominantFaction[currentTileIndex];
+      const controlLevelAtCurrent = world.controlLevel[currentTileIndex] ?? 0;
+      const controlLevelDifference = controlLevelAtNeighbor - controlLevelAtCurrent;
+      if(controlLevelDifference > 0){
+        const affinityAtCurrent = factionAffinity(factionId, dominantFactionAtCurrent);
+        const affinityAtNeighbor = factionAffinity(factionId, dominantFactionAtNeighbor);
+        const friendlyHere = dominantFactionAtCurrent === factionId || affinityAtCurrent > 0;
+        const friendlyNext = dominantFactionAtNeighbor === factionId || affinityAtNeighbor > 0;
+        if(friendlyHere && friendlyNext){
+          controlGrad = controlLevelDifference;
         }
       }
-      let myNext = 0;
-      if(dom >= 0){
-        const affinityNext = factionAffinity(factionId, dom);
-        if(dom === factionId || affinityNext > 0){
-          myNext = ctrlNext;
-        }
-      }
-      const delta = myNext - myHere;
-      if(delta > 0) controlGrad = delta;
     }
   }
   let rivalSafeMem = 0;
@@ -591,16 +628,16 @@ function scoredNeighbor(agent, nx, ny, weights){
     if(otherId === factionId) continue;
     const affinity = factionAffinity(factionId, otherId);
     if(affinity >= 0) continue;
-    const proj = projectOnto(world.memX, world.memY, k, safePhaseForId(otherId));
-    if(proj > 0) rivalSafeMem = Math.max(rivalSafeMem, proj * -affinity);
+    const projectedSafetyMemory = projectOnto(world.memX, world.memY, neighborIndex, safePhaseForId(otherId));
+    if(projectedSafetyMemory > 0) rivalSafeMem = Math.max(rivalSafeMem, projectedSafetyMemory * -affinity);
   }
 
   // Sample emotion/psychology fields
-  const aggro = world.aggroField ? world.aggroField[k] ?? 0 : 0;
-  const curiosity = world.curiosityField ? world.curiosityField[k] ?? 0 : 0;
-  const awe = world.aweField ? world.aweField[k] ?? 0 : 0;
-  const noise = world.noiseField ? world.noiseField[k] ?? 0 : 0;
-  const blood = world.bloodField ? world.bloodField[k] ?? 0 : 0;
+  const aggro = world.aggroField ? world.aggroField[neighborIndex] ?? 0 : 0;
+  const curiosity = world.curiosityField ? world.curiosityField[neighborIndex] ?? 0 : 0;
+  const awe = world.aweField ? world.aweField[neighborIndex] ?? 0 : 0;
+  const noise = world.noiseField ? world.noiseField[neighborIndex] ?? 0 : 0;
+  const blood = world.bloodField ? world.bloodField[neighborIndex] ?? 0 : 0;
 
   return (
     (weights.safety ?? 0) * safety +
@@ -630,22 +667,22 @@ function scoredNeighbor(agent, nx, ny, weights){
   );
 }
 
-function hazardHere(k){
-  const heat = world.heat[k] ?? 0;
-  const panic = world.panicField ? world.panicField[k] ?? 0 : 0;
-  const o2 = world.o2[k] ?? 0;
-  return clamp01(0.6 * heat + 0.3 * panic + 0.1 * (1 - o2));
+function hazardHere(tileIndex){
+  const heat = world.heat[tileIndex] ?? 0;
+  const panic = world.panicField ? world.panicField[tileIndex] ?? 0 : 0;
+  const oxygen = world.o2[tileIndex] ?? 0;
+  return clamp01(0.6 * heat + 0.3 * panic + 0.1 * (1 - oxygen));
 }
 
 function mayExplore(agent){
-  const k = idx(agent.x, agent.y);
-  const safeHere = world.safeField ? world.safeField[k] ?? 0 : 0;
-  const hzHere = hazardHere(k);
+  const tileIndex = idx(agent.x, agent.y);
+  const safeHere = world.safeField ? world.safeField[tileIndex] ?? 0 : 0;
+  const localHazard = hazardHere(tileIndex);
   const tension = agent.S?.tension ?? 0.5;
   const amplitude = agent.S?.amplitude ?? 0.2;
   const curiosity = clamp01((tension - 0.5) - (amplitude - 0.3));
   const okSafe = safeHere > 0.65;
-  const okHazard = hzHere < 0.25;
+  const okHazard = localHazard < 0.25;
   const okMood = curiosity > 0.2;
   return okSafe && okHazard && okMood ? curiosity : 0;
 }
@@ -653,28 +690,32 @@ function mayExplore(agent){
 function tryCuriosityStep(agent){
   const here = idx(agent.x, agent.y);
   const safeHere = world.safeField ? world.safeField[here] ?? 0 : 0;
-  let best = { score: -Infinity, x: agent.x, y: agent.y };
+  let bestCuriosityDestination = { score: -Infinity, x: agent.x, y: agent.y };
   for(const [dx,dy] of DIRS4){
     const nx = agent.x + dx;
     const ny = agent.y + dy;
     if(!inBounds(nx, ny)) continue;
-    const nk = idx(nx, ny);
-    if(world.wall[nk]) continue;
-    const safeNext = world.safeField ? world.safeField[nk] ?? 0 : 0;
+    const neighborIndex = idx(nx, ny);
+    if(world.wall[neighborIndex]) continue;
+    const safeNext = world.safeField ? world.safeField[neighborIndex] ?? 0 : 0;
     const edgeBias = Math.max(0, safeHere - safeNext);
     if(edgeBias <= 0) continue;
-    const hz = hazardHere(nk);
-    if(hz > 0.35) continue;
-    const novelty = world.visited ? 1 - (world.visited[nk] ?? 0) : 1;
-    const score = 0.5 * edgeBias + 0.8 * novelty - 0.4 * hz + randomCentered() * 0.0005;
-    if(score > best.score) best = { score, x: nx, y: ny };
+    const hazardAtNeighbor = hazardHere(neighborIndex);
+    if(hazardAtNeighbor > 0.35) continue;
+    const novelty = world.visited ? 1 - (world.visited[neighborIndex] ?? 0) : 1;
+    const curiosityScore = 0.5 * edgeBias + 0.8 * novelty - 0.4 * hazardAtNeighbor + randomCentered() * 0.0005;
+    if(curiosityScore > bestCuriosityDestination.score){
+      bestCuriosityDestination = { score: curiosityScore, x: nx, y: ny };
+    }
   }
-  if(best.score > -Infinity && (best.x !== agent.x || best.y !== agent.y)){
-    agent.x = best.x;
-    agent.y = best.y;
+  const hasValidCuriosityMove =
+    bestCuriosityDestination.score > -Infinity && (bestCuriosityDestination.x !== agent.x || bestCuriosityDestination.y !== agent.y);
+  if(hasValidCuriosityMove){
+    agent.x = bestCuriosityDestination.x;
+    agent.y = bestCuriosityDestination.y;
 
     // Emit curiosity and discovery emotions when exploring novel areas
-    const destIdx = idx(best.x, best.y);
+    const destIdx = idx(bestCuriosityDestination.x, bestCuriosityDestination.y);
     const visitedAmount = world.visited ? world.visited[destIdx] ?? 0 : 0;
     if(visitedAmount < 0.3){  // Relatively unexplored
       emitCuriosity(destIdx, 0.05);
@@ -722,28 +763,28 @@ function safetyScore(x,y){
 }
 
 function bestDirectionByHeat(x,y,radius=2){
-  const hereHeat = world.heat[idx(x,y)] ?? 1;
-  let best = { dx:0, dy:0, h: hereHeat };
-  for(let r=1; r<=radius; r++){
-    for(let dx=-r; dx<=r; dx++){
-      for(let dy=-r; dy<=r; dy++){
-        if(Math.abs(dx) + Math.abs(dy) !== r) continue;
+  const currentTileHeat = world.heat[idx(x,y)] ?? 1;
+  let coolestDirection = { dx:0, dy:0, heat: currentTileHeat };
+  for(let taxiRadius=1; taxiRadius<=radius; taxiRadius++){
+    for(let dx=-taxiRadius; dx<=taxiRadius; dx++){
+      for(let dy=-taxiRadius; dy<=taxiRadius; dy++){
+        if(Math.abs(dx) + Math.abs(dy) !== taxiRadius) continue;
         const nx = x + dx;
         const ny = y + dy;
         if(!inBounds(nx,ny)) continue;
-        const k = idx(nx,ny);
-        if(world.wall[k]) continue;
-        const h = world.heat[k];
-        if(h < best.h - 0.001){
+        const neighborIndex = idx(nx,ny);
+        if(world.wall[neighborIndex]) continue;
+        const neighborHeat = world.heat[neighborIndex];
+        if(neighborHeat < coolestDirection.heat - 0.001){
           const stepX = dx === 0 ? 0 : dx / Math.abs(dx);
           const stepY = dy === 0 ? 0 : dy / Math.abs(dy);
-          best = { dx: stepX, dy: stepY, h };
+          coolestDirection = { dx: stepX, dy: stepY, heat: neighborHeat };
         }
       }
     }
-    if(best.h < hereHeat - 0.02) break;
+    if(coolestDirection.heat < currentTileHeat - 0.02) break;
   }
-  return best;
+  return coolestDirection;
 }
 
 function setHeadingFromVector(S, dx, dy){
@@ -786,25 +827,30 @@ function tryRandomStep(agent){
   return false;
 }
 
-function twoStepEscapeOK(x,y){
-  const hereHeat = world.heat[idx(x,y)] ?? 0;
-  for(const [dx,dy] of DIRS4){
-    const mx = x + dx;
-    const my = y + dy;
-    if(!inBounds(mx,my) || world.wall[idx(mx,my)]) continue;
-    const midHeat = world.heat[idx(mx,my)] ?? 1;
-    if(midHeat > hereHeat + 0.05) continue;
-    const best = bestDirectionByHeat(mx,my,2);
-    if(best.h < hereHeat - 0.05){
-      return { nx: mx, ny: my };
+  function twoStepEscapeOK(x,y){
+    const hereHeat = world.heat[idx(x,y)] ?? 0;
+    for(const [dx,dy] of DIRS4){
+      const mx = x + dx;
+      const my = y + dy;
+      if(!inBounds(mx,my) || world.wall[idx(mx,my)]) continue;
+      const midHeat = world.heat[idx(mx,my)] ?? 1;
+      if(midHeat > hereHeat + 0.05) continue;
+      const best = bestDirectionByHeat(mx,my,2);
+      if(best.heat < hereHeat - 0.05){
+        return { nx: mx, ny: my };
+      }
     }
+    return null;
   }
-  return null;
-}
 
 // ========================================
 // Emotion Field Emission Functions
 // ========================================
+
+function depositFromConfig(fieldKey, scale = 1, intensity = 1){
+  const base = getFieldDepositBase(fieldKey);
+  return base * scale * intensity;
+}
 
 /**
  * Emit aggro, blood, and noise fields from combat/damage
@@ -818,22 +864,26 @@ export function emitCombatEmotions(tileIdx, damageAmount = 0.5){
 
   // Aggro field - hostility marker
   if(world.aggroField){
-    world.aggroField[tileIdx] = Math.min(1, (world.aggroField[tileIdx] ?? 0) + 0.3 * intensity);
+    const deposit = depositFromConfig(Aggro, 2, intensity); // ~0.3 with default config
+    world.aggroField[tileIdx] = Math.min(1, (world.aggroField[tileIdx] ?? 0) + deposit);
   }
 
   // Blood field - combat aftermath (only for significant damage)
   if(world.bloodField && intensity > 0.3){
-    world.bloodField[tileIdx] = Math.min(1, (world.bloodField[tileIdx] ?? 0) + 0.4 * intensity);
+    const deposit = depositFromConfig(Blood, 1.6, intensity); // ~0.4 with default config
+    world.bloodField[tileIdx] = Math.min(1, (world.bloodField[tileIdx] ?? 0) + deposit);
   }
 
   // Noise field - combat sounds
   if(world.noiseField){
-    world.noiseField[tileIdx] = Math.min(1, (world.noiseField[tileIdx] ?? 0) + 0.25 * intensity);
+    const deposit = depositFromConfig(Noise, 1.25, intensity); // ~0.25 with default config
+    world.noiseField[tileIdx] = Math.min(1, (world.noiseField[tileIdx] ?? 0) + deposit);
   }
 
   // Panic field - fear from violence
   if(world.panicField){
-    world.panicField[tileIdx] = Math.min(1, (world.panicField[tileIdx] ?? 0) + 0.15 * intensity);
+    const deposit = depositFromConfig(Panic, 3, intensity); // align with config yet keep impacty
+    world.panicField[tileIdx] = Math.min(1, (world.panicField[tileIdx] ?? 0) + deposit);
   }
 }
 
@@ -849,17 +899,20 @@ export function emitDiscoveryEmotions(tileIdx, intensity = 0.8){
 
   // Awe field - wonder and amazement
   if(world.aweField){
-    world.aweField[tileIdx] = Math.min(1, (world.aweField[tileIdx] ?? 0) + 0.15 * amount);
+    const deposit = depositFromConfig(Awe, 1.25, amount);
+    world.aweField[tileIdx] = Math.min(1, (world.aweField[tileIdx] ?? 0) + deposit);
   }
 
   // Curiosity field - exploration pull
   if(world.curiosityField){
-    world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + 0.12 * amount);
+    const deposit = depositFromConfig(Curiosity, 1.5, amount);
+    world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + deposit);
   }
 
   // Discovery marker - mark as discovered
   if(world.discoveryField){
-    world.discoveryField[tileIdx] = Math.max(world.discoveryField[tileIdx] ?? 0, amount);
+    const deposit = depositFromConfig(Discovery, 1, amount);
+    world.discoveryField[tileIdx] = Math.max(world.discoveryField[tileIdx] ?? 0, deposit);
   }
 }
 
@@ -868,11 +921,11 @@ export function emitDiscoveryEmotions(tileIdx, intensity = 0.8){
  * @param {number} tileIdx - Tile index
  * @param {number} amount - Curiosity amount to add (0-1)
  */
-export function emitCuriosity(tileIdx, amount = 0.08){
+export function emitCuriosity(tileIdx, amount){
   if(typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= world.heat.length) return;
   if(!world.curiosityField) return;
 
-  const deposit = Math.max(0, Math.min(1, amount));
+  const deposit = Math.max(0, Math.min(1, amount ?? getFieldDepositBase(Curiosity)));
   world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + deposit);
 }
 
@@ -885,34 +938,37 @@ export function emitFactoryCuriosity(){
   const factory = world.factory;
   if(!factory?.structures?.size) return;
 
+  const baseDeposit = getFieldDepositBase(Curiosity);
+
   // Iterate through all factory structures and emit curiosity
   for(const [tileIdx, structure] of factory.structures.entries()){
     if(!structure) continue;
 
     // Different factory types emit different amounts of curiosity
-    let emissionAmount = 0.05; // Base emission
+    let multiplier = 0.625; // Aligns with prior 0.05 baseline relative to default curiosity deposit
 
     switch(structure.kind){
       case 'smelter':
-        emissionAmount = 0.08; // Smelters are interesting (heat, transformation)
+        multiplier = 1.0; // Smelters are interesting (heat, transformation)
         break;
       case 'constructor':
-        emissionAmount = 0.10; // Constructors are very interesting (creation)
+        multiplier = 1.25; // Constructors are very interesting (creation)
         break;
       case 'node':
-        emissionAmount = 0.06; // Nodes are moderately interesting (central hub)
+        multiplier = 0.75; // Nodes are moderately interesting (central hub)
         break;
       case 'miner':
-        emissionAmount = 0.04; // Miners are less interesting (repetitive)
+        multiplier = 0.5; // Miners are less interesting (repetitive)
         break;
       case 'storage':
-        emissionAmount = 0.05; // Storage is baseline interesting
+        multiplier = 0.625; // Storage is baseline interesting
         break;
       case 'belt':
-        emissionAmount = 0.03; // Belts are least interesting (movement only)
+        multiplier = 0.375; // Belts are least interesting (movement only)
         break;
     }
 
+    const emissionAmount = baseDeposit * multiplier;
     // Emit curiosity at factory location
     world.curiosityField[tileIdx] = Math.min(1, (world.curiosityField[tileIdx] ?? 0) + emissionAmount);
   }
@@ -923,11 +979,11 @@ export function emitFactoryCuriosity(){
  * @param {number} tileIdx - Tile index
  * @param {number} amount - Noise amount (0-1)
  */
-export function emitNoise(tileIdx, amount = 0.2){
+export function emitNoise(tileIdx, amount){
   if(typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= world.heat.length) return;
   if(!world.noiseField) return;
 
-  const deposit = Math.max(0, Math.min(1, amount));
+  const deposit = Math.max(0, Math.min(1, amount ?? depositFromConfig(Noise, 1)));
   world.noiseField[tileIdx] = Math.min(1, (world.noiseField[tileIdx] ?? 0) + deposit);
 }
 
@@ -980,7 +1036,7 @@ export class Agent{
       if(agent === this || agent.role === Mode.MEDIC) continue;
       const tension = agent.S?.tension ?? 1;
       const amplitude = agent.S?.amplitude ?? 0;
-      const isPanicking = agent.S?.mode === Mode.PANIC;
+      const isPanicking = agent.S?.mode === Mode.Panic;
       if(!isPanicking && tension > aura.burstTriggerTension) continue;
       const dist = Math.abs(agent.x - this.x) + Math.abs(agent.y - this.y);
       if(dist > (aura.searchRadius ?? 32)) continue;
@@ -1079,9 +1135,9 @@ export class Agent{
     }
     if(bestValue > hereValue + 0.004){
       if(world.routeField){
-        const deposit = fieldConfig.route?.depositBase ?? 0.04;
+        const deposit = getFieldDepositBase(Route);
         world.routeField[hereIndex] = Math.min(1, (world.routeField[hereIndex] || 0) + deposit);
-        depositTagged(world.memX, world.memY, hereIndex, deposit, MTAG.ROUTE);
+        depositTagged(world.memX, world.memY, hereIndex, deposit, MTAG.Route);
       }
       this.x = bestX;
       this.y = bestY;
@@ -1118,9 +1174,9 @@ export class Agent{
     }
     if(bestValue > hereValue + 0.002){
       if(world.routeField){
-        const deposit = fieldConfig.route?.depositBase ?? 0.04;
+        const deposit = getFieldDepositBase(Route);
         world.routeField[hereIndex] = Math.min(1, (world.routeField[hereIndex] || 0) + deposit);
-        depositTagged(world.memX, world.memY, hereIndex, deposit, MTAG.ROUTE);
+        depositTagged(world.memX, world.memY, hereIndex, deposit, MTAG.Route);
       }
       this.x = bestX;
       this.y = bestY;
@@ -1163,7 +1219,7 @@ export class Agent{
       return;
     }
     const target = this.medicTarget;
-    if(target.S?.mode !== Mode.PANIC && target.S?.tension > this.medicConfig.burstTriggerTension){
+    if(target.S?.mode !== Mode.Panic && target.S?.tension > this.medicConfig.burstTriggerTension){
       this._medicReleaseTarget();
       return;
     }
@@ -1177,9 +1233,9 @@ export class Agent{
     }
     const hereIndex = idx(this.x, this.y);
     if(world.routeField){
-      const deposit = fieldConfig.route?.depositBase ?? 0.04;
+      const deposit = getFieldDepositBase(Route);
       world.routeField[hereIndex] = Math.min(1, (world.routeField[hereIndex] || 0) + deposit);
-      depositTagged(world.memX, world.memY, hereIndex, deposit, MTAG.ROUTE);
+      depositTagged(world.memX, world.memY, hereIndex, deposit, MTAG.Route);
     }
     this.x = nx;
     this.y = ny;
@@ -1227,11 +1283,11 @@ export class Agent{
         const newIdx = idx(this.x, this.y);
         const newHeat = world.heat[newIdx] ?? 0;
         if(newHeat < hereHeat){
-          const deposit = fieldConfig.escape?.depositBase ?? 0.04;
+          const deposit = getFieldDepositBase(Escape);
           world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + deposit);
           world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + deposit * 0.5);
-          depositTagged(world.memX, world.memY, newIdx, deposit, MTAG.ESCAPE);
-          depositTagged(world.memX, world.memY, hereIdx, deposit * 0.5, MTAG.ESCAPE);
+          depositTagged(world.memX, world.memY, newIdx, deposit, MTAG.Escape);
+          depositTagged(world.memX, world.memY, hereIdx, deposit * 0.5, MTAG.Escape);
           escapeDeposited = true;
         }
       };
@@ -1418,17 +1474,17 @@ export class Agent{
         if(newIdx !== hereIdx){
           const newHeat = world.heat[newIdx] ?? 0;
           if(newHeat < hereHeat){
-            const deposit = fieldConfig.escape?.depositBase ?? 0.04;
-            world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + deposit);
-            world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + deposit * 0.5);
-            depositTagged(world.memX, world.memY, newIdx, deposit, MTAG.ESCAPE);
-            depositTagged(world.memX, world.memY, hereIdx, deposit * 0.5, MTAG.ESCAPE);
+          const deposit = getFieldDepositBase(Escape);
+          world.escapeField[newIdx] = Math.min(1, (world.escapeField[newIdx] || 0) + deposit);
+          world.escapeField[hereIdx] = Math.min(1, (world.escapeField[hereIdx] || 0) + deposit * 0.5);
+          depositTagged(world.memX, world.memY, newIdx, deposit, MTAG.Escape);
+            depositTagged(world.memX, world.memY, hereIdx, deposit * 0.5, MTAG.Escape);
             escapeDeposited = true;
           }
         }
       }
     }
-    let acc=0,sumPhase=0,n=0;
+    let phaseCouplingSum = 0, phaseAngleSum = 0, neighbourCount = 0;
     const BIN=4;
     const bx=(this.x/BIN)|0, by=(this.y/BIN)|0;
     const groups = bins? (function(){
@@ -1473,19 +1529,19 @@ export class Agent{
       for(const ag of g){
         if(ag===this) continue;
         const d=Math.hypot(ag.x-this.x, ag.y-this.y);
-        if(d<=3){ acc+=couple(this.S, ag.S, 0.02); sumPhase+=ag.S.phase; n++; }
+        if(d<=3){ phaseCouplingSum+=couple(this.S, ag.S, 0.02); phaseAngleSum+=ag.S.phase; neighbourCount++; }
       }
     }
     if(this.phaseShock > 0){
       const wobble = randomCentered() * this.phaseShock * 2;
       this.S.phase = wrapTau(this.S.phase + wobble);
     }
-    if(n>0){
-      this.S.amplitude = clamp01(this.S.amplitude + acc/n);
-      const avg=sumPhase/n;
+    if(neighbourCount>0){
+      this.S.amplitude = clamp01(this.S.amplitude + phaseCouplingSum/neighbourCount);
+      const avg=phaseAngleSum/neighbourCount;
       this.S.phase = lerpPhase(this.S.phase, avg, 0.1);
       // social stress lowers tension slightly when surrounded by agitated peers
-      const socialStress = acc / Math.max(1,n);
+      const socialStress = phaseCouplingSum / Math.max(1,neighbourCount);
       if(socialStress > thresholds.socialStress.trigger){
         if(!(this.isMedic && this.medicConfig.stressResistance.social)){
           this.S.tension = clamp01(this.S.tension - socialStress * thresholds.socialStress.tensionMultiplier);
@@ -1545,7 +1601,7 @@ export class Agent{
     if(world.safeField){
       const val = world.safeField[tileIdx] || 0;
       if(currentSafety > 0.62 && (this.S?.tension ?? 0) > 0.6){
-        const baseDeposit = fieldConfig.safe?.depositBase ?? 0.02;
+        const baseDeposit = getFieldDepositBase(Safe);
         world.safeField[tileIdx] = Math.min(1, val + baseDeposit);
         const faction = factionById(this.factionId ?? DEFAULT_FACTION_ID);
         const myPhase = safePhaseForId(faction.id);
@@ -1577,8 +1633,9 @@ export class Agent{
       }
       const safeStrength = world.safeField[tileIdx] || 0;
       if(safeStrength > 0){
-        const tensionBoost = fieldConfig.safe?.calmTensionBoost ?? 0;
-        const amplitudeDrop = fieldConfig.safe?.calmAmplitudeDrop ?? 0;
+        const safeSpec = getFieldSpec(Safe);
+        const tensionBoost = safeSpec?.calmTensionBoost ?? 0;
+        const amplitudeDrop = safeSpec?.calmAmplitudeDrop ?? 0;
         if(tensionBoost > 0){
           this.S.tension = clamp01(this.S.tension + safeStrength * tensionBoost);
         }
@@ -1589,7 +1646,8 @@ export class Agent{
     }
     if(world.visited){
       const prevVisited = world.visited[tileIdx] ?? 0;
-      world.visited[tileIdx] = Math.min(1, prevVisited + 0.02);
+      const deposit = getFieldDepositBase(Visited);
+      world.visited[tileIdx] = Math.min(1, prevVisited + deposit);
      // console.log('visited', tileIdx, world.visited[tileIdx])
     }
     const panicIntensity = clamp01((this.S.amplitude - 0.2) * 0.8 + (0.5 - this.S.tension));
@@ -1598,26 +1656,26 @@ export class Agent{
       this.S.mode = Mode.MEDIC;
       this.panicLevel = 0;
     } else {
-      if(this.S.amplitude>thresholds.panic.amplitudeHigh && this.S.tension<thresholds.panic.tensionLow) this.S.mode=Mode.PANIC;
+      if(this.S.amplitude>thresholds.panic.amplitudeHigh && this.S.tension<thresholds.panic.tensionLow) this.S.mode=Mode.Panic;
       else if(this.S.amplitude<thresholds.panic.amplitudeLow) this.S.mode=Mode.CALM;
     }
 
-    if(this.S?.mode === Mode.PANIC && world.helpField){
+    if(this.S?.mode === Mode.Panic && world.helpField){
       const k = tileIdx;
       const amp = clamp01(this.S?.amplitude ?? 0);
       if(amp > 0){
         const currentHelp = world.helpField[k] || 0;
-        const dHelp = (fieldConfig.help?.depositBase ?? 0.1) * amp * (1 - currentHelp);
+        const dHelp = getFieldDepositBase(Help) * amp * (1 - currentHelp);
         if(dHelp > 0){
           world.helpField[k] = Math.min(1, currentHelp + dHelp);
-          depositTagged(world.memX, world.memY, k, dHelp, MTAG.HELP);
+          depositTagged(world.memX, world.memY, k, dHelp, MTAG.Help);
         }
         if(world.panicField){
           const currentPanic = world.panicField[k] || 0;
-          const dPanic = (fieldConfig.panic?.depositBase ?? 0.05) * amp * (1 - currentPanic);
+          const dPanic = getFieldDepositBase(Panic) * amp * (1 - currentPanic);
           if(dPanic > 0){
             world.panicField[k] = Math.min(1, currentPanic + dPanic);
-            depositTagged(world.memX, world.memY, k, dPanic, MTAG.PANIC);
+            depositTagged(world.memX, world.memY, k, dPanic, MTAG.Panic);
           }
         }
       }
@@ -1696,7 +1754,7 @@ export function populateDemoScenario(){
   } else {
     console.warn('[demo] unable to spawn calm agent', calmResult);
   }
-  const panicResult = spawnNPC(Mode.PANIC);
+  const panicResult = spawnNPC(Mode.Panic);
   if(panicResult.ok){
     const panicAgent = getAgentById(panicResult.agentId);
     if(panicAgent){
@@ -1859,12 +1917,12 @@ export function scenarioIgnite(tileIdx, intensity = 1){
 
 function resolveScenarioField(name){
   switch(name){
-    case 'help': return world.helpField;
-    case 'route': return world.routeField;
-    case 'panic': return world.panicField;
-    case 'safe': return world.safeField;
-    case 'escape': return world.escapeField;
-    case 'door': return world.doorField;
+    case Help: return world.helpField;
+    case Route: return world.routeField;
+    case Panic: return world.panicField;
+    case Safe: return world.safeField;
+    case Escape: return world.escapeField;
+    case Door: return world.doorField;
     case 'heat': return world.heat;
     case 'o2': return world.o2;
     default:
@@ -2087,43 +2145,43 @@ setFactoryWorkerSpawner((tileIdx) => {
   return agent;
 });
 
-function diffuse(field, diff){
+function diffuse(field, diffusionRate){
   const MAX_ALPHA = 0.22;
-  const steps = Math.max(1, Math.ceil(diff / MAX_ALPHA));
-  const alpha = diff / steps;
-  const N = field.length;
-  let cur = field;
-  let tmp = new Float32Array(N);
+  const steps = Math.max(1, Math.ceil(diffusionRate / MAX_ALPHA));
+  const alpha = diffusionRate / steps;
+  const fieldLength = field.length;
+  let currentField = field;
+  let nextField = new Float32Array(fieldLength);
   for(let s=0; s<steps; s++){
     for(let y=1;y<world.H-1;y++){
       for(let x=1;x<world.W-1;x++){
         const i=y*world.W+x;
-        if(world.wall[i]){ tmp[i] = cur[i]; continue; }
-        const c = cur[i];
-        const l = world.wall[y*world.W + (x-1)] ? c : cur[y*world.W + (x-1)];
-        const r = world.wall[y*world.W + (x+1)] ? c : cur[y*world.W + (x+1)];
-        const u = world.wall[(y-1)*world.W + x] ? c : cur[(y-1)*world.W + x];
-        const d = world.wall[(y+1)*world.W + x] ? c : cur[(y+1)*world.W + x];
+        if(world.wall[i]){ nextField[i] = currentField[i]; continue; }
+        const c = currentField[i];
+        const l = world.wall[y*world.W + (x-1)] ? c : currentField[y*world.W + (x-1)];
+        const r = world.wall[y*world.W + (x+1)] ? c : currentField[y*world.W + (x+1)];
+        const u = world.wall[(y-1)*world.W + x] ? c : currentField[(y-1)*world.W + x];
+        const d = world.wall[(y+1)*world.W + x] ? c : currentField[(y+1)*world.W + x];
         const lap = (l+r+u+d - 4*c);
-        tmp[i] = c + alpha * lap;
+        nextField[i] = c + alpha * lap;
       }
     }
     for(let y=1;y<world.H-1;y++){
       for(let x=1;x<world.W-1;x++){
         const i=y*world.W+x;
         if(world.wall[i]) continue;
-        const n = (tmp[i-1]+tmp[i+1]+tmp[i-world.W]+tmp[i+world.W])*0.25;
-        tmp[i] = tmp[i]*0.96 + n*0.04;
+        const n = (nextField[i-1]+nextField[i+1]+nextField[i-world.W]+nextField[i+world.W])*0.25;
+        nextField[i] = nextField[i]*0.96 + n*0.04;
       }
     }
-    const swap = cur; cur = tmp; tmp = swap;
+    const swap = currentField; currentField = nextField; nextField = swap;
   }
-  if(cur !== field) field.set(cur);
+  if(currentField !== field) field.set(currentField);
 }
 
 export function createSimulation({ getSettings, updateMetrics, draw }){
   let paused = false;
-  let acc = 0;
+  let timeAccumulatorMs = 0;
   let last = performance.now();
   let simTime = 0;
   let stepCount = 0;
@@ -2283,14 +2341,14 @@ let acidBasePairs = new Set();
 
       diffuse(world.heat, settings.dHeat);
       diffuse(world.o2, settings.dO2);
-      updateField(world.helpField, fieldConfig.help);
-      updateField(world.routeField, fieldConfig.route);
-      updateField(world.panicField, fieldConfig.panic);
-      updateField(world.safeField, fieldConfig.safe);
-      updateField(world.escapeField, fieldConfig.escape);
+      updateField(world.helpField, getFieldSpec(Help));
+      updateField(world.routeField, getFieldSpec(Route));
+      updateField(world.panicField, getFieldSpec(Panic));
+      updateField(world.safeField, getFieldSpec(Safe));
+      updateField(world.escapeField, getFieldSpec(Escape));
       if(world.safeFieldsByFaction){
         for(const field of world.safeFieldsByFaction){
-          updateField(field, fieldConfig.safe);
+          updateField(field, getFieldSpec(Safe));
         }
       }
       if(world.doorField){
@@ -2299,22 +2357,22 @@ let acidBasePairs = new Set();
             world.doorField[k] = 1;
           }
         }
-        updateField(world.doorField, fieldConfig.door);
+        updateField(world.doorField, getFieldSpec(Door));
         if(world.doorTiles && world.doorTiles.size){
           for(const k of world.doorTiles){
             world.doorField[k] = 1;
           }
         }
       }
-      updateField(world.visited, fieldConfig.visited, { skipWalls: false });
+      updateField(world.visited, getFieldSpec(Visited), { skipWalls: false });
 
       // Update emotion/psychology fields
-      updateField(world.aggroField, fieldConfig.aggro);
-      updateField(world.curiosityField, fieldConfig.curiosity);
-      updateField(world.aweField, fieldConfig.awe);
-      updateField(world.noiseField, fieldConfig.noise);
-      updateField(world.bloodField, fieldConfig.blood);
-      updateField(world.discoveryField, fieldConfig.discovery);
+      updateField(world.aggroField, getFieldSpec(Aggro));
+      updateField(world.curiosityField, getFieldSpec(Curiosity));
+      updateField(world.aweField, getFieldSpec(Awe));
+      updateField(world.noiseField, getFieldSpec(Noise));
+      updateField(world.bloodField, getFieldSpec(Blood));
+      updateField(world.discoveryField, getFieldSpec(Discovery));
 
       clampField01(world.helpField);
       clampField01(world.routeField);
@@ -2363,14 +2421,14 @@ let acidBasePairs = new Set();
       seedReinforcement();
       //console.log("After calling seedReinforment");
       if(world.reinforceByFaction){
-        const reinforceCfg = { D: REINFORCE_DIFFUSION, tHalf: REINFORCE_HALFLIFE };
+        const reinforceCfg = { diffusionRate: REINFORCE_DIFFUSION, halfLifeTurns: REINFORCE_HALFLIFE };
         for(const field of world.reinforceByFaction){
           updateField(field, reinforceCfg);
           clampField01(field);
         }
       }
       if(world.debtByFaction){
-        const debtCfg = { D: DEBT_DIFFUSION, tHalf: DEBT_HALFLIFE };
+        const debtCfg = { diffusionRate: DEBT_DIFFUSION, halfLifeTurns: DEBT_HALFLIFE };
         for(const field of world.debtByFaction){
           updateField(field, debtCfg);
           clampField01(field);
@@ -2623,18 +2681,18 @@ let acidBasePairs = new Set();
       requestAnimationFrame(frame);
       return;
     }
-    acc += dt;
+    timeAccumulatorMs += dt;
     const settings = getSettings();
     const speed = getSimSpeed();
     let ticks = 0;
-    while(acc >= 100 && ticks < speed){
+    while(timeAccumulatorMs >= 100 && ticks < speed){
       stepSimulation(settings);
-      acc -= 100;
+      timeAccumulatorMs -= 100;
       ticks++;
     }
-    if(acc >= 100){
+    if(timeAccumulatorMs >= 100){
       // prevent large backlog by dropping extra accumulated time
-      acc = 0;
+      timeAccumulatorMs = 0;
     }
     draw();
     requestAnimationFrame(frame);
