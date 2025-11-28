@@ -51,28 +51,28 @@ export const roles = {
 };
 
 export const fieldConfig = {
-  help:   { D: 0.12, tHalf: 6,   depositBase: 0.10 },
-  route:  { D: 0.10, tHalf: 30,  depositBase: 0.04 },
-  panic:  { D: 0.10, tHalf: 8,   depositBase: 0.05 },
-  safe:   {
-    D: 0.09,
-    tHalf: 25,
-    depositBase: 0.02,
+  Help:    { diffusionRate: 0.12, halfLifeTurns: 6,   baseDeposit: 0.10 },
+  Route:   { diffusionRate: 0.10, halfLifeTurns: 30,  baseDeposit: 0.04 },
+  Panic:   { diffusionRate: 0.10, halfLifeTurns: 8,   baseDeposit: 0.05 },
+  Safe:    {
+    diffusionRate: 0.09,
+    halfLifeTurns: 25,
+    baseDeposit: 0.02,
     calmTensionBoost: 0.005,
     calmAmplitudeDrop: 0.005,
   },
-  escape: { D: 0.11, tHalf: 10,  depositBase: 0.04 },
-  door:   { D: 0.10, tHalf: 15 },
-  visited:{              tHalf: 20 },
-  sound:  { D: 0.28, tHalf: 15,  depositBase: 0.10 },
+  Escape:  { diffusionRate: 0.11, halfLifeTurns: 10,  baseDeposit: 0.04 },
+  Door:    { diffusionRate: 0.10, halfLifeTurns: 15 },
+  Visited: {                          halfLifeTurns: 20, baseDeposit: 0.02 },
+  Sound:   { diffusionRate: 0.28, halfLifeTurns: 15,  baseDeposit: 0.10 },
 
   // Emotion/psychology fields
-  aggro:     { D: 0.08, tHalf: 20,  depositBase: 0.15 },  // Hostility - slower decay
-  curiosity: { D: 0.11, tHalf: 40,  depositBase: 0.08 },  // Exploration - long persistence
-  awe:       { D: 0.12, tHalf: 35,  depositBase: 0.12 },  // Wonder - spreads fast
-  noise:     { D: 0.28, tHalf: 5,   depositBase: 0.20 },  // Sound - fast diffusion, short life
-  blood:     { D: 0.06, tHalf: 50,  depositBase: 0.25 },  // Combat aftermath - sticky, long-lasting
-  discovery: { D: 0.10, tHalf: 100, depositBase: 0.10 },  // Points of interest - very persistent
+  Aggro:     { diffusionRate: 0.08, halfLifeTurns: 20,  baseDeposit: 0.15 },  // Hostility - slower decay
+  Curiosity: { diffusionRate: 0.11, halfLifeTurns: 40,  baseDeposit: 0.08 },  // Exploration - long persistence
+  Awe:       { diffusionRate: 0.12, halfLifeTurns: 35,  baseDeposit: 0.12 },  // Wonder - spreads fast
+  Noise:     { diffusionRate: 0.28, halfLifeTurns: 5,   baseDeposit: 0.20 },  // Sound - fast diffusion, short life
+  Blood:     { diffusionRate: 0.06, halfLifeTurns: 50,  baseDeposit: 0.25 },  // Combat aftermath - sticky, long-lasting
+  Discovery: { diffusionRate: 0.10, halfLifeTurns: 100, baseDeposit: 0.10 },  // Points of interest - very persistent
 };
 
 export function decayMultiplierFromHalfLife(tHalf, dt = 1){

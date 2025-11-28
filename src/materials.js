@@ -27,13 +27,13 @@ export function baseStringFor(mode){
     case Mode.CALM:   return { mode, tension:0.90, amplitude:0.1, phase:0.0 };
     case Mode.PANIC:  return { mode, tension:0.20, amplitude:0.9, phase:0.8 };
     case Mode.MEDIC: {
-      const cfg = roles.medic || {};
+      const medicRoleConfig = roles.medic || {};
       return {
         mode,
         tension: 0.85,
         amplitude: 0.05,
         phase: 0.0,
-        composure: cfg.burstCooldown ?? 12,
+        composure: medicRoleConfig.burstCooldown ?? 12,
       };
     }
     case Mode.FACTORY_NODE:
