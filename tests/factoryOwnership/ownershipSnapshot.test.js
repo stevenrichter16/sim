@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeOwnershipEntries } from '../../src/factoryOwnership/transform/ownershipSnapshot.js';
+import { computeOwnershipEntries } from '../../dist/factoryOwnership/transform/ownershipSnapshot.js';
 import {
   makeBasicOwnershipSnapshot,
   makeContestedOwnershipSnapshot,

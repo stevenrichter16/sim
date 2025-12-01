@@ -1,7 +1,9 @@
+/// <reference path="../types/external-modules.d.ts" />
+
 import {
   CLOUD_CLUSTER_AUTO_LINK_PREFIX,
 } from '../constants.js';
-import { CloudFactoryPortDirection } from '../../cloudCluster/domain/factoryObject.js';
+import { CloudFactoryPortDirection } from '../../../src/cloudCluster/domain/factoryObject.js';
 
 export function computeAllocationIntents({
   clusterId,
@@ -10,7 +12,7 @@ export function computeAllocationIntents({
   clusterSnapshot,
   manualReservations = [],
   dependencies = {},
-} = {}){
+}: any = {}){
   const objectsMap = desiredObjects instanceof Map ? desiredObjects : new Map();
   const manualReservationList = Array.isArray(manualReservations) ? manualReservations : [];
   const { FactoryKind } = dependencies;
@@ -27,9 +29,9 @@ export function computeAllocationIntents({
     }
   }
 
-  const allocationLinks = new Map();
-  const rejectedPorts = [];
-  const auditTrail = [];
+  const allocationLinks = new Map<string, any>();
+  const rejectedPorts: any[] = [];
+  const auditTrail: any[] = [];
 
   for(const object of objectsMap.values()){
     if(!object?.id){
@@ -40,10 +42,10 @@ export function computeAllocationIntents({
       continue;
     }
     const inputPorts = Array.isArray(object.ports)
-      ? object.ports.filter((port) => port.direction === CloudFactoryPortDirection.INPUT)
+      ? object.ports.filter((port: any) => port.direction === CloudFactoryPortDirection.INPUT)
       : [];
     for(const port of inputPorts){
-      const auditEntry = {
+      const auditEntry: any = {
         consumerId: object.id,
         consumerPortId: port.id,
         assignedProviders: [],
@@ -114,11 +116,11 @@ export function computeAllocationIntents({
   };
 }
 
-function buildProviderInventory(desiredObjects){
+function buildProviderInventory(desiredObjects: any){
   const providers = new Map();
   for(const object of desiredObjects.values()){
     const outputPorts = Array.isArray(object?.ports)
-      ? object.ports.filter((port) => port.direction === CloudFactoryPortDirection.OUTPUT)
+      ? object.ports.filter((port: any) => port.direction === CloudFactoryPortDirection.OUTPUT)
       : [];
     for(const port of outputPorts){
       const items = extractPortItems(port);
@@ -134,7 +136,7 @@ function buildProviderInventory(desiredObjects){
   return providers;
 }
 
-function extractPortItems(port){
+function extractPortItems(port: any){
   const items = [];
   if(port?.metadata?.item){
     items.push(port.metadata.item);
@@ -145,7 +147,7 @@ function extractPortItems(port){
   return items.filter(Boolean);
 }
 
-function registerProvider(store, item, provider){
+function registerProvider(store: any, item: string | null, provider: any){
   if(!item || !provider){
     return;
   }
@@ -157,7 +159,7 @@ function registerProvider(store, item, provider){
   list.push({ ...provider });
 }
 
-function applyManualReservations(store, reservations){
+function applyManualReservations(store: any, reservations: any[]){
   for(const reservation of reservations){
     const item = reservation?.item ?? null;
     const providerId = reservation?.provider?.objectId;
@@ -175,7 +177,7 @@ function applyManualReservations(store, reservations){
   }
 }
 
-function takeProvider(store, preferredItem){
+function takeProvider(store: any, preferredItem: string | null){
   if(preferredItem){
     return pullProviderForItem(store, preferredItem);
   }
@@ -188,7 +190,7 @@ function takeProvider(store, preferredItem){
   return null;
 }
 
-function pullProviderForItem(store, item){
+function pullProviderForItem(store: any, item: string | null){
   if(!item || !store.has(item)){
     return null;
   }
@@ -204,7 +206,7 @@ function pullProviderForItem(store, item){
   return provider;
 }
 
-function normaliseClusterSnapshot(snapshot){
+function normaliseClusterSnapshot(snapshot: any){
   const objects = new Map();
   const links = new Map();
   if(snapshot?.objects instanceof Map){
@@ -237,7 +239,7 @@ function normaliseClusterSnapshot(snapshot){
   return { objects, links };
 }
 
-function isAutoLink(link, linkId){
+function isAutoLink(link: any, linkId: string){
   if(!link){
     return false;
   }
@@ -246,10 +248,10 @@ function isAutoLink(link, linkId){
   return metaAuto || idAuto;
 }
 
-function makeAutoLinkKey(sourceObjectId, sourcePortId, targetObjectId, targetPortId, item){
+function makeAutoLinkKey(sourceObjectId: string | null, sourcePortId: string | null, targetObjectId: string | null, targetPortId: string | null, item: string | null){
   return `${sourceObjectId ?? ''}:${sourcePortId ?? ''}->${targetObjectId ?? ''}:${targetPortId ?? ''}:${item ?? ''}`;
 }
 
-function buildAutoLinkId(clusterId, sourceObjectId, targetObjectId, item){
+function buildAutoLinkId(clusterId: string | null, sourceObjectId: string, targetObjectId: string, item: string | null){
   return `${CLOUD_CLUSTER_AUTO_LINK_PREFIX}${clusterId}:${sourceObjectId}->${targetObjectId}:${item ?? ''}`;
 }

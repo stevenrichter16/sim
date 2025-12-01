@@ -9,11 +9,14 @@
     "test": "vitest",
     "test:ci": "vitest run",
     "test:factory-ownership": "vitest run --config vitest.factory-ownership.config.ts",
+    "pretest:ci": "npm run build:factory-ownership",
+    "pretest:factory-ownership": "npm run build:factory-ownership",
     "compile-scripts": "node scripts/compile-scripts.mjs",
     "compile-scripts:watch": "node --watch --watch-path=scenarios scripts/compile-scripts.mjs",
     "cloud-clusters": "node scripts/cloud-clusters.mjs",
     "trace:factory-ownership": "node scripts/trace-factory-ownership.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:factory-ownership": "tsc -p tsconfig.factory-ownership.json"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",

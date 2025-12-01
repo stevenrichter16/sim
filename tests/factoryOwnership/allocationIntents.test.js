@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeOwnershipEntries, computeClusterIntents, computeAllocationIntents } from '../../src/factoryOwnership/transform/index.js';
+import { computeOwnershipEntries, computeClusterIntents, computeAllocationIntents } from '../../dist/factoryOwnership/transform/index.js';
 import { FactoryKind } from '../../src/factory.js';
 import { makeBasicOwnershipSnapshot } from './__fixtures__/ownershipSnapshots.js';
 

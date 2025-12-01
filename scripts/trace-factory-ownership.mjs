@@ -1,21 +1,43 @@
 #!/usr/bin/env node
 
+/**
+ * @typedef {import('../dist/factoryOwnership/model/types.js').FactoryOwnershipDiffBundle} FactoryOwnershipDiffBundle
+ */
+
 import process from 'node:process';
 import { getFactoryOwnership } from '../src/factory.js';
+import { FACTORY_OWNERSHIP_SCHEMA_VERSION } from '../dist/factoryOwnership/model/contracts.js';
 
 const args = new Set(process.argv.slice(2));
 const ownership = getFactoryOwnership();
 const bundles = ownership.diffBundles ?? [];
 const manualWarnings = ownership.manualLinkWarnings ?? [];
 
+const mismatchedBundles = bundles.filter(
+  (envelope) => envelope?.bundle?.version && envelope.bundle.version !== FACTORY_OWNERSHIP_SCHEMA_VERSION,
+);
+if(mismatchedBundles.length && !args.has('--json')){
+  console.warn(
+    `[trace:factory-ownership] ${mismatchedBundles.length} bundle(s) emitted schema versions other than "${FACTORY_OWNERSHIP_SCHEMA_VERSION}".`,
+  );
+}
+
 if(args.has('--json')){
   console.log(JSON.stringify({ bundles, manualWarnings }, null, 2));
   process.exit(0);
 }
 
-console.log(`[trace:factory-ownership] captured ${bundles.length} diff bundle(s).`);
+console.log(
+  `[trace:factory-ownership] captured ${bundles.length} diff bundle(s) (schema ${FACTORY_OWNERSHIP_SCHEMA_VERSION}).`,
+);
 for(const envelope of bundles){
   const { factionId, clusterId, bundle } = envelope;
+  if(bundle?.version && bundle.version !== FACTORY_OWNERSHIP_SCHEMA_VERSION){
+    console.warn(
+      `- faction ${factionId} (${clusterId}) uses schema ${bundle.version}, expected ${FACTORY_OWNERSHIP_SCHEMA_VERSION}.`,
+    );
+    continue;
+  }
   const addedObjects = bundle?.diff?.addedObjects?.length ?? 0;
   const removedObjects = bundle?.diff?.removedObjects?.length ?? 0;
   const addedLinks = bundle?.diff?.addedLinks?.length ?? 0;

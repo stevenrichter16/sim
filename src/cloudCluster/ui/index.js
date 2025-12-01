@@ -1,3 +1,7 @@
+/**
+ * @typedef {import('@factoryOwnership/model/types.js').FactoryOwnershipDiffBundle} FactoryOwnershipDiffBundle
+ */
+
 import {
   FactoryKind,
   FactoryItem,
@@ -35,6 +39,23 @@ import {
   clearClusterAccumulator,
   updateClusterAccumulatorMembership,
 } from '../sim/index.js';
+const { FACTORY_OWNERSHIP_SCHEMA_VERSION } = await loadFactoryOwnershipContractsModule();
+
+async function loadFactoryOwnershipContractsModule() {
+  if (typeof window === 'undefined') {
+    return import('../../factoryOwnership/model/contracts.ts');
+  }
+
+  try {
+    return await import('/dist/factoryOwnership/model/contracts.js');
+  } catch (error) {
+    console.warn(
+      '[cloudCluster] Falling back to bundled schema version because /dist module is unavailable.',
+      error,
+    );
+    return { FACTORY_OWNERSHIP_SCHEMA_VERSION: 'v1' };
+  }
+}
 
 const KIND_LABEL = Object.freeze({
   [FactoryKind.NODE]: 'Dermal Node',
@@ -601,7 +622,19 @@ export function createCloudClusterEditor(options = {}){
   function refreshOwnershipDiagnostics(){
     try {
       const ownership = getFactoryOwnership();
-      state.diffBundles = Array.isArray(ownership.diffBundles) ? ownership.diffBundles : [];
+      const rawBundles = Array.isArray(ownership.diffBundles) ? ownership.diffBundles : [];
+      state.diffBundles = rawBundles.filter((envelope) => {
+        const version = envelope?.bundle?.version ?? null;
+        if(version === FACTORY_OWNERSHIP_SCHEMA_VERSION){
+          return true;
+        }
+        if(typeof console !== 'undefined' && console.warn){
+          console.warn(
+            `[cloudCluster] Ignoring ownership diff bundle with unexpected schema version "${version}". Expected "${FACTORY_OWNERSHIP_SCHEMA_VERSION}".`,
+          );
+        }
+        return false;
+      });
       state.manualLinkWarnings = Array.isArray(ownership.manualLinkWarnings) ? ownership.manualLinkWarnings : [];
     } catch (error){
       state.diffBundles = [];

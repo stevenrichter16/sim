@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { FactoryKind, FactoryItem, placeFactoryStructure, stepFactory } from '../../src/factory.js';
+import * as factoryModule from '../../src/factory.js';
 import {
   resetCloudClusterState,
   createCloudClusterEditor,
@@ -8,6 +9,7 @@ import {
 import { idx, world } from '../../src/state.js';
 import { initWorld } from '../helpers/worldHarness.js';
 import { upsertLink } from '../../src/cloudCluster/domain/cluster.js';
+import { FACTORY_OWNERSHIP_SCHEMA_VERSION } from '../../src/factoryOwnership/model/contracts.ts';
 
 function getPortByDirection(node, direction){
   return node?.ports?.find((port) => port.direction === direction) ?? null;
@@ -135,5 +137,33 @@ describe('cloud cluster editor UI helpers', () => {
     const clusters = editor.getClusters();
     const target = clusters.find((entry) => entry.id === clusterId);
     expect(target?.manualWarningCount ?? 0).toBeGreaterThan(0);
+  });
+
+  it('filters diagnostics that use unexpected schema versions', () => {
+    const spy = vi
+      .spyOn(factoryModule, 'getFactoryOwnership')
+      .mockImplementation(() => ({
+        diffBundles: [
+          {
+            factionId: 1,
+            clusterId: 'schema-ok',
+            bundle: { version: FACTORY_OWNERSHIP_SCHEMA_VERSION },
+          },
+          {
+            factionId: 2,
+            clusterId: 'schema-legacy',
+            bundle: { version: 'legacy' },
+          },
+        ],
+        manualLinkWarnings: [],
+      }));
+
+    const editor = createCloudClusterEditor();
+    const diagnostics = editor.getOwnershipDiagnostics();
+    expect(diagnostics.diffBundles).toHaveLength(1);
+    expect(diagnostics.diffBundles[0].clusterId).toBe('schema-ok');
+    expect(diagnostics.diffBundles.some((entry) => entry.clusterId === 'schema-legacy')).toBe(false);
+
+    spy.mockRestore();
   });
 });

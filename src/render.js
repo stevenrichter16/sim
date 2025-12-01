@@ -328,10 +328,10 @@ function drawPheromoneSlices(ctx){
 
   // Emotion/psychology field overlays
   if(overlay.aggro !== false)     fields.push({ key:'aggro',     data: world.aggroField,     color: '#ff0000', threshold: 0.01 }); // Red
-  if(overlay.curiosity !== false) fields.push({ key:'curiosity', data: world.curiosityField, color: '#00ffff', threshold: 0.01 }); // Cyan
+  if(overlay.curiosity !== false) fields.push({ key:'curiosity', data: world.curiosityField, color: '#00f5ff', threshold: 0.005, minAlpha: 0.35, scale: 1.4 }); // Brighter cyan, lower threshold
   if(overlay.awe !== false)       fields.push({ key:'awe',       data: world.aweField,       color: '#ff00ff', threshold: 0.01 }); // Magenta
   if(overlay.noise !== false)     fields.push({ key:'noise',     data: world.noiseField,     color: '#ffff00', threshold: 0.01 }); // Yellow
-  if(overlay.blood !== false)     fields.push({ key:'blood',     data: world.bloodField,     color: '#800000', threshold: 0.01 }); // Dark red
+  if(overlay.blood !== false)     fields.push({ key:'blood',     data: world.bloodField,     color: '#ff1a1a', threshold: 0.005, minAlpha: 0.35, scale: 1.5 }); // Bright red, more visible
   if(overlay.discovery !== false) fields.push({ key:'discovery', data: world.discoveryField, color: '#ffa500', threshold: 0.01 }); // Orange
   if(overlay.computedTension){
     fields.push({

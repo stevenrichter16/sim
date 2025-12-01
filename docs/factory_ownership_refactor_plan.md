@@ -21,6 +21,13 @@
 - `src/factoryOwnership/devtools/` – optional tracing subscribers, diff visualisers, and debug helpers that can be excluded from production bundles.
 - All modules must adopt descriptive names for variables, classes, and functions so intent is obvious without cross-referencing implementation details; prefer `allocatedBloodProviderCount` over generic identifiers like `num` or `tmp`.
 
+## Current status (TypeScript migration progress)
+- ✅ **Tooling + build output.** `tsconfig.factory-ownership.json` emits `dist/factoryOwnership/**/*`, and `npm run build:factory-ownership` now runs automatically before `test:factory-ownership` and CI suites so reviewers consume the compiled JS.
+- ✅ **Pure transforms typed.** `ownershipSnapshot`, `clusterIntents`, and `allocationIntents` have been renamed to `.ts`, run under strict null checks, and their consumers (tests + runtime) import from `dist`.
+- ✅ **Runtime extraction.** `clusterRuntime.ts` and `orchestrator.ts` capture inputs, emit DTO bundles, and validate against `FACTORY_OWNERSHIP_SCHEMA_VERSION`. `src/factoryOwnership.js` and scripts pull from the built runtime.
+- ✅ **Devtools/UI consumers updated.** `scripts/trace-factory-ownership.mjs` and `src/cloudCluster/ui/index.js` read DTOs from `dist` and log schema mismatches so designers see dropped manual links inside the editor.
+- 🔜 **Documentation & integration tests.** This plan (and related docs) still referenced the pre-TypeScript world; update remaining sections as tasks land. Add automated coverage for the UI/CLI diagnostics filtering to guard the new codepaths.
+
 ## Solo developer checkpoints
 - **Tooling baseline.** TypeScript/Vite configs, lint/test/typecheck scripts, and the factory-ownership DTO contracts (`contracts.ts` + schema helper) are present. Keep `allowJs` on while the rest of the codebase remains JavaScript.
 - **Adapter note.** Leave yourself a brief comment/TODO in `src/factoryOwnership.js` describing how the future transform layer will plug in so Phase 1 starts smoothly.

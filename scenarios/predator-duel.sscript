@@ -1,0 +1,22 @@
+let countA = 0;
+let countB = 0;
+
+fn onInit(seed) {
+  call logDebug("scenario", "predator-duel: seeding hunters");
+
+  // Spawn 5 predators for faction A
+  while (countA < 5) {
+    call spawnAgent("A", 105); // Mode.PREDATOR
+    countA = countA + 1;
+  }
+
+  // Spawn 5 predators for faction B
+  while (countB < 5) {
+    call spawnAgent("B", 105); // Mode.PREDATOR
+    countB = countB + 1;
+  }
+}
+
+fn onTick(frame, dt) {
+  // No-op: let them fight
+}

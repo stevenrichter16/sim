@@ -119,6 +119,11 @@ const REINFORCE_DIFFUSION = 0.05;
 const REINFORCE_HALFLIFE = 14;
 const REINFORCE_FRONTIER_MIN = 0.1;
 const REINFORCE_FRONTIER_BOOST = 0.005;
+const PREDATOR_ATTACK_COOLDOWN = 2;
+const PREDATOR_HIT_CHANCE = 0.7;
+const PREDATOR_STAGGER_TICKS = 2;
+const PREDATOR_DOWNED_WOUNDS = 2;
+const PREDATOR_PANIC_SPREAD = 0.25;
 
 let prevDominant = null;
 let prevControl = null;
@@ -489,6 +494,7 @@ function movementWeightsFor(agent){
       curiosity:-0.2,    // Not interested in exploration
       awe:-0.1,          // Not interested in wonders
       mySafeField:-0.2,  // Avoid safe zones
+      rivalPresence:0.6, // Seek rival scent
       rivalSafeField:0.5,// Target enemy safe zones
     };
   }
@@ -665,6 +671,76 @@ function scoredNeighbor(agent, nx, ny, weights){
     (weights.noise ?? 0) * noise +
     (weights.blood ?? 0) * blood
   );
+}
+
+function agentAtPosition(x, y, exclude){
+  for(const other of world.agents){
+    if(other === exclude) continue;
+    if(other.downed) continue;
+    if(other.x === x && other.y === y) return other;
+  }
+  return null;
+}
+
+function tryPredatorAttack(attacker){
+  if(attacker.attackCooldown > 0) return false;
+  let target = null;
+  for(const [dx, dy] of DIRS4){
+    const nx = attacker.x + dx;
+    const ny = attacker.y + dy;
+    if(!inBounds(nx, ny)) continue;
+    const candidate = agentAtPosition(nx, ny, attacker);
+    if(!candidate) continue;
+    if(factionAffinity(attacker.factionId, candidate.factionId) < 0){
+      target = candidate;
+      break;
+    }
+  }
+  if(!target) return false;
+
+  attacker.attackCooldown = PREDATOR_ATTACK_COOLDOWN;
+  const hit = random() < PREDATOR_HIT_CHANCE;
+  if(hit){
+    const targetIdx = idx(target.x, target.y);
+    target.woundCount = Math.min(PREDATOR_DOWNED_WOUNDS, (target.woundCount ?? 0) + 1);
+    target.staggerTicks = Math.max(target.staggerTicks ?? 0, PREDATOR_STAGGER_TICKS);
+    if(target.S){
+      target.S.tension = clamp01((target.S.tension ?? 0) + 0.25);
+      target.S.amplitude = clamp01((target.S.amplitude ?? 0) + 0.2);
+    }
+    emitCombatEmotions(targetIdx, 0.65);
+    emitFlash(target.x, target.y, {
+      radius: 0.55,
+      life: 14,
+      colorStart: '#ff875c',
+      colorEnd: '#ffd0b8',
+    });
+    if(world.bloodField && target.woundCount + 0 >= PREDATOR_DOWNED_WOUNDS){
+      const bleed = depositFromConfig(Blood, 1.2, 0.8);
+      world.bloodField[targetIdx] = Math.min(1, (world.bloodField[targetIdx] ?? 0) + bleed);
+    }
+    if(world.panicField){
+      const panicDeposit = getFieldDepositBase(Panic) * PREDATOR_PANIC_SPREAD;
+      if(panicDeposit > 0){
+        const applyPanicAt = (i)=>{
+          world.panicField[i] = Math.min(1, (world.panicField[i] ?? 0) + panicDeposit);
+        };
+        applyPanicAt(targetIdx);
+        for(const [dx,dy] of DIRS4){
+          const nx = target.x + dx;
+          const ny = target.y + dy;
+          if(!inBounds(nx, ny)) continue;
+          const nIdx = idx(nx, ny);
+          if(world.wall[nIdx]) continue;
+          applyPanicAt(nIdx);
+        }
+      }
+    }
+    if(target.woundCount >= PREDATOR_DOWNED_WOUNDS){
+      target.downed = true;
+    }
+  }
+  return true;
 }
 
 function hazardHere(tileIndex){
@@ -1026,6 +1102,10 @@ export class Agent{
     this.panicRunDx = 0;
     this.panicRunDy = 0;
     this.panicFailureCount = 0;
+    this.attackCooldown = 0;
+    this.woundCount = 0;
+    this.staggerTicks = 0;
+    this.downed = false;
   }
   _medicAcquireTarget(){
     const aura = this.medicConfig;
@@ -1256,6 +1336,11 @@ export class Agent{
   }
 
   _doStep(bins){
+    if(this.attackCooldown > 0) this.attackCooldown -= 1;
+    if(this.staggerTicks > 0) this.staggerTicks -= 1;
+    if(this.downed){
+      return;
+    }
     const hereIdx = idx(this.x, this.y);
     const hereHeat = world.heat[hereIdx] ?? 0;
     if(hereHeat > thresholds.heat.highThreshold){
@@ -1424,6 +1509,13 @@ export class Agent{
       } else {
         this._resetPanicRun();
         this._resetPanicFailure();
+      }
+      const predatorAttacked = this.role === Mode.PREDATOR && tryPredatorAttack(this);
+      if(predatorAttacked){
+        return;
+      }
+      if(this.staggerTicks > 0 && random() < 0.5){
+        return;
       }
       let moved = false;
       {

@@ -8,7 +8,7 @@ fn onTick(frame, dt) {
   if (frame >= nextAgentSpawn) {
     let counter = 0;
     while (counter < 3) {
-      spawnAgent("A", MODE_CALM);
+      call spawnAgent("A", 101); // Mode.CALM
       counter = counter + 1;
     }
     

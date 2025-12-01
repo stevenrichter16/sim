@@ -14,6 +14,14 @@ const overlayDefaults = {
   control: false,
   reinforce: false,
   frontier: false,
+  // Emotion/psychology fields
+  aggro: true,
+  curiosity: true,
+  awe: true,
+  noise: true,
+  blood: true,
+  discovery: true,
+  computedTension: false,
 };
 
 for(const faction of FACTIONS){

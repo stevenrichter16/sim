@@ -131,6 +131,7 @@ export interface RegistryDiffV1 {
 }
 
 export interface FactoryOwnershipDiffBundle {
+  version: FactoryOwnershipSchemaVersion;
   snapshot: FactionOwnershipSnapshot;
   allocation: AllocationResult;
   diff: RegistryDiffV1;

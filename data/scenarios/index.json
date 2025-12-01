@@ -1,6 +1,24 @@
 {
-  "generatedAt": "2025-10-22T00:09:29.888Z",
+  "generatedAt": "2025-11-30T22:17:08.235Z",
   "scenarios": [
+    {
+      "key": "agent-spawn",
+      "name": "agent-spawn",
+      "file": "agent-spawn.json",
+      "source": "agent-spawn.sscript",
+      "capabilities": [
+        "fire.write",
+        "agent.spawn",
+        "agent.switch",
+        "agent.read",
+        "field.read",
+        "field.write",
+        "rng.use",
+        "runtime.schedule",
+        "effects.emit",
+        "diag.write"
+      ]
+    },
     {
       "key": "hazard-demo",
       "name": "hazard-demo",
@@ -10,6 +28,17 @@
         "fire.write",
         "rng.use",
         "runtime.schedule",
+        "diag.write"
+      ]
+    },
+    {
+      "key": "predator-duel",
+      "name": "predator-duel",
+      "file": "predator-duel.json",
+      "source": "predator-duel.sscript",
+      "capabilities": [
+        "agent.spawn",
+        "rng.use",
         "diag.write"
       ]
     },

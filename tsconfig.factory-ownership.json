@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist/factoryOwnership",
+    "rootDir": "src/factoryOwnership",
+    "allowJs": false,
+    "declaration": true,
+    "declarationMap": true,
+    "strict": true,
+    "composite": false
+  },
+  "include": [
+    "src/factoryOwnership/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build"
+  ]
+}

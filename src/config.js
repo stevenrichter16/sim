@@ -71,7 +71,7 @@ export const fieldConfig = {
   Curiosity: { diffusionRate: 0.11, halfLifeTurns: 40,  baseDeposit: 0.08 },  // Exploration - long persistence
   Awe:       { diffusionRate: 0.12, halfLifeTurns: 35,  baseDeposit: 0.12 },  // Wonder - spreads fast
   Noise:     { diffusionRate: 0.28, halfLifeTurns: 5,   baseDeposit: 0.20 },  // Sound - fast diffusion, short life
-  Blood:     { diffusionRate: 0.06, halfLifeTurns: 50,  baseDeposit: 0.25 },  // Combat aftermath - sticky, long-lasting
+  Blood:     { diffusionRate: 0.04, halfLifeTurns: 5000020, baseDeposit: 0.25 },  // Combat aftermath - very long-lasting
   Discovery: { diffusionRate: 0.10, halfLifeTurns: 100, baseDeposit: 0.10 },  // Points of interest - very persistent
 };
 

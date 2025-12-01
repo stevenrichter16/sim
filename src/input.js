@@ -4287,10 +4287,10 @@ function toggleScenarioDiagPanel(force){
       }
     });
     if(!getCustomCanvasSize()){
-      const defaultValue = '1600x900';
+      const defaultValue = '1280x720';
       canvasSizeSelect.value = defaultValue;
       if(canvasSizeSelect.value === defaultValue){
-        setCustomCanvasSize({ width: 1600, height: 900 });
+        setCustomCanvasSize({ width: 1280, height: 720 });
       }
     }
   }

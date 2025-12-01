@@ -1,0 +1,529 @@
+// Auto-generated from contracts.schema.json to avoid runtime JSON module imports.
+// Edit the JSON schema and rerun the generator if needed.
+
+export const contractsSchema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sim.internal/schemas/factoryOwnership/contracts.schema.json",
+  "title": "Factory Ownership Contracts",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": "v1"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/FactionOwnershipSnapshot"
+    },
+    "allocation": {
+      "$ref": "#/$defs/AllocationResult"
+    },
+    "diff": {
+      "$ref": "#/$defs/RegistryDiffV1"
+    }
+  },
+  "required": [
+    "version",
+    "snapshot",
+    "allocation",
+    "diff"
+  ],
+  "$defs": {
+    "TileCoordsDTO": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "OwnershipEntryDTO": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tileIdx": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coords": {
+          "$ref": "#/$defs/TileCoordsDTO"
+        },
+        "type": {
+          "enum": [
+            "node",
+            "structure"
+          ]
+        },
+        "kind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "control": {
+          "type": "number"
+        },
+        "factionId": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "dominantFactionId": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "resource": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orientation": {
+          "enum": [
+            "north",
+            "east",
+            "south",
+            "west",
+            null
+          ]
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "tileIdx",
+        "coords",
+        "type",
+        "kind",
+        "control",
+        "factionId",
+        "dominantFactionId"
+      ],
+      "additionalProperties": false
+    },
+    "FactoryNodeDTO": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/OwnershipEntryDTO"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "node"
+            },
+            "kind": {
+              "const": "node"
+            },
+            "resource": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "resource"
+          ]
+        }
+      ]
+    },
+    "StructureDTO": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/OwnershipEntryDTO"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "structure"
+            },
+            "orientation": {
+              "enum": [
+                "north",
+                "east",
+                "south",
+                "west",
+                null
+              ]
+            }
+          },
+          "required": [
+            "orientation"
+          ]
+        }
+      ]
+    },
+    "LinkEndpointDTO": {
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string"
+        },
+        "portId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "objectId",
+        "portId"
+      ],
+      "additionalProperties": false
+    },
+    "LinkPortDTO": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            "input",
+            "output"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "itemKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "direction",
+        "label",
+        "itemKeys"
+      ],
+      "additionalProperties": false
+    },
+    "ClusterObjectDTO": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkPortDTO"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "metadata",
+        "ports"
+      ],
+      "additionalProperties": false
+    },
+    "LinkDTO": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/LinkEndpointDTO"
+        },
+        "target": {
+          "$ref": "#/$defs/LinkEndpointDTO"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "RejectionLogEntry": {
+      "type": "object",
+      "properties": {
+        "consumerId": {
+          "type": "string"
+        },
+        "consumerPortId": {
+          "type": "string"
+        },
+        "requiredItem": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "consumerId",
+        "consumerPortId",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "AllocationAuditEntry": {
+      "type": "object",
+      "properties": {
+        "consumerId": {
+          "type": "string"
+        },
+        "consumerPortId": {
+          "type": "string"
+        },
+        "assignedProviders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "providerId": {
+                "type": "string"
+              },
+              "portId": {
+                "type": "string"
+              },
+              "item": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "providerId",
+              "portId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "notes": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "consumerId",
+        "consumerPortId",
+        "assignedProviders"
+      ],
+      "additionalProperties": false
+    },
+    "MetadataDelta": {
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "previousValue": {},
+        "nextValue": {}
+      },
+      "required": [
+        "objectId",
+        "key",
+        "previousValue",
+        "nextValue"
+      ],
+      "additionalProperties": false
+    },
+    "ManualLinkReconciliationDTO": {
+      "type": "object",
+      "properties": {
+        "preservedLinks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkDTO"
+          }
+        },
+        "droppedLinks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkDTO"
+          }
+        },
+        "missingTargets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkDTO"
+          }
+        }
+      },
+      "required": [
+        "preservedLinks",
+        "droppedLinks",
+        "missingTargets"
+      ],
+      "additionalProperties": false
+    },
+    "FactionOwnershipSnapshot": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactoryNodeDTO"
+          }
+        },
+        "structures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StructureDTO"
+          }
+        },
+        "existingLinks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkDTO"
+          }
+        },
+        "existingManualLinks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkDTO"
+          }
+        }
+      },
+      "required": [
+        "nodes",
+        "structures",
+        "existingLinks",
+        "existingManualLinks"
+      ],
+      "additionalProperties": false
+    },
+    "AllocationResult": {
+      "type": "object",
+      "properties": {
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkDTO"
+          }
+        },
+        "rejectedPorts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RejectionLogEntry"
+          }
+        },
+        "auditTrail": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AllocationAuditEntry"
+          }
+        },
+        "reconciliation": {
+          "$ref": "#/$defs/ManualLinkReconciliationDTO"
+        }
+      },
+      "required": [
+        "links",
+        "rejectedPorts",
+        "auditTrail"
+      ],
+      "additionalProperties": false
+    },
+    "RegistryDiffV1": {
+      "type": "object",
+      "properties": {
+        "addedObjects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ClusterObjectDTO"
+          }
+        },
+        "removedObjects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ClusterObjectDTO"
+          }
+        },
+        "addedLinks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkDTO"
+          }
+        },
+        "removedLinks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkDTO"
+          }
+        },
+        "metadataChanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MetadataDelta"
+          }
+        },
+        "preservedManualLinks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkDTO"
+          }
+        },
+        "droppedManualLinks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkDTO"
+          }
+        }
+      },
+      "required": [
+        "addedObjects",
+        "removedObjects",
+        "addedLinks",
+        "removedLinks",
+        "metadataChanges",
+        "preservedManualLinks",
+        "droppedManualLinks"
+      ],
+      "additionalProperties": false
+    }
+  }
+} as const;
+
+export default contractsSchema;

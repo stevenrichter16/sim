@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Ajv2020 from 'ajv/dist/2020.js';
-import { createRequire } from 'node:module';
 import { idx, world } from '../../src/state.js';
 import {
   FactoryKind,
@@ -10,10 +9,10 @@ import {
 } from '../../src/factory.js';
 import { initWorld } from '../helpers/worldHarness.js';
 import { upsertLink } from '../../src/cloudCluster/domain/cluster.js';
+import { factoryOwnershipSchemas } from '../../dist/factoryOwnership/model/index.js';
 
 const ajv = new Ajv2020({ strict: false, allErrors: true });
-const require = createRequire(import.meta.url);
-const contractsSchema = require('../../src/factoryOwnership/model/contracts.schema.json');
+const contractsSchema = factoryOwnershipSchemas.contracts;
 const validateBundle = ajv.compile(contractsSchema);
 
 describe('factory ownership runtime diff bundles', () => {

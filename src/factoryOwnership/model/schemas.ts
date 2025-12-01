@@ -1,4 +1,4 @@
-import contractsSchema from './contracts.schema.json';
+import contractsSchema from './contractsSchema.js';
 
 export const factoryOwnershipSchemas = {
   contracts: contractsSchema,

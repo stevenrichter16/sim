@@ -1,0 +1,8 @@
+{
+  "name": "predator-duel",
+  "capabilities": [
+    "agent.spawn",
+    "rng.use",
+    "diag.write"
+  ]
+}
