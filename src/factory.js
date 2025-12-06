@@ -118,6 +118,16 @@ const ORIENTATION_VECTOR = Object.freeze({
   south: { dx: 0, dy: 1 },
   west: { dx: -1, dy: 0 },
 });
+
+let beltOnlyMode = false;
+
+export function setBeltOnlyMode(enabled){
+  beltOnlyMode = !!enabled;
+}
+
+export function isBeltOnlyMode(){
+  return beltOnlyMode;
+}
 const ORIENTATION_ANGLE = Object.freeze({
   east: 0,
   south: Math.PI / 2,
@@ -1135,20 +1145,36 @@ function updateRecipeProducer(tileIdx, structure, factory){
       for(const [item, amount] of requirements.entries()){
         const have = buffer.get(item) ?? 0;
         if(have < (amount ?? 0) && !pending.has(item)){
-          markPendingInput(structure, item);
-          enqueueFactoryJob({
-            kind: 'pull',
-            tileIdx: sourceIdx,
-            payload: {
-              duration: 1,
-              item,
-              source: sourceIdx,
-              target: tileIdx,
-            },
-          });
-          if(telemetry){
-            telemetry.inputRequests = (telemetry.inputRequests ?? 0) + 1;
-            telemetry.lastInputTick = factory.ticks ?? 0;
+          if(beltOnlyMode && structure.kind === FactoryKind.CONSTRUCTOR){
+            const srcStruct = factory.structures.get(sourceIdx);
+            if(srcStruct?.kind === FactoryKind.BELT && srcStruct.item === item){
+              srcStruct.item = null;
+              srcStruct.progress = 0;
+              acceptItem(structure, tileIdx, item, factory);
+            }
+          } else if(beltOnlyMode && structure.kind === FactoryKind.SMELTER){
+            const srcStruct = factory.structures.get(sourceIdx);
+            if(srcStruct?.kind === FactoryKind.BELT && srcStruct.item === item){
+              srcStruct.item = null;
+              srcStruct.progress = 0;
+              acceptItem(structure, tileIdx, item, factory);
+            }
+          } else {
+            markPendingInput(structure, item);
+            enqueueFactoryJob({
+              kind: 'pull',
+              tileIdx: sourceIdx,
+              payload: {
+                duration: 1,
+                item,
+                source: sourceIdx,
+                target: tileIdx,
+              },
+            });
+            if(telemetry){
+              telemetry.inputRequests = (telemetry.inputRequests ?? 0) + 1;
+              telemetry.lastInputTick = factory.ticks ?? 0;
+            }
           }
         }
       }
@@ -1195,20 +1221,33 @@ function updateRecipeProducer(tileIdx, structure, factory){
   }
   const outputTarget = neighborIndex(tileIdx, structure.orientation);
   if(structure.outputBuffer > 0 && !structure.pendingOutputJob && outputTarget >= 0){
-    structure.pendingOutputJob = true;
-    enqueueFactoryJob({
-      kind: 'pickup-output',
-      tileIdx,
-      payload: {
-        duration: 1,
-        item: recipe.output,
-        target: outputTarget,
-      },
-    });
-    if(telemetry){
-      telemetry.outputRequests = (telemetry.outputRequests ?? 0) + 1;
-      telemetry.outputBuffer = structure.outputBuffer ?? 0;
-      telemetry.lastOutputRequestTick = factory.ticks ?? 0;
+    if(beltOnlyMode && (structure.kind === FactoryKind.SMELTER || structure.kind === FactoryKind.CONSTRUCTOR)){
+      const targetStruct = factory.structures.get(outputTarget);
+      if(targetStruct?.kind === FactoryKind.BELT && !targetStruct.item){
+        targetStruct.item = recipe.output;
+        targetStruct.progress = 0;
+        structure.outputBuffer -= 1;
+        if(telemetry){
+          telemetry.outputBuffer = structure.outputBuffer ?? 0;
+          telemetry.lastOutputTick = factory.ticks ?? 0;
+        }
+      }
+    } else {
+      structure.pendingOutputJob = true;
+      enqueueFactoryJob({
+        kind: 'pickup-output',
+        tileIdx,
+        payload: {
+          duration: 1,
+          item: recipe.output,
+          target: outputTarget,
+        },
+      });
+      if(telemetry){
+        telemetry.outputRequests = (telemetry.outputRequests ?? 0) + 1;
+        telemetry.outputBuffer = structure.outputBuffer ?? 0;
+        telemetry.lastOutputRequestTick = factory.ticks ?? 0;
+      }
     }
   }
 }
@@ -1904,6 +1943,25 @@ function handleWorkerJobEffect(worker, factory){
         node.telemetry.lastOutputItem = resource;
       }
       const targetTile = job.payload?.targetStructure;
+      if(beltOnlyMode && typeof source === 'number'){
+        const minerStruct = factory.structures.get(source);
+        if(minerStruct){
+          const outIdx = neighborIndex(source, minerStruct.orientation);
+          const outStruct = factory.structures.get(outIdx);
+          if(outStruct?.kind === FactoryKind.BELT && !outStruct.item){
+            outStruct.item = resource;
+            outStruct.progress = 0;
+            const beltTelemetry = ensureStructureTelemetry(outStruct);
+            if(beltTelemetry){
+              beltTelemetry.itemsReceived = (beltTelemetry.itemsReceived ?? 0) + 1;
+              beltTelemetry.lastReceivedTick = factory.ticks ?? 0;
+              beltTelemetry.lastReceivedItem = resource;
+              beltTelemetry.currentItem = resource;
+            }
+            return;
+          }
+        }
+      }
       if(targetTile != null){
         enqueueFactoryJob({
           kind: 'deliver',

@@ -23,8 +23,21 @@ input.bindSimulation(simulation);
 
 const initialSettings = input.getSettings();
 simulation.resetWorld(initialSettings.o2Base, initialSettings);
-simulation.seedDemoScenario();
-draw();
+// Load pilot-signals scenario by default instead of demo
+(async()=>{
+  try{
+    const resp = await fetch('data/scenarios/pilot-signals.json', { cache:'no-store' });
+    if(resp.ok){
+      const asset = await resp.json();
+      simulation.loadScenarioAsset(asset);
+    } else {
+      console.warn('[bootstrap] failed to fetch pilot-signals scenario:', resp.status);
+    }
+  } catch (err){
+    console.warn('[bootstrap] pilot-signals load error', err);
+  }
+  draw();
+})();
 
 simulation.start();
 if(input.selectBrush) input.selectBrush('fire');

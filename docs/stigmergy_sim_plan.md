@@ -115,3 +115,26 @@ A deep-dive design for a Necesse-style survival/colony sim fused with Satisfacto
 5. **Room Mode Logic:** Mode detection based on dominant tags; implement 3 core modes with bonuses and visual shifts.
 6. **Raid Spoofing Pass:** Simple raider AI that follows/forges traces; prototype verifier/honeytrap blocks to counter.
 7. **Scenario Harness:** Build scripted scenarios for early, mid, and raid tests with metrics collection.
+
+---
+## Critique (risks to manage)
+- **Signal soup & taxonomy:** The tag set is broad; without a minimal v1 palette and clear conflict rules, fields will devolve into noise. Clamp sources, cap emitters per tile, and define interference math early.
+- **UX opacity:** “Play the pheromone field” demands excellent overlays, sculpting tools, and explanations. If players can’t see/shape signals clearly, the core loop fails.
+- **Performance/stability:** Diffusion/interference everywhere is expensive and can cascade. Use chunked/low-res fields, throttles, and guardrails to avoid runaway turbulence.
+- **Logistics determinism:** Carrier motes on signal conduits can deadlock/backflow without simple directionality/capacity rules. Keep routing rules explicit.
+- **Mode flapping:** Dynamic rooms need locks/hysteresis and strong feedback to prevent unwanted mode switches.
+- **Progress clarity:** “Progress via signal control” needs measurable milestones (coherence scores, delivery latency) so players feel advancement.
+
+---
+## Execution suggestions (scoped start)
+- Start tiny: 3–4 tags, one biome, one material conversion, one logistics lane, one raid-spoof counter to prove readability/stability.
+- Prototype overlays and sculpting tools first; they are the player-facing UI for the core mechanic.
+- Add quantitative constraints and acceptance tests: caps on emitters per tile, bounded decay/diffusion, and metrics like coherence score and delivery latency to keep the system debuggable.
+
+## Pilot scope (to implement next)
+- **Tag palette:** limit to 4 active tags for the pilot: build, harvest, defend, resonate. Suspend others in the test scenario.
+- **Biome:** single “plain” biome with neutral baseline signals and one perturbation event (raid spoof).
+- **Material conversion:** one substrate -> tuned beam (build+resonate) pipeline.
+- **Logistics lane:** one conduit carrying tuned beams with a simple amplifier and scrubber.
+- **Raid spoof counter:** one verifier/honeytrap interaction to validate defend/resonate signals.
+- **Metrics:** track coherence score in the work area and delivery latency for tuned beams.

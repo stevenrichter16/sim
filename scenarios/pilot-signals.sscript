@@ -1,0 +1,37 @@
+// Pilot scenario: 3 scouts, a dermal node, belts, and a bioforge connected linearly.
+
+let scoutsSpawned = 0;
+let seeded = 0;
+
+// Precomputed tiles (x,y on 80x45 grid): node at (10,22), belts to the east, smelter at (13,22)
+let nodeTile = 1770;
+let smelterTile = 1773;
+let minerTile = 1770; // miner grafts onto the node
+
+fn onInit(seed) {
+  call logDebug("scenario", "pilot-signals init");
+}
+
+fn onTick(frame, dt) {
+  if (seeded == 1) {
+    return;
+  }
+
+  if (scoutsSpawned < 3) {
+    call spawnAgent("A", 104); // Mode.SCOUT
+    scoutsSpawned = scoutsSpawned + 1;
+    return;
+  }
+
+  // Place dermal node, miner, and bioforge
+  let placed = call placeFactory(nodeTile, "factory-node-skin");
+  if (placed) {
+    // Miner grafted onto the node
+    call placeFactory(minerTile, "factory-miner");
+    let sm = call placeFactory(smelterTile, "factory-smelter-omni");
+    if (sm) {
+      seeded = 1;
+      call logDebug("scenario", "pilot-signals seed complete");
+    }
+  }
+}
