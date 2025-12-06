@@ -10,6 +10,7 @@
     "rng.use",
     "runtime.schedule",
     "effects.emit",
+    "factory.place",
     "diag.write"
   ],
   "bytecode": {
@@ -24,7 +25,7 @@
             "column": 1
           },
           "end": {
-            "index": 327,
+            "index": 328,
             "line": 17,
             "column": 2
           }
@@ -92,7 +93,7 @@
                 "column": 1
               },
               "end": {
-                "index": 327,
+                "index": 328,
                 "line": 17,
                 "column": 2
               }
@@ -215,7 +216,7 @@
             "column": 1
           },
           "end": {
-            "index": 327,
+            "index": 328,
             "line": 17,
             "column": 2
           }
@@ -491,12 +492,12 @@
             ],
             "span": {
               "start": {
-                "index": 264,
+                "index": 265,
                 "line": 12,
                 "column": 17
               },
               "end": {
-                "index": 271,
+                "index": 272,
                 "line": 12,
                 "column": 24
               }
@@ -509,12 +510,12 @@
             ],
             "span": {
               "start": {
-                "index": 274,
+                "index": 275,
                 "line": 12,
                 "column": 27
               },
               "end": {
-                "index": 275,
+                "index": 276,
                 "line": 12,
                 "column": 28
               }
@@ -525,12 +526,12 @@
             "args": [],
             "span": {
               "start": {
-                "index": 264,
+                "index": 265,
                 "line": 12,
                 "column": 17
               },
               "end": {
-                "index": 275,
+                "index": 276,
                 "line": 12,
                 "column": 28
               }
@@ -543,12 +544,12 @@
             ],
             "span": {
               "start": {
-                "index": 254,
+                "index": 255,
                 "line": 12,
                 "column": 7
               },
               "end": {
-                "index": 275,
+                "index": 276,
                 "line": 12,
                 "column": 28
               }
@@ -559,12 +560,12 @@
             "args": [],
             "span": {
               "start": {
-                "index": 254,
+                "index": 255,
                 "line": 12,
                 "column": 7
               },
               "end": {
-                "index": 276,
+                "index": 277,
                 "line": 12,
                 "column": 29
               }
@@ -582,7 +583,7 @@
                 "column": 5
               },
               "end": {
-                "index": 282,
+                "index": 283,
                 "line": 13,
                 "column": 6
               }
@@ -595,12 +596,12 @@
             ],
             "span": {
               "start": {
-                "index": 309,
+                "index": 310,
                 "line": 15,
                 "column": 22
               },
               "end": {
-                "index": 314,
+                "index": 315,
                 "line": 15,
                 "column": 27
               }
@@ -613,12 +614,12 @@
             ],
             "span": {
               "start": {
-                "index": 317,
+                "index": 318,
                 "line": 15,
                 "column": 30
               },
               "end": {
-                "index": 320,
+                "index": 321,
                 "line": 15,
                 "column": 33
               }
@@ -629,12 +630,12 @@
             "args": [],
             "span": {
               "start": {
-                "index": 309,
+                "index": 310,
                 "line": 15,
                 "column": 22
               },
               "end": {
-                "index": 320,
+                "index": 321,
                 "line": 15,
                 "column": 33
               }
@@ -647,12 +648,12 @@
             ],
             "span": {
               "start": {
-                "index": 292,
+                "index": 293,
                 "line": 15,
                 "column": 5
               },
               "end": {
-                "index": 320,
+                "index": 321,
                 "line": 15,
                 "column": 33
               }
@@ -663,12 +664,12 @@
             "args": [],
             "span": {
               "start": {
-                "index": 292,
+                "index": 293,
                 "line": 15,
                 "column": 5
               },
               "end": {
-                "index": 321,
+                "index": 322,
                 "line": 15,
                 "column": 34
               }
@@ -684,7 +685,7 @@
                 "column": 1
               },
               "end": {
-                "index": 327,
+                "index": 328,
                 "line": 17,
                 "column": 2
               }
@@ -700,7 +701,7 @@
       0,
       3,
       "A",
-      101,
+      104,
       1,
       100
     ],
@@ -728,6 +729,6 @@
   "meta": {
     "source": "agent-spawn.sscript",
     "relativeSource": "agent-spawn.sscript",
-    "generatedAt": "2025-11-30T22:17:08.160Z"
+    "generatedAt": "2025-12-02T04:20:21.551Z"
   }
 }

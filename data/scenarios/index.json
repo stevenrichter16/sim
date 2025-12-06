@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-11-30T22:17:08.235Z",
+  "generatedAt": "2025-12-02T04:20:21.586Z",
   "scenarios": [
     {
       "key": "agent-spawn",
@@ -16,6 +16,19 @@
         "rng.use",
         "runtime.schedule",
         "effects.emit",
+        "factory.place",
+        "diag.write"
+      ]
+    },
+    {
+      "key": "factory-control",
+      "name": "factory-control",
+      "file": "factory-control.json",
+      "source": "factory-control.sscript",
+      "capabilities": [
+        "agent.spawn",
+        "factory.place",
+        "rng.use",
         "diag.write"
       ]
     },

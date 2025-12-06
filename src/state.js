@@ -28,6 +28,9 @@ export const world = {
   frontierByFaction: null,
   debtByFaction: null,
   reinforceByFaction: null,
+  factorySeenByFaction: null,
+  factoryDiscoveryByFaction: null,
+  factoryCuriosityDisabled: null,
   visited: null,
 
   // Emotion/psychology fields
@@ -140,6 +143,9 @@ export function resetWorld(o2BaseValue, options = {}){
   world.frontierByFaction = FACTIONS.map(() => new Float32Array(size));
   world.debtByFaction = FACTIONS.map(() => new Float32Array(size));
   world.reinforceByFaction = FACTIONS.map(() => new Float32Array(size));
+  world.factorySeenByFaction = FACTIONS.map(() => new Float32Array(size));
+  world.factoryDiscoveryByFaction = FACTIONS.map(() => new Float32Array(size));
+  world.factoryCuriosityDisabled = new Uint8Array(size);
   world.visited = new Float32Array(size);
 
   // Initialize emotion/psychology fields
@@ -180,6 +186,19 @@ export function resetWorld(o2BaseValue, options = {}){
     for(const field of world.safeFieldsByFaction){
       field.fill(0);
     }
+  }
+  if(world.factorySeenByFaction){
+    for(const field of world.factorySeenByFaction){
+      field.fill(0);
+    }
+  }
+  if(world.factoryDiscoveryByFaction){
+    for(const field of world.factoryDiscoveryByFaction){
+      field.fill(0);
+    }
+  }
+  if(world.factoryCuriosityDisabled){
+    world.factoryCuriosityDisabled.fill(0);
   }
   world.presenceX.fill(0);
   world.presenceY.fill(0);

@@ -13,6 +13,7 @@ export const DEFAULT_CAPABILITIES = [
   'rng.use',
   'runtime.schedule',
   'effects.emit',
+  'factory.place',
   'diag.write',
 ];
 
@@ -128,6 +129,7 @@ function createDefaultNatives(host, logger, rngApi) {
   const fieldWriteFn = safeHost.fieldWrite ?? null;
   const randTileFn = safeHost.randTile ?? null;
   const emitEffectFn = safeHost.emitEffect ?? safeHost.scenarioEmitEffect ?? null;
+  const placeFactoryFn = safeHost.placeFactory ?? null;
 
   const { random, range } = resolveRng(rngApi);
 
@@ -163,6 +165,9 @@ function createDefaultNatives(host, logger, rngApi) {
     }),
     randTile: makeHostNative('randTile', 'rng.use', ({ args, tick }) =>
       callHostNative('randTile', randTileFn, args, { tick }),
+    ),
+    placeFactory: makeHostNative('placeFactory', 'factory.place', ({ args, tick }) =>
+      callHostNative('placeFactory', placeFactoryFn, args, { tick }),
     ),
     emitEffect: makeHostNative('emitEffect', 'effects.emit', ({ args, tick }) =>
       callHostNative('emitEffect', emitEffectFn, args, { tick }),

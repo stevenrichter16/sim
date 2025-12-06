@@ -63,7 +63,7 @@ export const fieldConfig = {
   },
   Escape:  { diffusionRate: 0.11, halfLifeTurns: 10,  baseDeposit: 0.04 },
   Door:    { diffusionRate: 0.10, halfLifeTurns: 15 },
-  Visited: {                          halfLifeTurns: 20, baseDeposit: 0.02 },
+  Visited: { diffusionRate: 0.06,    halfLifeTurns: 120, baseDeposit: 0.08 },
   Sound:   { diffusionRate: 0.28, halfLifeTurns: 15,  baseDeposit: 0.10 },
 
   // Emotion/psychology fields
@@ -71,8 +71,8 @@ export const fieldConfig = {
   Curiosity: { diffusionRate: 0.11, halfLifeTurns: 40,  baseDeposit: 0.08 },  // Exploration - long persistence
   Awe:       { diffusionRate: 0.12, halfLifeTurns: 35,  baseDeposit: 0.12 },  // Wonder - spreads fast
   Noise:     { diffusionRate: 0.28, halfLifeTurns: 5,   baseDeposit: 0.20 },  // Sound - fast diffusion, short life
-  Blood:     { diffusionRate: 0.04, halfLifeTurns: 5000020, baseDeposit: 0.25 },  // Combat aftermath - very long-lasting
-  Discovery: { diffusionRate: 0.10, halfLifeTurns: 100, baseDeposit: 0.10 },  // Points of interest - very persistent
+  Blood:     { diffusionRate: 0.00004, halfLifeTurns: 5000020, baseDeposit: 5.25 },  // Combat aftermath - very long-lasting
+  Discovery: { diffusionRate: 0.11, halfLifeTurns: 40, baseDeposit: 0.08 },  // Points of interest - match curiosity profile
 };
 
 export function decayMultiplierFromHalfLife(tHalf, dt = 1){
