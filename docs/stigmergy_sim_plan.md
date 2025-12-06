@@ -21,7 +21,7 @@ A deep-dive design for a Necesse-style survival/colony sim fused with Satisfacto
 ---
 ## World & Biomes (Signal Ecology)
 - **Biome Spectra:** Each biome emits a baseline signal mix (e.g., Myco Groves = growth/heal, Basalt Vents = heat/resonate, Ruin Fields = decay/defend). Players must counter, amplify, or harness ambient fields.
-- **Hazard Feedback:** Over-harvest raises reclaim signals that spawn recycler fauna; heavy defend signals attract raid scouts; excess resonate in caves awakens echo predators.
+- **Hazard Feedback:** Over-harvest raises reclaim signals that spawn recycler fauna; heavy defend signals attract raid scouts; excess resonate in caves awakens echo predators, but resonance-rich caves also unlock easy counterplay (auto-assembling echo shields, temporary sonic wards, sprint bursts) so mining hard feels high-risk/high-power rather than purely punitive.
 - **Travel & Mapping:** Trails accumulate success/failure signals (safe/unsafe pheromones). Raids can spoof trails; players deploy scrubbers or verifiers to cleanse or lock trails.
 
 ---
