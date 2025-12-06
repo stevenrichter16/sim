@@ -1,0 +1,45 @@
+let scoutsSpawned = 0;
+let forgePlaced = 0;
+let constructorPlaced = 0;
+let seedingDone = 0;
+
+fn onInit(seed) {
+  call logDebug("scenario", "factory-control init");
+}
+
+fn onTick(frame, dt) {
+  if (seedingDone == 1) {
+    return;
+  }
+
+  if (scoutsSpawned < 3) {
+    call spawnAgent("A", 104); // Mode.SCOUT
+    scoutsSpawned = scoutsSpawned + 1;
+    return;
+  }
+
+  if (forgePlaced < 4) {
+    let spot = call randTile("open");
+    if (spot != -1) {
+      let ok = call placeFactory(spot, "factory-smelter-omni");
+      if (ok) {
+        forgePlaced = forgePlaced + 1;
+      }
+    }
+    return;
+  }
+
+  if (constructorPlaced < 2) {
+    let spot = call randTile("open");
+    if (spot != -1) {
+      let ok = call placeFactory(spot, "factory-constructor");
+      if (ok) {
+        constructorPlaced = constructorPlaced + 1;
+      }
+    }
+    return;
+  }
+
+  seedingDone = 1;
+  call logDebug("scenario", "factory-control seed complete");
+}

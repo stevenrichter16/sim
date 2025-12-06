@@ -43,7 +43,7 @@ import {
 } from './materials.js';
 import { createScenarioRuntime } from './script/runtime.js';
 import { deserialiseCompiledProgram } from './script/bytecode.js';
-import { stepFactory, setFactoryWorkerSpawner, spawnFactoryWorker } from './factory.js';
+import { stepFactory, setFactoryWorkerSpawner, spawnFactoryWorker, placeFactoryStructure } from './factory.js';
 import { EmotionFields, FieldCoupling } from './emotionConstants.js';
 
 const {
@@ -124,9 +124,37 @@ const PREDATOR_HIT_CHANCE = 0.7;
 const PREDATOR_STAGGER_TICKS = 2;
 const PREDATOR_DOWNED_WOUNDS = 2;
 const PREDATOR_PANIC_SPREAD = 0.25;
+const SCOUT_FACTORY_LOG_LIMIT = 20;
+const FACTORY_CURIOSITY_LOG_LIMIT = 12;
 
 let prevDominant = null;
 let prevControl = null;
+const scoutFactoryLog = new Set();
+const factoryCuriosityLog = new Set();
+
+function disableFactoryCuriosity(tileIdx, modeLabel){
+  if(!world.factoryCuriosityDisabled) return;
+  world.factoryCuriosityDisabled[tileIdx] = 1;
+  if(world.curiosityField){
+    clearCuriosityRadius(tileIdx, 2);
+  }
+  logFactoryCuriosityEvent(`disable-${tileIdx}`, `disabled curiosity at factory tile=${tileIdx} mode=${modeLabel}`);
+}
+
+function clearCuriosityRadius(tileIdx, radius = 2){
+  if(!world.curiosityField) return;
+  const cx = tileIdx % world.W;
+  const cy = (tileIdx / world.W) | 0;
+  for(let dx=-radius; dx<=radius; dx++){
+    for(let dy=-radius; dy<=radius; dy++){
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if(!inBounds(nx, ny)) continue;
+      const nIdx = idx(nx, ny);
+      world.curiosityField[nIdx] = 0;
+    }
+  }
+}
 
 function updatePresenceControl(){
   if(!world.presenceX || !world.presenceY || !world.dominantFaction || !world.controlLevel) return;
@@ -525,6 +553,7 @@ function scoredNeighbor(agent, nx, ny, weights){
   if(!inBounds(nx,ny)) return -Infinity;
   const neighborIndex = idx(nx, ny);
   if(world.wall[neighborIndex]) return -Infinity;
+  const neighborString = world.strings[neighborIndex];
   const safety = Math.max(0, Math.min(1, safetyScore(nx, ny)));
   const help = world.helpField ? world.helpField[neighborIndex] ?? 0 : 0;
   const route = world.routeField ? world.routeField[neighborIndex] ?? 0 : 0;
@@ -644,6 +673,12 @@ function scoredNeighbor(agent, nx, ny, weights){
   const awe = world.aweField ? world.aweField[neighborIndex] ?? 0 : 0;
   const noise = world.noiseField ? world.noiseField[neighborIndex] ?? 0 : 0;
   const blood = world.bloodField ? world.bloodField[neighborIndex] ?? 0 : 0;
+  let curiositySignal = curiosity;
+  const S = world.strings[neighborIndex];
+  if(agent?.role === Mode.SCOUT){
+    // Allow scouts to enter factories to disable curiosity; no discovery gating
+    // Non-factory tiles: keep curiosity as-is for scouts
+  }
 
   return (
     (weights.safety ?? 0) * safety +
@@ -666,7 +701,7 @@ function scoredNeighbor(agent, nx, ny, weights){
     (weights.controlGradReward ?? 0) * controlGrad +
     (weights.reinforce ?? 0) * myReinforce +
     (weights.aggro ?? 0) * aggro +
-    (weights.curiosity ?? 0) * curiosity +
+    (weights.curiosity ?? 0) * curiositySignal +
     (weights.awe ?? 0) * awe +
     (weights.noise ?? 0) * noise +
     (weights.blood ?? 0) * blood
@@ -680,6 +715,79 @@ function agentAtPosition(x, y, exclude){
     if(other.x === x && other.y === y) return other;
   }
   return null;
+}
+
+function logScoutFactoryEvent(key, message){
+  if(scoutFactoryLog.has(key)) return;
+  if(scoutFactoryLog.size >= SCOUT_FACTORY_LOG_LIMIT) return;
+  scoutFactoryLog.add(key);
+  console.warn('[scout-factory]', message);
+}
+
+function logFactoryCuriosityEvent(key, message){
+  if(factoryCuriosityLog.has(key)) return;
+  if(factoryCuriosityLog.size >= FACTORY_CURIOSITY_LOG_LIMIT) return;
+  factoryCuriosityLog.add(key);
+  console.warn('[factory-curiosity]', message);
+}
+
+function isFactoryString(S){
+  if(!S) return false;
+  switch(S.mode){
+    case Mode.FACTORY_NODE:
+    case Mode.FACTORY_MINER:
+    case Mode.FACTORY_BELT:
+    case Mode.FACTORY_SMELTER:
+    case Mode.FACTORY_CONSTRUCTOR:
+    case Mode.FACTORY_STORAGE:
+      return true;
+    default:
+      return false;
+  }
+}
+
+function isCuriosityFactoryString(S){
+  if(!S) return false;
+  switch(S.mode){
+    case Mode.FACTORY_SMELTER:
+    case Mode.FACTORY_CONSTRUCTOR:
+      return true;
+    default:
+      return false;
+  }
+}
+
+function markFactorySeen(agent, tileIdx){
+  if(!agent || !world.factorySeenByFaction) return;
+  const S = world.strings[tileIdx];
+  if(!isFactoryString(S)) return;
+  const fid = agent.factionId ?? DEFAULT_FACTION_ID;
+  const seenField = world.factorySeenByFaction[fid];
+  if(seenField) seenField[tileIdx] = 1;
+  if(world.factoryDiscoveryByFaction){
+    const discField = world.factoryDiscoveryByFaction[fid];
+    if(discField) discField[tileIdx] = 0; // clear discovery for this faction
+  }
+  // If a scout visited, disable curiosity emission globally for this factory tile
+  if(agent.role === Mode.SCOUT && world.factoryCuriosityDisabled){
+    disableFactoryCuriosity(tileIdx, S.mode);
+  }
+  const visitedVal = world.visited ? world.visited[tileIdx] ?? 0 : 0;
+  const fx = tileIdx % world.W;
+  const fy = (tileIdx / world.W) | 0;
+  logFactoryCuriosityEvent(`step-${agent.id}-${tileIdx}`, `agent ${agent.id} (${agent.role}) stepped on factory tile=${tileIdx} (${fx},${fy}) mode=${S.mode} visited=${visitedVal > 0}`);
+}
+
+function hasHostileNearby(agent, radius = 3){
+  const factionId = agent?.factionId ?? DEFAULT_FACTION_ID;
+  for(const other of world.agents){
+    if(other === agent) continue;
+    if(other.downed) continue;
+    if(factionAffinity(factionId, other.factionId) >= 0) continue;
+    const dist = Math.abs(other.x - agent.x) + Math.abs(other.y - agent.y);
+    if(dist <= radius) return true;
+  }
+  return false;
 }
 
 function tryPredatorAttack(attacker){
@@ -778,6 +886,9 @@ function tryCuriosityStep(agent){
     if(edgeBias <= 0) continue;
     const hazardAtNeighbor = hazardHere(neighborIndex);
     if(hazardAtNeighbor > 0.35) continue;
+    const S = world.strings[neighborIndex];
+    const isFactory = isCuriosityFactoryString(S);
+    // No discovery gating; allow scouts to step onto factories to disable curiosity
     const novelty = world.visited ? 1 - (world.visited[neighborIndex] ?? 0) : 1;
     const curiosityScore = 0.5 * edgeBias + 0.8 * novelty - 0.4 * hazardAtNeighbor + randomCentered() * 0.0005;
     if(curiosityScore > bestCuriosityDestination.score){
@@ -793,6 +904,21 @@ function tryCuriosityStep(agent){
     // Emit curiosity and discovery emotions when exploring novel areas
     const destIdx = idx(bestCuriosityDestination.x, bestCuriosityDestination.y);
     const visitedAmount = world.visited ? world.visited[destIdx] ?? 0 : 0;
+    const destString = world.strings[destIdx];
+    const destIsFactory = isFactoryString(destString);
+    if(destIsFactory && agent.role === Mode.SCOUT && world.factorySeenByFaction){
+      const fid = agent.factionId ?? DEFAULT_FACTION_ID;
+      const seenField = world.factorySeenByFaction[fid];
+      if(seenField){
+        seenField[destIdx] = 1;
+      }
+      if(world.factoryDiscoveryByFaction){
+        const discField = world.factoryDiscoveryByFaction[fid];
+        if(discField){
+          discField[destIdx] = 0;
+        }
+      }
+    }
     if(visitedAmount < 0.3){  // Relatively unexplored
       emitCuriosity(destIdx, 0.05);
       if(visitedAmount < 0.1){  // Very novel
@@ -1015,10 +1141,30 @@ export function emitFactoryCuriosity(){
   if(!factory?.structures?.size) return;
 
   const baseDeposit = getFieldDepositBase(Curiosity);
+  const discoveryDeposit = getFieldDepositBase(Curiosity);
+
+  // Safety sweep: disable curiosity for any curiosity factory a scout is standing on
+  if(world.agents && world.factoryCuriosityDisabled){
+    for(const agent of world.agents){
+      if(!agent || agent.role !== Mode.SCOUT) continue;
+      const aIdx = idx(agent.x, agent.y);
+      const S = world.strings[aIdx];
+      if(isCuriosityFactoryString(S) && !world.factoryCuriosityDisabled[aIdx]){
+        disableFactoryCuriosity(aIdx, S.mode);
+      }
+    }
+  }
 
   // Iterate through all factory structures and emit curiosity
   for(const [tileIdx, structure] of factory.structures.entries()){
     if(!structure) continue;
+    if(world.factoryCuriosityDisabled && world.factoryCuriosityDisabled[tileIdx]){
+      logFactoryCuriosityEvent(`skip-${tileIdx}`, `skipping curiosity emit; disabled tile=${tileIdx} kind=${structure.kind}`);
+      if(world.curiosityField){
+        clearCuriosityRadius(tileIdx, 2); // keep cleared in case diffusion refills
+      }
+      continue; // stop emitting once a scout visited
+    }
 
     // Different factory types emit different amounts of curiosity
     let multiplier = 0.625; // Aligns with prior 0.05 baseline relative to default curiosity deposit
@@ -1031,17 +1177,13 @@ export function emitFactoryCuriosity(){
         multiplier = 1.25; // Constructors are very interesting (creation)
         break;
       case 'node':
-        multiplier = 0.75; // Nodes are moderately interesting (central hub)
-        break;
+        continue; // nodes do not emit curiosity
       case 'miner':
-        multiplier = 0.5; // Miners are less interesting (repetitive)
-        break;
+        continue; // miners do not emit curiosity
       case 'storage':
-        multiplier = 0.625; // Storage is baseline interesting
-        break;
+        continue; // storage does not emit curiosity
       case 'belt':
-        multiplier = 0.375; // Belts are least interesting (movement only)
-        break;
+        continue; // belts do not emit curiosity
     }
 
     const emissionAmount = baseDeposit * multiplier;
@@ -1336,12 +1478,18 @@ export class Agent{
   }
 
   _doStep(bins){
+    const hereIdx = idx(this.x, this.y);
+    if(this.role === Mode.SCOUT && world.factoryCuriosityDisabled){
+      const hereString = world.strings[hereIdx];
+      if(isCuriosityFactoryString(hereString) && !world.factoryCuriosityDisabled[hereIdx]){
+        markFactorySeen(this, hereIdx);
+      }
+    }
     if(this.attackCooldown > 0) this.attackCooldown -= 1;
     if(this.staggerTicks > 0) this.staggerTicks -= 1;
     if(this.downed){
       return;
     }
-    const hereIdx = idx(this.x, this.y);
     const hereHeat = world.heat[hereIdx] ?? 0;
     if(hereHeat > thresholds.heat.highThreshold){
       diagnosticsFrame.hotAgents += 1;
@@ -1517,18 +1665,23 @@ export class Agent{
       if(this.staggerTicks > 0 && random() < 0.5){
         return;
       }
-      let moved = false;
-      {
-        const curiosity = mayExplore(this);
-        if(curiosity && random() < (0.12 + 0.5 * curiosity)){
-          if(tryCuriosityStep(this)){
-            moved = true;
-            maybeBoostFrontierFromReinforce(hereIdx, idx(this.x, this.y), this.factionId);
-          }
+    let moved = false;
+    {
+      const curiosity = mayExplore(this);
+      if(curiosity && random() < (0.12 + 0.5 * curiosity)){
+        if(tryCuriosityStep(this)){
+          moved = true;
+          markFactorySeen(this, idx(this.x, this.y));
+          maybeBoostFrontierFromReinforce(hereIdx, idx(this.x, this.y), this.factionId);
         }
       }
+    }
       if(!moved){
         const weights = movementWeightsFor(this);
+        if(this.role === Mode.PREDATOR && !hasHostileNearby(this, 3)){
+          // If no prey nearby, don't loiter on blood pools; roam instead.
+          weights.blood = -0.15;
+        }
         let bestX = this.x;
         let bestY = this.y;
         let bestScore = scoredNeighbor(this, this.x, this.y, weights);
@@ -1549,6 +1702,7 @@ export class Agent{
           maybeBoostFrontierFromReinforce(hereIdx, toIdx, this.factionId);
           this.x = bestX;
           this.y = bestY;
+          markFactorySeen(this, toIdx);
           moved = true;
         }
       }
@@ -2308,6 +2462,18 @@ let acidBasePairs = new Set();
     return spawnNPC(mode, factionRef, options);
   }
 
+  function scenarioPlaceFactory(tileIdx, brush, orientation){
+    if(typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= world.heat.length){
+      return { status: 'error', error: { message: 'Invalid tile index.' } };
+    }
+    const dir = orientation && typeof orientation === 'string' ? orientation : 'east';
+    const result = placeFactoryStructure(tileIdx | 0, brush, { orientation: dir });
+    if(!result?.ok){
+      return { status: 'error', error: { message: result?.message || result?.error || 'Placement failed.' } };
+    }
+    return { status: 'ok', value: result };
+  }
+
   function createScenarioHost(overrides = {}){
     const baseHost = {
       ignite: (tileIdx, intensity, meta) => scenarioIgnite(tileIdx, intensity),
@@ -2320,6 +2486,7 @@ let acidBasePairs = new Set();
       fieldWrite: (tileIdx, fieldName, value, meta) => scenarioWriteField(tileIdx, fieldName, value),
       randTile: (filterKey, meta) => scenarioRandTile(filterKey),
       emitEffect: (effectType, x, y, options, meta) => scenarioEmitEffect(effectType, x, y, options),
+      placeFactory: (tileIdx, brush, orientation, meta) => scenarioPlaceFactory(tileIdx, brush, orientation),
     };
     return { ...baseHost, ...overrides };
   }
@@ -2438,11 +2605,16 @@ let acidBasePairs = new Set();
       updateField(world.panicField, getFieldSpec(Panic));
       updateField(world.safeField, getFieldSpec(Safe));
       updateField(world.escapeField, getFieldSpec(Escape));
-      if(world.safeFieldsByFaction){
-        for(const field of world.safeFieldsByFaction){
-          updateField(field, getFieldSpec(Safe));
-        }
-      }
+  if(world.safeFieldsByFaction){
+    for(const field of world.safeFieldsByFaction){
+      updateField(field, getFieldSpec(Safe));
+    }
+  }
+  if(world.factoryDiscoveryByFaction){
+    for(const field of world.factoryDiscoveryByFaction){
+      updateField(field, getFieldSpec(Curiosity));
+    }
+  }
       if(world.doorField){
         if(world.doorTiles && world.doorTiles.size){
           for(const k of world.doorTiles){
@@ -2473,9 +2645,14 @@ let acidBasePairs = new Set();
       clampField01(world.escapeField);
       if(world.safeFieldsByFaction){
         for(const field of world.safeFieldsByFaction){
-          clampField01(field);
-        }
-      }
+      clampField01(field);
+    }
+  }
+  if(world.factoryDiscoveryByFaction){
+    for(const field of world.factoryDiscoveryByFaction){
+      clampField01(field);
+    }
+  }
       if(world.doorField) clampField01(world.doorField);
       clampField01(world.visited);
 
