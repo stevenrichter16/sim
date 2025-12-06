@@ -1,0 +1,9 @@
+{
+  "name": "pilot-signals",
+  "capabilities": [
+    "agent.spawn",
+    "factory.place",
+    "rng.use",
+    "diag.write"
+  ]
+}

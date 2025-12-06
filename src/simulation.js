@@ -725,10 +725,7 @@ function logScoutFactoryEvent(key, message){
 }
 
 function logFactoryCuriosityEvent(key, message){
-  if(factoryCuriosityLog.has(key)) return;
-  if(factoryCuriosityLog.size >= FACTORY_CURIOSITY_LOG_LIMIT) return;
-  factoryCuriosityLog.add(key);
-  console.warn('[factory-curiosity]', message);
+  return;
 }
 
 function isFactoryString(S){

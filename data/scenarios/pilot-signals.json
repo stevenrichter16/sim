@@ -1,0 +1,1284 @@
+{
+  "name": "pilot-signals",
+  "capabilities": [
+    "agent.spawn",
+    "factory.place",
+    "rng.use",
+    "diag.write"
+  ],
+  "bytecode": {
+    "chunks": [
+      {
+        "name": "<init>",
+        "params": 0,
+        "span": {
+          "start": {
+            "index": 87,
+            "line": 3,
+            "column": 1
+          },
+          "end": {
+            "index": 970,
+            "line": 37,
+            "column": 2
+          }
+        },
+        "instructions": [
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 107,
+                "line": 3,
+                "column": 21
+              },
+              "end": {
+                "index": 108,
+                "line": 3,
+                "column": 22
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 87,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "index": 109,
+                "line": 3,
+                "column": 23
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 87,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "index": 109,
+                "line": 3,
+                "column": 23
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              1
+            ],
+            "span": {
+              "start": {
+                "index": 123,
+                "line": 4,
+                "column": 14
+              },
+              "end": {
+                "index": 124,
+                "line": 4,
+                "column": 15
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              1
+            ],
+            "span": {
+              "start": {
+                "index": 110,
+                "line": 4,
+                "column": 1
+              },
+              "end": {
+                "index": 125,
+                "line": 4,
+                "column": 16
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 110,
+                "line": 4,
+                "column": 1
+              },
+              "end": {
+                "index": 125,
+                "line": 4,
+                "column": 16
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 239,
+                "line": 7,
+                "column": 16
+              },
+              "end": {
+                "index": 243,
+                "line": 7,
+                "column": 20
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 224,
+                "line": 7,
+                "column": 1
+              },
+              "end": {
+                "index": 244,
+                "line": 7,
+                "column": 21
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 224,
+                "line": 7,
+                "column": 1
+              },
+              "end": {
+                "index": 244,
+                "line": 7,
+                "column": 21
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              3
+            ],
+            "span": {
+              "start": {
+                "index": 263,
+                "line": 8,
+                "column": 19
+              },
+              "end": {
+                "index": 267,
+                "line": 8,
+                "column": 23
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              3
+            ],
+            "span": {
+              "start": {
+                "index": 245,
+                "line": 8,
+                "column": 1
+              },
+              "end": {
+                "index": 268,
+                "line": 8,
+                "column": 24
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 245,
+                "line": 8,
+                "column": 1
+              },
+              "end": {
+                "index": 268,
+                "line": 8,
+                "column": 24
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              4
+            ],
+            "span": {
+              "start": {
+                "index": 285,
+                "line": 9,
+                "column": 17
+              },
+              "end": {
+                "index": 289,
+                "line": 9,
+                "column": 21
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              4
+            ],
+            "span": {
+              "start": {
+                "index": 269,
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "index": 290,
+                "line": 9,
+                "column": 22
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 269,
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "index": 290,
+                "line": 9,
+                "column": 22
+              }
+            }
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 87,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "index": 970,
+                "line": 37,
+                "column": 2
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "onInit",
+        "params": 1,
+        "span": {
+          "start": {
+            "index": 322,
+            "line": 11,
+            "column": 1
+          },
+          "end": {
+            "index": 392,
+            "line": 13,
+            "column": 2
+          }
+        },
+        "instructions": [
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              5
+            ],
+            "span": {
+              "start": {
+                "index": 356,
+                "line": 12,
+                "column": 17
+              },
+              "end": {
+                "index": 366,
+                "line": 12,
+                "column": 27
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              6
+            ],
+            "span": {
+              "start": {
+                "index": 368,
+                "line": 12,
+                "column": 29
+              },
+              "end": {
+                "index": 388,
+                "line": 12,
+                "column": 49
+              }
+            }
+          },
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              0,
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 342,
+                "line": 12,
+                "column": 3
+              },
+              "end": {
+                "index": 389,
+                "line": 12,
+                "column": 50
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 342,
+                "line": 12,
+                "column": 3
+              },
+              "end": {
+                "index": 390,
+                "line": 12,
+                "column": 51
+              }
+            }
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 322,
+                "line": 11,
+                "column": 1
+              },
+              "end": {
+                "index": 392,
+                "line": 13,
+                "column": 2
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "onTick",
+        "params": 2,
+        "span": {
+          "start": {
+            "index": 394,
+            "line": 15,
+            "column": 1
+          },
+          "end": {
+            "index": 970,
+            "line": 37,
+            "column": 2
+          }
+        },
+        "instructions": [
+          {
+            "op": "LOAD_GLOBAL",
+            "args": [
+              1
+            ],
+            "span": {
+              "start": {
+                "index": 423,
+                "line": 16,
+                "column": 7
+              },
+              "end": {
+                "index": 429,
+                "line": 16,
+                "column": 13
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              7
+            ],
+            "span": {
+              "start": {
+                "index": 433,
+                "line": 16,
+                "column": 17
+              },
+              "end": {
+                "index": 434,
+                "line": 16,
+                "column": 18
+              }
+            }
+          },
+          {
+            "op": "CMP_EQ",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 423,
+                "line": 16,
+                "column": 7
+              },
+              "end": {
+                "index": 434,
+                "line": 16,
+                "column": 18
+              }
+            }
+          },
+          {
+            "op": "JMPF",
+            "args": [
+              5
+            ],
+            "span": {
+              "start": {
+                "index": 423,
+                "line": 16,
+                "column": 7
+              },
+              "end": {
+                "index": 434,
+                "line": 16,
+                "column": 18
+              }
+            }
+          },
+          {
+            "op": "RET",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 442,
+                "line": 17,
+                "column": 5
+              },
+              "end": {
+                "index": 449,
+                "line": 17,
+                "column": 12
+              }
+            }
+          },
+          {
+            "op": "LOAD_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 461,
+                "line": 20,
+                "column": 7
+              },
+              "end": {
+                "index": 474,
+                "line": 20,
+                "column": 20
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              8
+            ],
+            "span": {
+              "start": {
+                "index": 477,
+                "line": 20,
+                "column": 23
+              },
+              "end": {
+                "index": 478,
+                "line": 20,
+                "column": 24
+              }
+            }
+          },
+          {
+            "op": "CMP_LT",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 461,
+                "line": 20,
+                "column": 7
+              },
+              "end": {
+                "index": 478,
+                "line": 20,
+                "column": 24
+              }
+            }
+          },
+          {
+            "op": "JMPF",
+            "args": [
+              19
+            ],
+            "span": {
+              "start": {
+                "index": 461,
+                "line": 20,
+                "column": 7
+              },
+              "end": {
+                "index": 478,
+                "line": 20,
+                "column": 24
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              9
+            ],
+            "span": {
+              "start": {
+                "index": 502,
+                "line": 21,
+                "column": 21
+              },
+              "end": {
+                "index": 505,
+                "line": 21,
+                "column": 24
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              10
+            ],
+            "span": {
+              "start": {
+                "index": 507,
+                "line": 21,
+                "column": 26
+              },
+              "end": {
+                "index": 510,
+                "line": 21,
+                "column": 29
+              }
+            }
+          },
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              1,
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 486,
+                "line": 21,
+                "column": 5
+              },
+              "end": {
+                "index": 511,
+                "line": 21,
+                "column": 30
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 486,
+                "line": 21,
+                "column": 5
+              },
+              "end": {
+                "index": 512,
+                "line": 21,
+                "column": 31
+              }
+            }
+          },
+          {
+            "op": "LOAD_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 547,
+                "line": 22,
+                "column": 21
+              },
+              "end": {
+                "index": 560,
+                "line": 22,
+                "column": 34
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              11
+            ],
+            "span": {
+              "start": {
+                "index": 563,
+                "line": 22,
+                "column": 37
+              },
+              "end": {
+                "index": 564,
+                "line": 22,
+                "column": 38
+              }
+            }
+          },
+          {
+            "op": "ADD",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 547,
+                "line": 22,
+                "column": 21
+              },
+              "end": {
+                "index": 564,
+                "line": 22,
+                "column": 38
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              0
+            ],
+            "span": {
+              "start": {
+                "index": 531,
+                "line": 22,
+                "column": 5
+              },
+              "end": {
+                "index": 564,
+                "line": 22,
+                "column": 38
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 531,
+                "line": 22,
+                "column": 5
+              },
+              "end": {
+                "index": 565,
+                "line": 22,
+                "column": 39
+              }
+            }
+          },
+          {
+            "op": "RET",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 570,
+                "line": 23,
+                "column": 5
+              },
+              "end": {
+                "index": 577,
+                "line": 23,
+                "column": 12
+              }
+            }
+          },
+          {
+            "op": "LOAD_GLOBAL",
+            "args": [
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 660,
+                "line": 27,
+                "column": 34
+              },
+              "end": {
+                "index": 668,
+                "line": 27,
+                "column": 42
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              12
+            ],
+            "span": {
+              "start": {
+                "index": 670,
+                "line": 27,
+                "column": 44
+              },
+              "end": {
+                "index": 689,
+                "line": 27,
+                "column": 63
+              }
+            }
+          },
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              2,
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 642,
+                "line": 27,
+                "column": 16
+              },
+              "end": {
+                "index": 690,
+                "line": 27,
+                "column": 64
+              }
+            }
+          },
+          {
+            "op": "STORE_LOCAL",
+            "args": [
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 629,
+                "line": 27,
+                "column": 3
+              },
+              "end": {
+                "index": 691,
+                "line": 27,
+                "column": 65
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 629,
+                "line": 27,
+                "column": 3
+              },
+              "end": {
+                "index": 691,
+                "line": 27,
+                "column": 65
+              }
+            }
+          },
+          {
+            "op": "LOAD_LOCAL",
+            "args": [
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 698,
+                "line": 28,
+                "column": 7
+              },
+              "end": {
+                "index": 704,
+                "line": 28,
+                "column": 13
+              }
+            }
+          },
+          {
+            "op": "JMPF",
+            "args": [
+              44
+            ],
+            "span": {
+              "start": {
+                "index": 698,
+                "line": 28,
+                "column": 7
+              },
+              "end": {
+                "index": 704,
+                "line": 28,
+                "column": 13
+              }
+            }
+          },
+          {
+            "op": "LOAD_GLOBAL",
+            "args": [
+              4
+            ],
+            "span": {
+              "start": {
+                "index": 765,
+                "line": 30,
+                "column": 23
+              },
+              "end": {
+                "index": 774,
+                "line": 30,
+                "column": 32
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              13
+            ],
+            "span": {
+              "start": {
+                "index": 776,
+                "line": 30,
+                "column": 34
+              },
+              "end": {
+                "index": 791,
+                "line": 30,
+                "column": 49
+              }
+            }
+          },
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              2,
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 747,
+                "line": 30,
+                "column": 5
+              },
+              "end": {
+                "index": 792,
+                "line": 30,
+                "column": 50
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 747,
+                "line": 30,
+                "column": 5
+              },
+              "end": {
+                "index": 793,
+                "line": 30,
+                "column": 51
+              }
+            }
+          },
+          {
+            "op": "LOAD_GLOBAL",
+            "args": [
+              3
+            ],
+            "span": {
+              "start": {
+                "index": 825,
+                "line": 31,
+                "column": 32
+              },
+              "end": {
+                "index": 836,
+                "line": 31,
+                "column": 43
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              14
+            ],
+            "span": {
+              "start": {
+                "index": 838,
+                "line": 31,
+                "column": 45
+              },
+              "end": {
+                "index": 860,
+                "line": 31,
+                "column": 67
+              }
+            }
+          },
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              2,
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 807,
+                "line": 31,
+                "column": 14
+              },
+              "end": {
+                "index": 861,
+                "line": 31,
+                "column": 68
+              }
+            }
+          },
+          {
+            "op": "STORE_LOCAL",
+            "args": [
+              3
+            ],
+            "span": {
+              "start": {
+                "index": 798,
+                "line": 31,
+                "column": 5
+              },
+              "end": {
+                "index": 862,
+                "line": 31,
+                "column": 69
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 798,
+                "line": 31,
+                "column": 5
+              },
+              "end": {
+                "index": 862,
+                "line": 31,
+                "column": 69
+              }
+            }
+          },
+          {
+            "op": "LOAD_LOCAL",
+            "args": [
+              3
+            ],
+            "span": {
+              "start": {
+                "index": 871,
+                "line": 32,
+                "column": 9
+              },
+              "end": {
+                "index": 873,
+                "line": 32,
+                "column": 11
+              }
+            }
+          },
+          {
+            "op": "JMPF",
+            "args": [
+              44
+            ],
+            "span": {
+              "start": {
+                "index": 871,
+                "line": 32,
+                "column": 9
+              },
+              "end": {
+                "index": 873,
+                "line": 32,
+                "column": 11
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              15
+            ],
+            "span": {
+              "start": {
+                "index": 892,
+                "line": 33,
+                "column": 16
+              },
+              "end": {
+                "index": 893,
+                "line": 33,
+                "column": 17
+              }
+            }
+          },
+          {
+            "op": "STORE_GLOBAL",
+            "args": [
+              1
+            ],
+            "span": {
+              "start": {
+                "index": 883,
+                "line": 33,
+                "column": 7
+              },
+              "end": {
+                "index": 893,
+                "line": 33,
+                "column": 17
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 883,
+                "line": 33,
+                "column": 7
+              },
+              "end": {
+                "index": 894,
+                "line": 33,
+                "column": 18
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              16
+            ],
+            "span": {
+              "start": {
+                "index": 915,
+                "line": 34,
+                "column": 21
+              },
+              "end": {
+                "index": 925,
+                "line": 34,
+                "column": 31
+              }
+            }
+          },
+          {
+            "op": "PUSH_CONST",
+            "args": [
+              17
+            ],
+            "span": {
+              "start": {
+                "index": 927,
+                "line": 34,
+                "column": 33
+              },
+              "end": {
+                "index": 956,
+                "line": 34,
+                "column": 62
+              }
+            }
+          },
+          {
+            "op": "CALL_NATIVE",
+            "args": [
+              0,
+              2
+            ],
+            "span": {
+              "start": {
+                "index": 901,
+                "line": 34,
+                "column": 7
+              },
+              "end": {
+                "index": 957,
+                "line": 34,
+                "column": 63
+              }
+            }
+          },
+          {
+            "op": "POP",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 901,
+                "line": 34,
+                "column": 7
+              },
+              "end": {
+                "index": 958,
+                "line": 34,
+                "column": 64
+              }
+            }
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "span": {
+              "start": {
+                "index": 394,
+                "line": 15,
+                "column": 1
+              },
+              "end": {
+                "index": 970,
+                "line": 37,
+                "column": 2
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "constants": [
+      0,
+      0,
+      1770,
+      1773,
+      1770,
+      "scenario",
+      "pilot-signals init",
+      1,
+      3,
+      "A",
+      104,
+      1,
+      "factory-node-skin",
+      "factory-miner",
+      "factory-smelter-omni",
+      1,
+      "scenario",
+      "pilot-signals seed complete"
+    ],
+    "globals": [
+      [
+        "scoutsSpawned",
+        0
+      ],
+      [
+        "seeded",
+        1
+      ],
+      [
+        "nodeTile",
+        2
+      ],
+      [
+        "smelterTile",
+        3
+      ],
+      [
+        "minerTile",
+        4
+      ]
+    ],
+    "nativeIds": [
+      [
+        "logDebug",
+        0
+      ],
+      [
+        "spawnAgent",
+        1
+      ],
+      [
+        "placeFactory",
+        2
+      ]
+    ],
+    "entryPoints": {
+      "onInit": "onInit",
+      "onTick": "onTick"
+    }
+  },
+  "meta": {
+    "source": "pilot-signals.sscript",
+    "relativeSource": "pilot-signals.sscript",
+    "generatedAt": "2025-12-06T04:10:38.727Z"
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-12-02T04:20:21.586Z",
+  "generatedAt": "2025-12-06T04:10:38.742Z",
   "scenarios": [
     {
       "key": "agent-spawn",
@@ -41,6 +41,18 @@
         "fire.write",
         "rng.use",
         "runtime.schedule",
+        "diag.write"
+      ]
+    },
+    {
+      "key": "pilot-signals",
+      "name": "pilot-signals",
+      "file": "pilot-signals.json",
+      "source": "pilot-signals.sscript",
+      "capabilities": [
+        "agent.spawn",
+        "factory.place",
+        "rng.use",
         "diag.write"
       ]
     },
